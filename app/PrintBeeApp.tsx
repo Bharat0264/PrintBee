@@ -24,7 +24,8 @@ const options: Array<{ id: PrintMode; title: string; note: string; icon: string 
 const inr = new Intl.NumberFormat("en-IN", {
   style: "currency",
   currency: "INR",
-  maximumFractionDigits: 0,
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
 });
 
 type Viewer = { email: string; isAdmin: boolean } | null;
@@ -198,7 +199,7 @@ export default function PrintBeeApp({ viewer, authConfigured }: { viewer: Viewer
               {options.map((item) => (
                 <label key={item.id}>
                   <span><strong>{item.title}</strong><small>{item.note}</small></span>
-                  <span className="rupee">₹<input type="number" min="0" step="1" value={draftPrices[item.id]} onChange={(e) => setDraftPrices({ ...draftPrices, [item.id]: Math.max(0, Number(e.target.value)) })} /></span>
+                  <span className="rupee">₹<input type="number" min="0" step="0.01" value={draftPrices[item.id]} onChange={(e) => setDraftPrices({ ...draftPrices, [item.id]: Math.max(0, Number(e.target.value)) })} /></span>
                 </label>
               ))}
             </div>
