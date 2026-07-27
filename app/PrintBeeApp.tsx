@@ -31,6 +31,8 @@ const inr = new Intl.NumberFormat("en-IN", {
 
 type Viewer = { email: string; isAdmin: boolean } | null;
 type LocationOption = { id: string; name: string };
+const RAZORPAY_PAYMENT_LINK = "https://razorpay.me/@PrintBee";
+
 type CartItem = {
   id: string;
   uploadId: string;
@@ -65,7 +67,7 @@ export default function PrintBeeApp({ viewer, authConfigured }: { viewer: Viewer
   const [mobileNumber, setMobileNumber] = useState("");
   const [locationId, setLocationId] = useState("");
   const [orderError, setOrderError] = useState("");
-  const [orderResult, setOrderResult] = useState<{ id: string; orderNumber: string; deliveryCode: string; locationName: string; paid: boolean; paymentConfigured: boolean } | null>(null);
+  const [orderResult, setOrderResult] = useState<{ id: string; orderNumber: string; deliveryCode: string; locationName: string; totalPaise: number; paid: boolean } | null>(null);
   const [newLocation, setNewLocation] = useState("");
   const [agentEmail, setAgentEmail] = useState("");
   const [adminMessage, setAdminMessage] = useState("");
@@ -212,7 +214,7 @@ export default function PrintBeeApp({ viewer, authConfigured }: { viewer: Viewer
     setCart([]);
     const pendingResult = { ...data, paid: false };
     setOrderResult(pendingResult);
-    if (data.paymentConfigured) await startRazorpayPayment(pendingResult);
+    setPaymentReference("");
   };
 
   const openMyOrders = async () => {
@@ -235,42 +237,6 @@ export default function PrintBeeApp({ viewer, authConfigured }: { viewer: Viewer
     const data = await response.json();
     setAdminMessage(response.ok ? "Order marked paid." : data.error);
     await openAdminDashboard();
-  };
-
-  const startRazorpayPayment = async (order: any) => {
-    setOrderError("");
-    const createResponse = await fetch("/api/payments/razorpay/create", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ orderId: order.id }) });
-    const paymentOrder = await createResponse.json();
-    if (!createResponse.ok) return setOrderError(paymentOrder.error);
-    if (!(window as any).Razorpay) {
-      await new Promise<void>((resolve, reject) => {
-        const script = document.createElement("script");
-        script.src = "https://checkout.razorpay.com/v1/checkout.js";
-        script.onload = () => resolve();
-        script.onerror = () => reject(new Error("Razorpay Checkout could not load"));
-        document.head.appendChild(script);
-      });
-    }
-    const checkout = new (window as any).Razorpay({
-      key: paymentOrder.keyId,
-      amount: paymentOrder.amount,
-      currency: "INR",
-      name: "PrintBee",
-      description: `Print order ${order.orderNumber}`,
-      order_id: paymentOrder.razorpayOrderId,
-      prefill: { name: customerName, email: viewer?.email, contact: `+91${mobileNumber}` },
-      theme: { color: "#ffb900" },
-      handler: async (result: any) => {
-        const verification = await fetch("/api/payments/razorpay/verify", {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...result, printbeeOrderId: order.id }),
-        });
-        const verified = await verification.json();
-        if (!verification.ok) return setOrderError(verified.error);
-        setOrderResult({ ...order, paid: true });
-      },
-    });
-    checkout.open();
   };
 
   const openAdminDashboard = async () => {
@@ -529,9 +495,15 @@ export default function PrintBeeApp({ viewer, authConfigured }: { viewer: Viewer
                 <p>Order <strong>{orderResult.orderNumber}</strong> · {orderResult.locationName}</p>
                 <div className={orderResult.paid ? "payment-paid" : "payment-pending"}><small>Payment status</small><strong>{orderResult.paid ? "PAID" : "PENDING"}</strong></div>
                 <div><small>Your delivery code</small><strong>{orderResult.deliveryCode}</strong></div>
-                <p>{orderResult.paid ? "Give this code to the delivery agent only after receiving your prints." : "Your order will not be processed until Razorpay payment is complete."}</p>
-                {!orderResult.paid && orderResult.paymentConfigured && <button className="save-button" onClick={() => startRazorpayPayment(orderResult)}>Pay {inr.format((orderResult as any).totalPaise / 100)} with Razorpay</button>}
-                {!orderResult.paid && !orderResult.paymentConfigured && <p className="panel-message">Razorpay credentials must be added securely before this order can be paid.</p>}
+                <p>{orderResult.paid ? "Give this code to the delivery agent only after receiving your prints." : `Pay exactly ${inr.format(orderResult.totalPaise / 100)} using the PrintBee payment link. Use ${orderResult.orderNumber} as the payment note.`}</p>
+                {!orderResult.paid && (
+                  <>
+                    <a className="save-button" href={RAZORPAY_PAYMENT_LINK} target="_blank" rel="noreferrer">Open Razorpay payment link</a>
+                    <label className="checkout-field">Razorpay payment ID / UTR<input value={paymentReference} onChange={(e) => setPaymentReference(e.target.value)} placeholder="Enter the reference after payment" /></label>
+                    <button className="save-button" disabled={paymentReference.trim().length < 6} onClick={submitPaymentReference}>Submit payment reference</button>
+                  </>
+                )}
+                {orderError && <p className="panel-message">{orderError}</p>}
                 <button className="save-button" onClick={() => { setCheckoutOpen(false); setOrderResult(null); }}>Done</button>
               </div>
             ) : (
@@ -546,7 +518,7 @@ export default function PrintBeeApp({ viewer, authConfigured }: { viewer: Viewer
                 <div className="fee-breakdown"><div><span>Printing subtotal</span><strong>{inr.format(cartTotal)}</strong></div><div><span>Delivery fee</span><strong>{inr.format(15)}</strong></div><div><span>Platform fee</span><strong>{inr.format(3.5)}</strong></div></div>
                 <div className="checkout-total"><span>To pay</span><strong>{inr.format(cartTotal + 18.5)}</strong></div>
                 {orderError && <p className="form-error">{orderError}</p>}
-                <button className="save-button" disabled={!locations.length} onClick={placeOrder}>Continue to Razorpay</button>
+                <button className="save-button" disabled={!locations.length} onClick={placeOrder}>Place order and get payment link</button>
               </>
             )}
           </section>
