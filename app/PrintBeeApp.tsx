@@ -33,6 +33,7 @@ type Viewer = { email: string; isAdmin: boolean } | null;
 type LocationOption = { id: string; name: string };
 type CartItem = {
   id: string;
+  uploadId: string;
   fileName: string;
   fileType: "PDF" | "IMAGE";
   pages: number;
@@ -49,6 +50,7 @@ export default function PrintBeeApp({ viewer, authConfigured }: { viewer: Viewer
   const [pages, setPages] = useState(12);
   const [copies, setCopies] = useState(1);
   const [fileName, setFileName] = useState("");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [fileType, setFileType] = useState<"PDF" | "IMAGE">("PDF");
   const [countingPages, setCountingPages] = useState(false);
   const [uploadError, setUploadError] = useState("");
@@ -72,6 +74,9 @@ export default function PrintBeeApp({ viewer, authConfigured }: { viewer: Viewer
   const [deliveryCode, setDeliveryCode] = useState("");
   const [deliveryMessage, setDeliveryMessage] = useState("");
   const [dashboard, setDashboard] = useState<any>(null);
+  const [myOrdersOpen, setMyOrdersOpen] = useState(false);
+  const [myOrders, setMyOrders] = useState<any[]>([]);
+  const [paymentReference, setPaymentReference] = useState("");
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
@@ -98,6 +103,7 @@ export default function PrintBeeApp({ viewer, authConfigured }: { viewer: Viewer
     const file = event.target.files?.[0];
     if (!file) return;
     setFileName(file.name);
+    setSelectedFile(file);
     setUploadError("");
     setCountingPages(true);
     try {
@@ -113,18 +119,28 @@ export default function PrintBeeApp({ viewer, authConfigured }: { viewer: Viewer
       }
     } catch (error) {
       setFileName("");
+      setSelectedFile(null);
       setUploadError(error instanceof Error ? error.message : "This file could not be read.");
     } finally {
       setCountingPages(false);
     }
   };
 
-  const addToCart = () => {
-    if (!fileName || countingPages) return;
+  const addToCart = async () => {
+    if (!viewer) return setLoginOpen(true);
+    if (!fileName || !selectedFile || countingPages) return;
+    setCountingPages(true);
+    const form = new FormData();
+    form.append("file", selectedFile);
+    form.append("pageCount", String(pages));
+    const uploadResponse = await fetch("/api/uploads", { method: "POST", body: form });
+    const uploaded = await uploadResponse.json();
+    if (!uploadResponse.ok) { setCountingPages(false); return setUploadError(uploaded.error); }
     setCart((items) => [
       ...items,
       {
         id: crypto.randomUUID(),
+        uploadId: uploaded.uploadId,
         fileName,
         fileType,
         pages,
@@ -135,8 +151,10 @@ export default function PrintBeeApp({ viewer, authConfigured }: { viewer: Viewer
       },
     ]);
     setFileName("");
+    setSelectedFile(null);
     setPages(1);
     setCopies(1);
+    setCountingPages(false);
   };
 
   const cartTotal = cart.reduce((sum, item) => sum + item.total, 0);
@@ -194,6 +212,28 @@ export default function PrintBeeApp({ viewer, authConfigured }: { viewer: Viewer
     const pendingResult = { ...data, paid: false };
     setOrderResult(pendingResult);
     if (data.paymentConfigured) await startRazorpayPayment(pendingResult);
+  };
+
+  const openMyOrders = async () => {
+    if (!viewer) return setLoginOpen(true);
+    const response = await fetch("/api/orders/my");
+    if (response.ok) setMyOrders(await response.json());
+    setMyOrdersOpen(true);
+  };
+
+  const submitPaymentReference = async () => {
+    if (!orderResult) return;
+    const response = await fetch("/api/orders/payment-reference", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ orderId: orderResult.id, reference: paymentReference }) });
+    const data = await response.json();
+    if (!response.ok) return setOrderError(data.error);
+    setOrderError("Payment reference submitted for admin verification.");
+  };
+
+  const markPaid = async (orderId: string) => {
+    const response = await fetch("/api/admin/orders/mark-paid", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ orderId }) });
+    const data = await response.json();
+    setAdminMessage(response.ok ? "Order marked paid." : data.error);
+    await openAdminDashboard();
   };
 
   const startRazorpayPayment = async (order: any) => {
@@ -283,6 +323,7 @@ export default function PrintBeeApp({ viewer, authConfigured }: { viewer: Viewer
           <a href="#pricing">Pricing</a>
           {viewer?.isAdmin && <button className="admin-link" onClick={openAdminDashboard}>Admin dashboard</button>}
           {(role === "ADMIN" || role === "AGENT") && <button className="admin-link" onClick={() => setDeliveryOpen(true)}>Delivery</button>}
+          {viewer && <button className="admin-link" onClick={openMyOrders}>My orders</button>}
           {viewer ? (
             <button className="login-link" onClick={signOut} title={viewer.email}>Sign out</button>
           ) : (
@@ -444,6 +485,9 @@ export default function PrintBeeApp({ viewer, authConfigured }: { viewer: Viewer
                     <div><strong>{order.order_number}</strong><small>{order.customer_name} · {order.location_name}</small></div>
                     <span className="status-chip">{order.payment_status} · {order.status}</span>
                     <strong>{inr.format(order.total_paise / 100)}</strong>
+                    {order.payment_reference && <small>Payment ref: {order.payment_reference}</small>}
+                    {order.payment_status === "PENDING" && order.payment_reference && <button className="mini-action" onClick={() => markPaid(order.id)}>Mark paid</button>}
+                    <div className="file-links">{JSON.parse(order.items_json || "[]").map((item: any) => <a key={item.uploadId} href={`/api/admin/files/${item.uploadId}/download`}>Download {item.fileName}</a>)}</div>
                     <select value={order.status} onChange={(e) => updateOrderStatus(order.id, e.target.value)}>
                       <option value="CONFIRMED">Confirmed</option><option value="PRINTING">Printing</option><option value="READY_FOR_PICKUP">Ready for pickup</option><option value="RIDER_ASSIGNED">Rider assigned</option>
                     </select>
@@ -470,8 +514,8 @@ export default function PrintBeeApp({ viewer, authConfigured }: { viewer: Viewer
                 <div className={orderResult.paid ? "payment-paid" : "payment-pending"}><small>Payment status</small><strong>{orderResult.paid ? "PAID" : "PENDING"}</strong></div>
                 <div><small>Your delivery code</small><strong>{orderResult.deliveryCode}</strong></div>
                 <p>{orderResult.paid ? "Give this code to the delivery agent only after receiving your prints." : "Your order will not be processed until Razorpay payment is complete."}</p>
-                {!orderResult.paid && orderResult.paymentConfigured && <button className="save-button" onClick={() => startRazorpayPayment(orderResult)}>Pay with Razorpay</button>}
-                {!orderResult.paid && !orderResult.paymentConfigured && <p className="panel-message">Razorpay test keys are required to activate payment.</p>}
+                {!orderResult.paid && <a className="pay-link" href={(orderResult as any).paymentLink ?? "https://razorpay.me/@PrintBee"} target="_blank" rel="noreferrer">Pay securely on Razorpay</a>}
+                {!orderResult.paid && <><label className="checkout-field">Razorpay payment ID / reference<input value={paymentReference} onChange={(e) => setPaymentReference(e.target.value)} placeholder="Enter after payment" /></label><button className="save-button" onClick={submitPaymentReference}>Submit payment reference</button></>}
                 <button className="save-button" onClick={() => { setCheckoutOpen(false); setOrderResult(null); }}>Done</button>
               </div>
             ) : (
@@ -504,6 +548,16 @@ export default function PrintBeeApp({ viewer, authConfigured }: { viewer: Viewer
             <label className="checkout-field">Customer delivery code<input className="code-input" value={deliveryCode} onChange={(e) => setDeliveryCode(e.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="000000" inputMode="numeric" /></label>
             <button className="save-button" onClick={verifyDelivery}>Verify and mark delivered</button>
             {deliveryMessage && <p className="panel-message">{deliveryMessage}</p>}
+          </section>
+        </div>
+      )}
+
+      {myOrdersOpen && (
+        <div className="modal-backdrop" role="presentation" onMouseDown={() => setMyOrdersOpen(false)}>
+          <section className="orders-modal" role="dialog" aria-modal="true" onMouseDown={(e) => e.stopPropagation()}>
+            <button className="close" onClick={() => setMyOrdersOpen(false)} aria-label="Close">×</button>
+            <div className="admin-badge">CUSTOMER</div><h2>My orders</h2>
+            {myOrders.length ? myOrders.map((order) => <article key={order.id}><div><strong>{order.order_number}</strong><small>{order.location_name} · {new Date(order.created_at).toLocaleDateString("en-IN")}</small></div><span className="status-chip">{order.payment_status} · {order.status}</span><strong>{inr.format(order.total_paise / 100)}</strong><div className="customer-code"><small>Delivery code</small><strong>{order.deliveryCode}</strong></div></article>) : <p>No orders yet.</p>}
           </section>
         </div>
       )}

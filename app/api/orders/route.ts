@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { database, hashDeliveryCode } from "../db";
+import { database, encryptDeliveryCode, hashDeliveryCode } from "../db";
 import { getViewer } from "../../supabase/server";
 
 export async function POST(request: Request) {
@@ -21,8 +21,17 @@ export async function POST(request: Request) {
   const deliveryFeePaise = 1500;
   const platformFeePaise = 350;
   const totalPaise = printingSubtotalPaise + deliveryFeePaise + platformFeePaise;
+  const uploadIds = body.items.map((item: any) => item.uploadId).filter(Boolean);
+  if (uploadIds.length !== body.items.length) return NextResponse.json({ error: "Every cart item must finish uploading" }, { status: 400 });
+  for (const uploadId of uploadIds) {
+    const upload = await database().prepare("SELECT id FROM uploads WHERE id=? AND customer_email=? AND order_id IS NULL").bind(uploadId, viewer.email).first();
+    if (!upload) return NextResponse.json({ error: "One or more uploaded files are unavailable" }, { status: 400 });
+  }
   const hash = await hashDeliveryCode(id, deliveryCode);
-  await database().prepare(`INSERT INTO orders (id, order_number, customer_email, customer_name, mobile_number, location_id, location_name, items_json, printing_subtotal_paise, delivery_fee_paise, platform_fee_paise, total_paise, delivery_code_hash, status, payment_status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PAYMENT_PENDING', 'PENDING', ?)`)
-    .bind(id, orderNumber, viewer.email, name, mobile, location.id, location.name, JSON.stringify(body.items), printingSubtotalPaise, deliveryFeePaise, platformFeePaise, totalPaise, hash, new Date().toISOString()).run();
-  return NextResponse.json({ id, orderNumber, deliveryCode, locationName: location.name, totalPaise, paymentConfigured: Boolean(process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET) });
+  const encryptedCode = await encryptDeliveryCode(deliveryCode);
+  const db = database();
+  await db.prepare(`INSERT INTO orders (id, order_number, customer_email, customer_name, mobile_number, location_id, location_name, items_json, printing_subtotal_paise, delivery_fee_paise, platform_fee_paise, total_paise, delivery_code_hash, delivery_code_encrypted, status, payment_status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PAYMENT_PENDING', 'PENDING', ?)`)
+    .bind(id, orderNumber, viewer.email, name, mobile, location.id, location.name, JSON.stringify(body.items), printingSubtotalPaise, deliveryFeePaise, platformFeePaise, totalPaise, hash, encryptedCode, new Date().toISOString()).run();
+  await db.batch(uploadIds.map((uploadId) => db.prepare("UPDATE uploads SET order_id=? WHERE id=?").bind(id, uploadId)));
+  return NextResponse.json({ id, orderNumber, deliveryCode, locationName: location.name, totalPaise, paymentConfigured: false, paymentLink: process.env.RAZORPAY_PAYMENT_LINK ?? "https://razorpay.me/@PrintBee" });
 }

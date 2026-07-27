@@ -13,6 +13,18 @@ export const appUsers = sqliteTable("app_users", {
   createdAt: text("created_at").notNull(),
 });
 
+export const uploads = sqliteTable("uploads", {
+  id: text("id").primaryKey(),
+  customerEmail: text("customer_email").notNull(),
+  originalName: text("original_name").notNull(),
+  contentType: text("content_type").notNull(),
+  storageKey: text("storage_key").notNull().unique(),
+  sizeBytes: integer("size_bytes").notNull(),
+  pageCount: integer("page_count").notNull(),
+  orderId: text("order_id"),
+  createdAt: text("created_at").notNull(),
+});
+
 export const orders = sqliteTable("orders", {
   id: text("id").primaryKey(),
   orderNumber: text("order_number").notNull().unique(),
@@ -27,10 +39,12 @@ export const orders = sqliteTable("orders", {
   platformFeePaise: integer("platform_fee_paise").notNull().default(350),
   totalPaise: integer("total_paise").notNull(),
   deliveryCodeHash: text("delivery_code_hash").notNull(),
+  deliveryCodeEncrypted: text("delivery_code_encrypted"),
   status: text("status").notNull().default("PAYMENT_PENDING"),
   paymentStatus: text("payment_status").notNull().default("PENDING"),
   razorpayOrderId: text("razorpay_order_id"),
   razorpayPaymentId: text("razorpay_payment_id"),
+  paymentReference: text("payment_reference"),
   riderEmail: text("rider_email"),
   createdAt: text("created_at").notNull(),
   deliveredAt: text("delivered_at"),
