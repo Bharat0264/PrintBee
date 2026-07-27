@@ -478,6 +478,8 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                 <h2>Operations dashboard</h2>
                 <div className="metric-grid">
                   <div><small>Total orders</small><strong>{dashboard.summary?.total ?? 0}</strong></div>
+                  <div><small>Paid</small><strong>{dashboard.summary?.paid ?? 0}</strong></div>
+                  <div><small>Unpaid</small><strong>{dashboard.summary?.unpaid ?? 0}</strong></div>
                   <div><small>Delivered</small><strong>{dashboard.summary?.delivered ?? 0}</strong></div>
                   <div><small>Ready</small><strong>{dashboard.summary?.ready ?? 0}</strong></div>
                   <div><small>Paid revenue</small><strong>{inr.format((dashboard.summary?.revenue_paise ?? 0) / 100)}</strong></div>
@@ -487,11 +489,25 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                 <h3>Live orders</h3>
                 <div className="admin-orders">{dashboard.orders?.length ? dashboard.orders.map((order: any) => (
                   <article key={order.id}>
-                    <div><strong>{order.order_number}</strong><small>{order.customer_name} · {order.location_name}</small></div>
+                    <div className="order-customer">
+                      <strong>{order.order_number}</strong>
+                      <small>{order.customer_name} · {order.mobile_number}</small>
+                      <small>{order.customer_email} · {order.location_name}</small>
+                      <small>Placed {new Date(order.created_at).toLocaleString("en-IN")}</small>
+                    </div>
                     <span className="status-chip">{order.payment_status} · {order.status}</span>
                     <strong>{inr.format(order.total_paise / 100)}</strong>
                     {order.payment_reference && <small>Payment ref: {order.payment_reference}</small>}
                     {order.payment_status === "PENDING" && order.payment_reference && <button className="mini-action" onClick={() => markPaid(order.id)}>Mark paid</button>}
+                    <div className="document-details">
+                      <strong>Documents</strong>
+                      {order.items?.length ? order.items.map((item: any, index: number) => (
+                        <div key={`${item.uploadId ?? item.fileName}-${index}`}>
+                          <span>{item.fileName ?? `Document ${index + 1}`}</span>
+                          <small>{item.pages ?? 1} pages · {item.copies ?? 1} copies · {options.find((option) => option.id === item.mode)?.title ?? item.mode ?? "A4 print"}</small>
+                        </div>
+                      )) : <small>No document details saved for this legacy order.</small>}
+                    </div>
                     <div className="file-links">{order.files?.length ? order.files.map((file: any) => <a key={file.id} href={`/api/admin/files/${file.id}/download`}>Download {file.original_name}</a>) : <span>Legacy order — document was not stored</span>}</div>
                     <select value={order.status} onChange={(e) => updateOrderStatus(order.id, e.target.value)}>
                       <option value="CONFIRMED">Confirmed</option><option value="PRINTING">Printing</option><option value="READY_FOR_PICKUP">Ready for pickup</option><option value="RIDER_ASSIGNED">Rider assigned</option>
