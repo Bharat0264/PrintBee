@@ -487,7 +487,7 @@ export default function PrintBeeApp({ viewer, authConfigured }: { viewer: Viewer
                     <strong>{inr.format(order.total_paise / 100)}</strong>
                     {order.payment_reference && <small>Payment ref: {order.payment_reference}</small>}
                     {order.payment_status === "PENDING" && order.payment_reference && <button className="mini-action" onClick={() => markPaid(order.id)}>Mark paid</button>}
-                    <div className="file-links">{JSON.parse(order.items_json || "[]").map((item: any) => <a key={item.uploadId} href={`/api/admin/files/${item.uploadId}/download`}>Download {item.fileName}</a>)}</div>
+                    <div className="file-links">{order.files?.length ? order.files.map((file: any) => <a key={file.id} href={`/api/admin/files/${file.id}/download`}>Download {file.original_name}</a>) : <span>Legacy order — document was not stored</span>}</div>
                     <select value={order.status} onChange={(e) => updateOrderStatus(order.id, e.target.value)}>
                       <option value="CONFIRMED">Confirmed</option><option value="PRINTING">Printing</option><option value="READY_FOR_PICKUP">Ready for pickup</option><option value="RIDER_ASSIGNED">Rider assigned</option>
                     </select>
