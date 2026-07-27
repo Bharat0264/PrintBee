@@ -4,6 +4,7 @@ import test from "node:test";
 
 const appSource = await readFile(new URL("../app/PrintBeeApp.tsx", import.meta.url), "utf8");
 const orderSource = await readFile(new URL("../app/api/orders/route.ts", import.meta.url), "utf8");
+const pageSource = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
 
 test("checkout uses only the PrintBee Razorpay payment link", async () => {
   assert.match(appSource, /https:\/\/razorpay\.me\/@PrintBee/);
@@ -14,4 +15,11 @@ test("checkout uses only the PrintBee Razorpay payment link", async () => {
 
   await assert.rejects(access(new URL("../app/api/payments/razorpay/create/route.ts", import.meta.url)));
   await assert.rejects(access(new URL("../app/api/payments/razorpay/verify/route.ts", import.meta.url)));
+});
+
+test("browser receives the hosted Supabase configuration without reading process.env", () => {
+  assert.match(pageSource, /supabaseConfig=\{supabaseConfig\}/);
+  assert.match(appSource, /supabaseConfig\.url/);
+  assert.match(appSource, /supabaseConfig\.anonKey/);
+  assert.doesNotMatch(appSource, /process\.env\.NEXT_PUBLIC_SUPABASE/);
 });

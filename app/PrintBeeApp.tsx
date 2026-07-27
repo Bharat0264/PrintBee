@@ -30,6 +30,7 @@ const inr = new Intl.NumberFormat("en-IN", {
 
 type Viewer = { email: string; isAdmin: boolean } | null;
 type LocationOption = { id: string; name: string };
+type SupabaseConfig = { url: string; anonKey: string } | null;
 const RAZORPAY_PAYMENT_LINK = "https://razorpay.me/@PrintBee";
 
 type CartItem = {
@@ -44,7 +45,7 @@ type CartItem = {
   total: number;
 };
 
-export default function PrintBeeApp({ viewer, authConfigured }: { viewer: Viewer; authConfigured: boolean }) {
+export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer; supabaseConfig: SupabaseConfig }) {
   const [prices, setPrices] = useState<Prices>(defaultPrices);
   const [draftPrices, setDraftPrices] = useState<Prices>(defaultPrices);
   const [mode, setMode] = useState<PrintMode>("bw-single");
@@ -168,10 +169,10 @@ export default function PrintBeeApp({ viewer, authConfigured }: { viewer: Viewer
     window.setTimeout(() => setSaved(false), 1800);
   };
 
-  const supabase = authConfigured
+  const supabase = supabaseConfig
     ? createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        supabaseConfig.url,
+        supabaseConfig.anonKey,
       )
     : null;
 
