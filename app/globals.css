@@ -213,6 +213,10 @@ footer { border-top: 1px solid var(--line); padding: 28px max(24px, calc((100% -
 .payment-pending strong, .payment-paid strong { font-size: 18px !important; letter-spacing: 1px !important; }
 .payment-pending { background: #fff4dc !important; color: #805600 !important; }
 .payment-paid { background: #e7f8ee !important; color: #126b37 !important; }
+.payment-scanner { margin: 18px 0; display: flex; flex-direction: column; align-items: center; gap: 10px; border: 1px solid var(--line); border-radius: 16px; background: #fff; padding: 16px; }
+.payment-scanner small { color: var(--muted); font-weight: 800; }
+.payment-scanner img { width: min(220px, 100%); height: auto; border-radius: 8px; }
+.payment-scanner strong { font-size: 22px; }
 .order-success .save-button + .save-button { margin-top: 8px; background: var(--ink); color: white; }
 .pay-link { display: block; margin: 10px 0; padding: 14px; border-radius: 10px; background: #2b166f; color: white; text-decoration: none; font-weight: 900; }
 .mini-action { border: 0; border-radius: 7px; background: #1a8f4b; color: white; padding: 7px; font-size: 10px; font-weight: 800; }

@@ -3,6 +3,7 @@
 import { ChangeEvent, useEffect, useMemo, useState } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 import { PDFDocument } from "pdf-lib";
+import QRCode from "qrcode";
 
 type PrintMode = "bw-single" | "bw-double" | "colour-single" | "colour-double";
 type Prices = Record<PrintMode, number>;
@@ -79,6 +80,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   const [myOrdersOpen, setMyOrdersOpen] = useState(false);
   const [myOrders, setMyOrders] = useState<any[]>([]);
   const [paymentReference, setPaymentReference] = useState("");
+  const [paymentQr, setPaymentQr] = useState("");
   const [riderOrders, setRiderOrders] = useState<any[]>([]);
   const [saved, setSaved] = useState(false);
 
@@ -98,6 +100,15 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
     if (!viewer) return;
     fetch("/api/me").then((response) => response.json()).then((data) => setRole(data.role)).catch(() => {});
   }, [viewer]);
+
+  useEffect(() => {
+    QRCode.toDataURL(RAZORPAY_PAYMENT_LINK, {
+      width: 280,
+      margin: 2,
+      color: { dark: "#171a20", light: "#ffffff" },
+      errorCorrectionLevel: "H",
+    }).then(setPaymentQr).catch(() => setPaymentQr(""));
+  }, []);
 
   const selected = options.find((item) => item.id === mode)!;
   const total = useMemo(() => pages * copies * prices[mode], [pages, copies, prices, mode]);
@@ -498,6 +509,11 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                 <p>{orderResult.paid ? "Give this code to the delivery agent only after receiving your prints." : `Pay exactly ${inr.format(orderResult.totalPaise / 100)} using the PrintBee payment link. Use ${orderResult.orderNumber} as the payment note.`}</p>
                 {!orderResult.paid && (
                   <>
+                    <div className="payment-scanner">
+                      <small>Scan to pay with Razorpay</small>
+                      {paymentQr ? <img src={paymentQr} width={220} height={220} alt="QR code for the PrintBee Razorpay payment link" /> : <span>Preparing scanner…</span>}
+                      <strong>{inr.format(orderResult.totalPaise / 100)}</strong>
+                    </div>
                     <a className="save-button" href={RAZORPAY_PAYMENT_LINK} target="_blank" rel="noreferrer">Open Razorpay payment link</a>
                     <label className="checkout-field">Razorpay payment ID / UTR<input value={paymentReference} onChange={(e) => setPaymentReference(e.target.value)} placeholder="Enter the reference after payment" /></label>
                     <button className="save-button" disabled={paymentReference.trim().length < 6} onClick={submitPaymentReference}>Submit payment reference</button>
