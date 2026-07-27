@@ -38,6 +38,7 @@ button { cursor: pointer; }
 nav { display: flex; align-items: center; gap: 30px; }
 nav a, .admin-link { color: #44484f; background: none; border: 0; text-decoration: none; font-size: 14px; font-weight: 700; }
 .admin-link { border: 1px solid var(--ink); border-radius: 999px; padding: 10px 16px; }
+.login-link { border: 0; border-radius: 999px; padding: 11px 17px; background: var(--yellow); color: var(--ink); font-size: 13px; font-weight: 900; }
 
 .hero {
   max-width: 1180px;
@@ -136,6 +137,21 @@ footer { border-top: 1px solid var(--line); padding: 28px max(24px, calc((100% -
 .rupee input { width: 70px; border: 0; background: transparent; padding: 10px; outline: 0; font-weight: 900; }
 .save-button { width: 100%; background: var(--yellow); color: var(--ink); }
 .admin-note { display: block; text-align: center; color: var(--muted); margin-top: 10px; }
+.login-modal { width: min(440px, 100%); position: relative; background: #fff; border-radius: 22px; padding: 30px; text-align: center; box-shadow: 0 30px 100px rgba(0,0,0,.3); }
+.login-modal > img { border-radius: 50%; object-fit: cover; }
+.login-modal h2 { margin: 8px 0 6px; font-size: 27px; }
+.login-modal > p { margin: 0 0 22px; color: var(--muted); font-size: 13px; }
+.google-button { width: 100%; border: 1px solid #dadce0; border-radius: 11px; padding: 13px; background: #fff; color: #303134; font-weight: 800; }
+.google-button span { color: #4285f4; font-size: 17px; margin-right: 12px; }
+.or { display: flex; align-items: center; gap: 12px; color: #96999e; font-size: 10px; margin: 18px 0; }
+.or::before, .or::after { content: ""; height: 1px; background: var(--line); flex: 1; }
+.phone-field { display: flex; align-items: center; border: 1px solid var(--line); border-radius: 11px; margin-bottom: 10px; text-align: left; }
+.phone-field span { padding: 0 12px; font-weight: 800; border-right: 1px solid var(--line); }
+.phone-field input, .otp-field { width: 100%; border: 0; outline: 0; padding: 13px; background: transparent; }
+.otp-field { border: 1px solid var(--line); border-radius: 11px; margin-bottom: 10px; text-align: center; letter-spacing: 4px; }
+.login-modal .save-button { margin-top: 2px; }
+.login-modal > small { display: block; color: var(--muted); font-size: 9px; margin-top: 13px; }
+.auth-message { background: var(--yellow-soft); border-radius: 8px; padding: 9px !important; margin: 10px 0 0 !important; color: #735500 !important; }
 
 @media (max-width: 820px) {
   nav a { display: none; }
