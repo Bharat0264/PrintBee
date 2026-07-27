@@ -38,9 +38,6 @@ export default function PrintBeeApp({ viewer, authConfigured }: { viewer: Viewer
   const [fileName, setFileName] = useState("");
   const [adminOpen, setAdminOpen] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
-  const [phone, setPhone] = useState("");
-  const [otp, setOtp] = useState("");
-  const [otpSent, setOtpSent] = useState(false);
   const [authMessage, setAuthMessage] = useState("");
   const [saved, setSaved] = useState(false);
 
@@ -84,23 +81,6 @@ export default function PrintBeeApp({ viewer, authConfigured }: { viewer: Viewer
       provider: "google",
       options: { redirectTo: `${window.location.origin}/auth/callback` },
     });
-  };
-
-  const sendOtp = async () => {
-    if (!supabase) return setAuthMessage("Authentication is awaiting Supabase configuration.");
-    const normalized = phone.startsWith("+") ? phone : `+91${phone}`;
-    const { error } = await supabase.auth.signInWithOtp({ phone: normalized });
-    if (error) return setAuthMessage(error.message);
-    setOtpSent(true);
-    setAuthMessage(`OTP sent to ${normalized}`);
-  };
-
-  const verifyOtp = async () => {
-    if (!supabase) return setAuthMessage("Authentication is awaiting Supabase configuration.");
-    const normalized = phone.startsWith("+") ? phone : `+91${phone}`;
-    const { error } = await supabase.auth.verifyOtp({ phone: normalized, token: otp, type: "sms" });
-    if (error) return setAuthMessage(error.message);
-    window.location.reload();
   };
 
   const signOut = async () => {
@@ -234,12 +214,8 @@ export default function PrintBeeApp({ viewer, authConfigured }: { viewer: Viewer
             <button className="close" onClick={() => setLoginOpen(false)} aria-label="Close">×</button>
             <Image src="/printbee-logo.png" width={88} height={88} alt="PrintBee" />
             <h2 id="login-title">Welcome to PrintBee</h2>
-            <p>Sign in to save your orders and track delivery.</p>
+            <p>Sign in securely with Google to save your orders and track delivery.</p>
             <button className="google-button" onClick={signInWithGoogle}><span>G</span> Continue with Google</button>
-            <div className="or"><span>or use mobile number</span></div>
-            <label className="phone-field"><span>+91</span><input value={phone} onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))} placeholder="10-digit mobile number" inputMode="numeric" /></label>
-            {otpSent && <input className="otp-field" value={otp} onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="Enter 6-digit OTP" inputMode="numeric" />}
-            <button className="save-button" onClick={otpSent ? verifyOtp : sendOtp}>{otpSent ? "Verify and sign in" : "Send OTP"}</button>
             {authMessage && <p className="auth-message">{authMessage}</p>}
             <small>By continuing, you agree to PrintBee’s terms and privacy policy.</small>
           </section>
