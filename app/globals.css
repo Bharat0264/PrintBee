@@ -145,7 +145,7 @@ footer { border-top: 1px solid var(--line); padding: 28px max(24px, calc((100% -
 .footer-brand p { margin: 2px 0; }
 
 .modal-backdrop { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; padding: 20px; background: rgba(20,21,23,.66); backdrop-filter: blur(6px); }
-.admin-modal { width: min(520px, 100%); position: relative; background: #fff; border-radius: 22px; padding: 30px; box-shadow: 0 30px 100px rgba(0,0,0,.3); }
+.admin-modal { width: min(560px, 100%); max-height: 90vh; overflow-y: auto; position: relative; background: #fff; border-radius: 22px; padding: 30px; box-shadow: 0 30px 100px rgba(0,0,0,.3); }
 .close { position: absolute; right: 20px; top: 16px; border: 0; background: transparent; font-size: 28px; }
 .admin-badge { display: inline-block; background: var(--yellow-soft); color: #8a6200; border-radius: 6px; padding: 6px 9px; font-size: 9px; font-weight: 900; letter-spacing: 1px; }
 .admin-modal h2 { font-size: 28px; margin: 14px 0 8px; }
@@ -168,6 +168,31 @@ footer { border-top: 1px solid var(--line); padding: 28px max(24px, calc((100% -
 .google-button span { color: #4285f4; font-size: 17px; margin-right: 12px; }
 .login-modal > small { display: block; color: var(--muted); font-size: 9px; margin-top: 13px; }
 .auth-message { background: var(--yellow-soft); border-radius: 8px; padding: 9px !important; margin: 10px 0 0 !important; color: #735500 !important; }
+.admin-divider { height: 1px; background: var(--line); margin: 24px 0; }
+.admin-modal h3 { margin: 20px 0 4px; font-size: 15px; }
+.admin-modal h3 + p { margin: 0 0 9px; color: var(--muted); font-size: 11px; }
+.inline-admin-form { display: flex; gap: 8px; }
+.inline-admin-form input { flex: 1; min-width: 0; border: 1px solid var(--line); border-radius: 9px; padding: 11px; }
+.inline-admin-form button { border: 0; border-radius: 9px; background: var(--ink); color: white; padding: 0 18px; font-weight: 800; }
+.panel-message { margin: 12px 0 !important; padding: 10px; border-radius: 9px; background: var(--yellow-soft); color: #735500 !important; font-size: 11px !important; }
+.checkout-modal { width: min(480px, 100%); position: relative; background: white; border-radius: 22px; padding: 30px; box-shadow: 0 30px 100px rgba(0,0,0,.3); }
+.checkout-modal h2 { margin: 13px 0 6px; font-size: 27px; }
+.checkout-modal > p { color: var(--muted); font-size: 12px; line-height: 1.5; }
+.checkout-field { display: block; margin: 15px 0; color: #555; font-size: 11px; font-weight: 800; }
+.checkout-field input, .checkout-field select { display: block; width: 100%; margin-top: 6px; border: 1px solid var(--line); border-radius: 10px; background: white; padding: 12px; outline: none; }
+.checkout-total { display: flex; justify-content: space-between; align-items: center; margin: 20px 0; padding-top: 17px; border-top: 1px solid var(--line); }
+.checkout-total span { color: var(--muted); font-size: 12px; }
+.checkout-total strong { font-size: 23px; }
+.checkout-modal .save-button { width: 100%; background: var(--yellow); color: var(--ink); }
+.checkout-modal .save-button:disabled { opacity: .4; cursor: not-allowed; }
+.form-error { color: #b42318 !important; font-weight: 700; }
+.order-success { text-align: center; }
+.order-success > span { width: 50px; height: 50px; display: grid; place-items: center; margin: auto; border-radius: 50%; background: var(--yellow); font-size: 23px; font-weight: 900; }
+.order-success > div { margin: 20px 0; padding: 18px; border-radius: 14px; background: var(--ink); color: white; }
+.order-success > div small, .order-success > div strong { display: block; }
+.order-success > div strong { color: var(--yellow); font-size: 36px; letter-spacing: 7px; margin-top: 5px; }
+.order-success p { color: var(--muted); font-size: 12px; }
+.code-input { text-align: center; letter-spacing: 7px; font-size: 22px; font-weight: 900; }
 
 @media (max-width: 820px) {
   nav a { display: none; }

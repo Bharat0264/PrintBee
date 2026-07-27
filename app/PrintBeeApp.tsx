@@ -30,6 +30,7 @@ const inr = new Intl.NumberFormat("en-IN", {
 });
 
 type Viewer = { email: string; isAdmin: boolean } | null;
+type LocationOption = { id: string; name: string };
 type CartItem = {
   id: string;
   fileName: string;
@@ -55,6 +56,21 @@ export default function PrintBeeApp({ viewer, authConfigured }: { viewer: Viewer
   const [adminOpen, setAdminOpen] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
   const [authMessage, setAuthMessage] = useState("");
+  const [role, setRole] = useState<string | null>(viewer?.isAdmin ? "ADMIN" : null);
+  const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const [locations, setLocations] = useState<LocationOption[]>([]);
+  const [customerName, setCustomerName] = useState("");
+  const [mobileNumber, setMobileNumber] = useState("");
+  const [locationId, setLocationId] = useState("");
+  const [orderError, setOrderError] = useState("");
+  const [orderResult, setOrderResult] = useState<{ orderNumber: string; deliveryCode: string; locationName: string } | null>(null);
+  const [newLocation, setNewLocation] = useState("");
+  const [agentEmail, setAgentEmail] = useState("");
+  const [adminMessage, setAdminMessage] = useState("");
+  const [deliveryOpen, setDeliveryOpen] = useState(false);
+  const [deliveryOrderNumber, setDeliveryOrderNumber] = useState("");
+  const [deliveryCode, setDeliveryCode] = useState("");
+  const [deliveryMessage, setDeliveryMessage] = useState("");
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
@@ -68,6 +84,11 @@ export default function PrintBeeApp({ viewer, authConfigured }: { viewer: Viewer
       window.localStorage.removeItem("printbee-a4-prices");
     }
   }, []);
+
+  useEffect(() => {
+    if (!viewer) return;
+    fetch("/api/me").then((response) => response.json()).then((data) => setRole(data.role)).catch(() => {});
+  }, [viewer]);
 
   const selected = options.find((item) => item.id === mode)!;
   const total = useMemo(() => pages * copies * prices[mode], [pages, copies, prices, mode]);
@@ -146,6 +167,52 @@ export default function PrintBeeApp({ viewer, authConfigured }: { viewer: Viewer
     window.location.reload();
   };
 
+  const loadLocations = async () => {
+    const response = await fetch("/api/locations");
+    const data = await response.json() as LocationOption[];
+    setLocations(data);
+    if (data.length && !locationId) setLocationId(data[0].id);
+  };
+
+  const openCheckout = async () => {
+    if (!viewer) return setLoginOpen(true);
+    await loadLocations();
+    setCheckoutOpen(true);
+  };
+
+  const placeOrder = async () => {
+    setOrderError("");
+    const response = await fetch("/api/orders", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ customerName, mobileNumber, locationId, items: cart, totalPaise: Math.round(cartTotal * 100) }),
+    });
+    const data = await response.json();
+    if (!response.ok) return setOrderError(data.error ?? "Order could not be placed");
+    setOrderResult(data);
+    setCart([]);
+  };
+
+  const addLocation = async () => {
+    const response = await fetch("/api/locations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: newLocation }) });
+    const data = await response.json();
+    setAdminMessage(response.ok ? `Location “${data.name}” added.` : data.error);
+    if (response.ok) setNewLocation("");
+  };
+
+  const addAgent = async () => {
+    const response = await fetch("/api/agents", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: agentEmail }) });
+    const data = await response.json();
+    setAdminMessage(response.ok ? `${data.email} can now verify deliveries.` : data.error);
+    if (response.ok) setAgentEmail("");
+  };
+
+  const verifyDelivery = async () => {
+    const response = await fetch("/api/orders/verify-delivery", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ orderNumber: deliveryOrderNumber, code: deliveryCode }) });
+    const data = await response.json();
+    setDeliveryMessage(response.ok ? "Delivery verified. Order marked delivered ✓" : data.error);
+  };
+
   return (
     <main>
       <header className="topbar">
@@ -157,6 +224,7 @@ export default function PrintBeeApp({ viewer, authConfigured }: { viewer: Viewer
           <a href="#how">How it works</a>
           <a href="#pricing">Pricing</a>
           {viewer?.isAdmin && <button className="admin-link" onClick={() => setAdminOpen(true)}>Admin pricing</button>}
+          {(role === "ADMIN" || role === "AGENT") && <button className="admin-link" onClick={() => setDeliveryOpen(true)}>Delivery</button>}
           {viewer ? (
             <button className="login-link" onClick={signOut} title={viewer.email}>Sign out</button>
           ) : (
@@ -242,7 +310,7 @@ export default function PrintBeeApp({ viewer, authConfigured }: { viewer: Viewer
             </div>
             <div className="cart-summary">
               <div><span>Printing subtotal</span><strong>{inr.format(cartTotal)}</strong></div>
-              <button onClick={() => viewer ? window.alert("Your cart is ready for checkout.") : setLoginOpen(true)}>Proceed to checkout →</button>
+              <button onClick={openCheckout}>Proceed to checkout →</button>
             </div>
           </>
         )}
@@ -292,7 +360,60 @@ export default function PrintBeeApp({ viewer, authConfigured }: { viewer: Viewer
               ))}
             </div>
             <button className="save-button" onClick={savePrices}>{saved ? "Prices saved ✓" : "Save new prices"}</button>
+            <div className="admin-divider" />
+            <h3>Delivery locations</h3>
+            <p>Customers can select only locations added here.</p>
+            <div className="inline-admin-form"><input value={newLocation} onChange={(e) => setNewLocation(e.target.value)} placeholder="Example: Madhapur" /><button onClick={addLocation}>Add</button></div>
+            <h3>Delivery agents</h3>
+            <p>Add the Google email used by each delivery agent.</p>
+            <div className="inline-admin-form"><input value={agentEmail} onChange={(e) => setAgentEmail(e.target.value)} placeholder="agent@gmail.com" /><button onClick={addAgent}>Add</button></div>
+            {adminMessage && <p className="panel-message">{adminMessage}</p>}
             <small className="admin-note">Prices are saved on this device for the current demo.</small>
+          </section>
+        </div>
+      )}
+
+      {checkoutOpen && (
+        <div className="modal-backdrop" role="presentation" onMouseDown={() => setCheckoutOpen(false)}>
+          <section className="checkout-modal" role="dialog" aria-modal="true" aria-labelledby="checkout-title" onMouseDown={(e) => e.stopPropagation()}>
+            <button className="close" onClick={() => setCheckoutOpen(false)} aria-label="Close">×</button>
+            {orderResult ? (
+              <div className="order-success">
+                <span>✓</span><h2>Order placed</h2>
+                <p>Order <strong>{orderResult.orderNumber}</strong> · {orderResult.locationName}</p>
+                <div><small>Your delivery code</small><strong>{orderResult.deliveryCode}</strong></div>
+                <p>Give this code to the delivery agent only after receiving your prints.</p>
+                <button className="save-button" onClick={() => { setCheckoutOpen(false); setOrderResult(null); }}>Done</button>
+              </div>
+            ) : (
+              <>
+                <div className="admin-badge">CHECKOUT</div>
+                <h2 id="checkout-title">Delivery details</h2>
+                <p>Enter your details and select an admin-approved delivery location.</p>
+                <label className="checkout-field">Full name<input value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="Your full name" /></label>
+                <label className="checkout-field">Mobile number<input value={mobileNumber} onChange={(e) => setMobileNumber(e.target.value.replace(/\D/g, "").slice(0, 10))} placeholder="10-digit mobile number" inputMode="numeric" /></label>
+                <label className="checkout-field">Delivery location<select value={locationId} onChange={(e) => setLocationId(e.target.value)}><option value="">Select a location</option>{locations.map((location) => <option value={location.id} key={location.id}>{location.name}</option>)}</select></label>
+                {!locations.length && <p className="panel-message">No delivery locations are available yet. The admin must add one first.</p>}
+                <div className="checkout-total"><span>Order total</span><strong>{inr.format(cartTotal)}</strong></div>
+                {orderError && <p className="form-error">{orderError}</p>}
+                <button className="save-button" disabled={!locations.length} onClick={placeOrder}>Place order</button>
+              </>
+            )}
+          </section>
+        </div>
+      )}
+
+      {deliveryOpen && (
+        <div className="modal-backdrop" role="presentation" onMouseDown={() => setDeliveryOpen(false)}>
+          <section className="checkout-modal" role="dialog" aria-modal="true" aria-labelledby="delivery-title" onMouseDown={(e) => e.stopPropagation()}>
+            <button className="close" onClick={() => setDeliveryOpen(false)} aria-label="Close">×</button>
+            <div className="admin-badge">DELIVERY AGENT</div>
+            <h2 id="delivery-title">Verify delivery</h2>
+            <p>Ask the customer for their six-digit code only after handing over the prints.</p>
+            <label className="checkout-field">Order number<input value={deliveryOrderNumber} onChange={(e) => setDeliveryOrderNumber(e.target.value.toUpperCase())} placeholder="PB12345678" /></label>
+            <label className="checkout-field">Customer delivery code<input className="code-input" value={deliveryCode} onChange={(e) => setDeliveryCode(e.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="000000" inputMode="numeric" /></label>
+            <button className="save-button" onClick={verifyDelivery}>Verify and mark delivered</button>
+            {deliveryMessage && <p className="panel-message">{deliveryMessage}</p>}
           </section>
         </div>
       )}
