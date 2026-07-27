@@ -77,6 +77,7 @@ export default function PrintBeeApp({ viewer, authConfigured }: { viewer: Viewer
   const [myOrdersOpen, setMyOrdersOpen] = useState(false);
   const [myOrders, setMyOrders] = useState<any[]>([]);
   const [paymentReference, setPaymentReference] = useState("");
+  const [riderOrders, setRiderOrders] = useState<any[]>([]);
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
@@ -309,6 +310,21 @@ export default function PrintBeeApp({ viewer, authConfigured }: { viewer: Viewer
     const response = await fetch("/api/orders/verify-delivery", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ orderNumber: deliveryOrderNumber, code: deliveryCode }) });
     const data = await response.json();
     setDeliveryMessage(response.ok ? "Delivery verified. Order marked delivered ✓" : data.error);
+    if (response.ok) {
+      setDeliveryOrderNumber("");
+      setDeliveryCode("");
+      await loadRiderOrders();
+    }
+  };
+
+  const loadRiderOrders = async () => {
+    const response = await fetch("/api/rider/orders");
+    if (response.ok) setRiderOrders(await response.json());
+  };
+
+  const openDeliveryQueue = async () => {
+    await loadRiderOrders();
+    setDeliveryOpen(true);
   };
 
   return (
@@ -322,7 +338,7 @@ export default function PrintBeeApp({ viewer, authConfigured }: { viewer: Viewer
           <a href="#how">How it works</a>
           <a href="#pricing">Pricing</a>
           {viewer?.isAdmin && <button className="admin-link" onClick={openAdminDashboard}>Admin dashboard</button>}
-          {(role === "ADMIN" || role === "AGENT") && <button className="admin-link" onClick={() => setDeliveryOpen(true)}>Delivery</button>}
+          {(role === "ADMIN" || role === "AGENT") && <button className="admin-link" onClick={openDeliveryQueue}>Delivery</button>}
           {viewer && <button className="admin-link" onClick={openMyOrders}>My orders</button>}
           {viewer ? (
             <button className="login-link" onClick={signOut} title={viewer.email}>Sign out</button>
@@ -514,8 +530,8 @@ export default function PrintBeeApp({ viewer, authConfigured }: { viewer: Viewer
                 <div className={orderResult.paid ? "payment-paid" : "payment-pending"}><small>Payment status</small><strong>{orderResult.paid ? "PAID" : "PENDING"}</strong></div>
                 <div><small>Your delivery code</small><strong>{orderResult.deliveryCode}</strong></div>
                 <p>{orderResult.paid ? "Give this code to the delivery agent only after receiving your prints." : "Your order will not be processed until Razorpay payment is complete."}</p>
-                {!orderResult.paid && <a className="pay-link" href={(orderResult as any).paymentLink ?? "https://razorpay.me/@PrintBee"} target="_blank" rel="noreferrer">Pay securely on Razorpay</a>}
-                {!orderResult.paid && <><label className="checkout-field">Razorpay payment ID / reference<input value={paymentReference} onChange={(e) => setPaymentReference(e.target.value)} placeholder="Enter after payment" /></label><button className="save-button" onClick={submitPaymentReference}>Submit payment reference</button></>}
+                {!orderResult.paid && orderResult.paymentConfigured && <button className="save-button" onClick={() => startRazorpayPayment(orderResult)}>Pay {inr.format((orderResult as any).totalPaise / 100)} with Razorpay</button>}
+                {!orderResult.paid && !orderResult.paymentConfigured && <p className="panel-message">Razorpay credentials must be added securely before this order can be paid.</p>}
                 <button className="save-button" onClick={() => { setCheckoutOpen(false); setOrderResult(null); }}>Done</button>
               </div>
             ) : (
@@ -544,6 +560,10 @@ export default function PrintBeeApp({ viewer, authConfigured }: { viewer: Viewer
             <div className="admin-badge">DELIVERY AGENT</div>
             <h2 id="delivery-title">Verify delivery</h2>
             <p>Ask the customer for their six-digit code only after handing over the prints.</p>
+            <div className="rider-queue">
+              <h3>My assigned orders</h3>
+              {riderOrders.length ? riderOrders.map((order) => <button key={order.order_number} onClick={() => setDeliveryOrderNumber(order.order_number)}><strong>{order.order_number}</strong><span>{order.customer_name} · {order.location_name}</span><small>{order.mobile_number} · {order.status}</small></button>) : <p>No active assigned orders.</p>}
+            </div>
             <label className="checkout-field">Order number<input value={deliveryOrderNumber} onChange={(e) => setDeliveryOrderNumber(e.target.value.toUpperCase())} placeholder="PB12345678" /></label>
             <label className="checkout-field">Customer delivery code<input className="code-input" value={deliveryCode} onChange={(e) => setDeliveryCode(e.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="000000" inputMode="numeric" /></label>
             <button className="save-button" onClick={verifyDelivery}>Verify and mark delivered</button>
