@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { ChangeEvent, useEffect, useMemo, useState } from "react";
 import { createBrowserClient } from "@supabase/ssr";
+import { PDFDocument } from "pdf-lib";
 
 type PrintMode = "bw-single" | "bw-double" | "colour-single" | "colour-double";
 type Prices = Record<PrintMode, number>;
@@ -29,6 +30,16 @@ const inr = new Intl.NumberFormat("en-IN", {
 });
 
 type Viewer = { email: string; isAdmin: boolean } | null;
+type CartItem = {
+  id: string;
+  fileName: string;
+  fileType: "PDF" | "IMAGE";
+  pages: number;
+  copies: number;
+  mode: PrintMode;
+  unitPrice: number;
+  total: number;
+};
 
 export default function PrintBeeApp({ viewer, authConfigured }: { viewer: Viewer; authConfigured: boolean }) {
   const [prices, setPrices] = useState<Prices>(defaultPrices);
@@ -37,6 +48,10 @@ export default function PrintBeeApp({ viewer, authConfigured }: { viewer: Viewer
   const [pages, setPages] = useState(12);
   const [copies, setCopies] = useState(1);
   const [fileName, setFileName] = useState("");
+  const [fileType, setFileType] = useState<"PDF" | "IMAGE">("PDF");
+  const [countingPages, setCountingPages] = useState(false);
+  const [uploadError, setUploadError] = useState("");
+  const [cart, setCart] = useState<CartItem[]>([]);
   const [adminOpen, setAdminOpen] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
   const [authMessage, setAuthMessage] = useState("");
@@ -57,10 +72,52 @@ export default function PrintBeeApp({ viewer, authConfigured }: { viewer: Viewer
   const selected = options.find((item) => item.id === mode)!;
   const total = useMemo(() => pages * copies * prices[mode], [pages, copies, prices, mode]);
 
-  const handleFile = (event: ChangeEvent<HTMLInputElement>) => {
+  const handleFile = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (file) setFileName(file.name);
+    if (!file) return;
+    setFileName(file.name);
+    setUploadError("");
+    setCountingPages(true);
+    try {
+      if (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) {
+        const pdf = await PDFDocument.load(await file.arrayBuffer(), { ignoreEncryption: true });
+        setPages(pdf.getPageCount());
+        setFileType("PDF");
+      } else if (file.type.startsWith("image/")) {
+        setPages(1);
+        setFileType("IMAGE");
+      } else {
+        throw new Error("Please choose a PDF, JPG, PNG or WEBP file.");
+      }
+    } catch (error) {
+      setFileName("");
+      setUploadError(error instanceof Error ? error.message : "This file could not be read.");
+    } finally {
+      setCountingPages(false);
+    }
   };
+
+  const addToCart = () => {
+    if (!fileName || countingPages) return;
+    setCart((items) => [
+      ...items,
+      {
+        id: crypto.randomUUID(),
+        fileName,
+        fileType,
+        pages,
+        copies,
+        mode,
+        unitPrice: prices[mode],
+        total,
+      },
+    ]);
+    setFileName("");
+    setPages(1);
+    setCopies(1);
+  };
+
+  const cartTotal = cart.reduce((sum, item) => sum + item.total, 0);
 
   const savePrices = () => {
     setPrices(draftPrices);
@@ -126,10 +183,11 @@ export default function PrintBeeApp({ viewer, authConfigured }: { viewer: Viewer
 
           <label className={`upload-zone ${fileName ? "has-file" : ""}`}>
             <input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" onChange={handleFile} />
-            <span className="upload-icon">{fileName ? "✓" : "↑"}</span>
+            <span className="upload-icon">{countingPages ? "…" : fileName ? "✓" : "↑"}</span>
             <strong>{fileName || "Choose a document"}</strong>
-            <small>{fileName ? "Ready to configure" : "or drag and drop it here"}</small>
+            <small>{countingPages ? "Counting pages…" : fileName ? `${pages} ${pages === 1 ? "page" : "pages"} detected` : "or drag and drop it here"}</small>
           </label>
+          {uploadError && <p className="upload-error">{uploadError}</p>}
 
           <div className="field-label"><span className="step">2</span> Choose print type</div>
           <div className="option-grid">
@@ -154,10 +212,40 @@ export default function PrintBeeApp({ viewer, authConfigured }: { viewer: Viewer
 
           <div className="estimate">
             <div><small>Estimated print total</small><strong>{inr.format(total)}</strong></div>
-            <button disabled={!fileName}>Add to cart <span>→</span></button>
+            <button disabled={!fileName || countingPages} onClick={addToCart}>Add to cart <span>→</span></button>
           </div>
           <p className="estimate-note">{pages} pages × {copies} {copies === 1 ? "copy" : "copies"} × {inr.format(prices[mode])} · {selected.title}</p>
         </section>
+      </section>
+
+      <section className="cart-section" id="cart" aria-labelledby="cart-title">
+        <div className="cart-heading">
+          <div><div className="eyebrow"><span>●</span> Your print cart</div><h2 id="cart-title">{cart.length ? `${cart.length} ${cart.length === 1 ? "document" : "documents"} ready` : "Your cart is empty"}</h2></div>
+          {cart.length > 0 && <strong>{inr.format(cartTotal)}</strong>}
+        </div>
+        {cart.length === 0 ? (
+          <div className="empty-cart"><span>▤</span><p>Upload a document above and click <strong>Add to cart</strong>.</p></div>
+        ) : (
+          <>
+            <div className="cart-items">
+              {cart.map((item) => {
+                const itemOption = options.find((option) => option.id === item.mode)!;
+                return (
+                  <article className="cart-item" key={item.id}>
+                    <div className="file-badge">{item.fileType === "PDF" ? "PDF" : "IMG"}</div>
+                    <div className="cart-file"><h3>{item.fileName}</h3><p>{item.pages} {item.pages === 1 ? "page" : "pages"} · A4 · {itemOption.title} · {item.copies} {item.copies === 1 ? "copy" : "copies"}</p><small>{item.pages} × {item.copies} × {inr.format(item.unitPrice)}</small></div>
+                    <strong>{inr.format(item.total)}</strong>
+                    <button className="remove-item" onClick={() => setCart((items) => items.filter((current) => current.id !== item.id))} aria-label={`Remove ${item.fileName}`}>×</button>
+                  </article>
+                );
+              })}
+            </div>
+            <div className="cart-summary">
+              <div><span>Printing subtotal</span><strong>{inr.format(cartTotal)}</strong></div>
+              <button onClick={() => viewer ? window.alert("Your cart is ready for checkout.") : setLoginOpen(true)}>Proceed to checkout →</button>
+            </div>
+          </>
+        )}
       </section>
 
       <section className="how" id="how">
