@@ -63,7 +63,7 @@ export default function PrintBeeApp({ viewer, authConfigured }: { viewer: Viewer
   const [mobileNumber, setMobileNumber] = useState("");
   const [locationId, setLocationId] = useState("");
   const [orderError, setOrderError] = useState("");
-  const [orderResult, setOrderResult] = useState<{ orderNumber: string; deliveryCode: string; locationName: string } | null>(null);
+  const [orderResult, setOrderResult] = useState<{ id: string; orderNumber: string; deliveryCode: string; locationName: string; paid: boolean; paymentConfigured: boolean } | null>(null);
   const [newLocation, setNewLocation] = useState("");
   const [agentEmail, setAgentEmail] = useState("");
   const [adminMessage, setAdminMessage] = useState("");
@@ -71,6 +71,7 @@ export default function PrintBeeApp({ viewer, authConfigured }: { viewer: Viewer
   const [deliveryOrderNumber, setDeliveryOrderNumber] = useState("");
   const [deliveryCode, setDeliveryCode] = useState("");
   const [deliveryMessage, setDeliveryMessage] = useState("");
+  const [dashboard, setDashboard] = useState<any>(null);
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
@@ -189,8 +190,65 @@ export default function PrintBeeApp({ viewer, authConfigured }: { viewer: Viewer
     });
     const data = await response.json();
     if (!response.ok) return setOrderError(data.error ?? "Order could not be placed");
-    setOrderResult(data);
     setCart([]);
+    const pendingResult = { ...data, paid: false };
+    setOrderResult(pendingResult);
+    if (data.paymentConfigured) await startRazorpayPayment(pendingResult);
+  };
+
+  const startRazorpayPayment = async (order: any) => {
+    setOrderError("");
+    const createResponse = await fetch("/api/payments/razorpay/create", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ orderId: order.id }) });
+    const paymentOrder = await createResponse.json();
+    if (!createResponse.ok) return setOrderError(paymentOrder.error);
+    if (!(window as any).Razorpay) {
+      await new Promise<void>((resolve, reject) => {
+        const script = document.createElement("script");
+        script.src = "https://checkout.razorpay.com/v1/checkout.js";
+        script.onload = () => resolve();
+        script.onerror = () => reject(new Error("Razorpay Checkout could not load"));
+        document.head.appendChild(script);
+      });
+    }
+    const checkout = new (window as any).Razorpay({
+      key: paymentOrder.keyId,
+      amount: paymentOrder.amount,
+      currency: "INR",
+      name: "PrintBee",
+      description: `Print order ${order.orderNumber}`,
+      order_id: paymentOrder.razorpayOrderId,
+      prefill: { name: customerName, email: viewer?.email, contact: `+91${mobileNumber}` },
+      theme: { color: "#ffb900" },
+      handler: async (result: any) => {
+        const verification = await fetch("/api/payments/razorpay/verify", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...result, printbeeOrderId: order.id }),
+        });
+        const verified = await verification.json();
+        if (!verification.ok) return setOrderError(verified.error);
+        setOrderResult({ ...order, paid: true });
+      },
+    });
+    checkout.open();
+  };
+
+  const openAdminDashboard = async () => {
+    setAdminOpen(true);
+    const response = await fetch("/api/admin/dashboard");
+    if (response.ok) setDashboard(await response.json());
+  };
+
+  const updateOrderStatus = async (orderId: string, status: string) => {
+    await fetch("/api/admin/orders/status", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ orderId, status }) });
+    await openAdminDashboard();
+  };
+
+  const assignRider = async (orderId: string, riderEmail: string) => {
+    if (!riderEmail) return;
+    const response = await fetch("/api/admin/orders/assign", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ orderId, riderEmail }) });
+    const data = await response.json();
+    if (!response.ok) setAdminMessage(data.error);
+    await openAdminDashboard();
   };
 
   const addLocation = async () => {
@@ -223,7 +281,7 @@ export default function PrintBeeApp({ viewer, authConfigured }: { viewer: Viewer
         <nav aria-label="Main navigation">
           <a href="#how">How it works</a>
           <a href="#pricing">Pricing</a>
-          {viewer?.isAdmin && <button className="admin-link" onClick={() => setAdminOpen(true)}>Admin pricing</button>}
+          {viewer?.isAdmin && <button className="admin-link" onClick={openAdminDashboard}>Admin dashboard</button>}
           {(role === "ADMIN" || role === "AGENT") && <button className="admin-link" onClick={() => setDeliveryOpen(true)}>Delivery</button>}
           {viewer ? (
             <button className="login-link" onClick={signOut} title={viewer.email}>Sign out</button>
@@ -368,6 +426,34 @@ export default function PrintBeeApp({ viewer, authConfigured }: { viewer: Viewer
             <p>Add the Google email used by each delivery agent.</p>
             <div className="inline-admin-form"><input value={agentEmail} onChange={(e) => setAgentEmail(e.target.value)} placeholder="agent@gmail.com" /><button onClick={addAgent}>Add</button></div>
             {adminMessage && <p className="panel-message">{adminMessage}</p>}
+            {dashboard && (
+              <div className="dashboard-block">
+                <div className="admin-divider" />
+                <h2>Operations dashboard</h2>
+                <div className="metric-grid">
+                  <div><small>Total orders</small><strong>{dashboard.summary?.total ?? 0}</strong></div>
+                  <div><small>Delivered</small><strong>{dashboard.summary?.delivered ?? 0}</strong></div>
+                  <div><small>Ready</small><strong>{dashboard.summary?.ready ?? 0}</strong></div>
+                  <div><small>Paid revenue</small><strong>{inr.format((dashboard.summary?.revenue_paise ?? 0) / 100)}</strong></div>
+                </div>
+                <h3>Rider performance</h3>
+                <div className="rider-stats">{dashboard.riders?.length ? dashboard.riders.map((rider: any) => <div key={rider.email}><span>{rider.email}</span><strong>{rider.delivered ?? 0} delivered</strong><small>{rider.assigned ?? 0} assigned</small></div>) : <p>No riders added yet.</p>}</div>
+                <h3>Live orders</h3>
+                <div className="admin-orders">{dashboard.orders?.length ? dashboard.orders.map((order: any) => (
+                  <article key={order.id}>
+                    <div><strong>{order.order_number}</strong><small>{order.customer_name} · {order.location_name}</small></div>
+                    <span className="status-chip">{order.payment_status} · {order.status}</span>
+                    <strong>{inr.format(order.total_paise / 100)}</strong>
+                    <select value={order.status} onChange={(e) => updateOrderStatus(order.id, e.target.value)}>
+                      <option value="CONFIRMED">Confirmed</option><option value="PRINTING">Printing</option><option value="READY_FOR_PICKUP">Ready for pickup</option><option value="RIDER_ASSIGNED">Rider assigned</option>
+                    </select>
+                    <select value={order.rider_email ?? ""} onChange={(e) => assignRider(order.id, e.target.value)}>
+                      <option value="">Assign rider</option>{dashboard.riders.map((rider: any) => <option key={rider.email} value={rider.email}>{rider.email}</option>)}
+                    </select>
+                  </article>
+                )) : <p>No orders yet.</p>}</div>
+              </div>
+            )}
             <small className="admin-note">Prices are saved on this device for the current demo.</small>
           </section>
         </div>
@@ -381,8 +467,11 @@ export default function PrintBeeApp({ viewer, authConfigured }: { viewer: Viewer
               <div className="order-success">
                 <span>✓</span><h2>Order placed</h2>
                 <p>Order <strong>{orderResult.orderNumber}</strong> · {orderResult.locationName}</p>
+                <div className={orderResult.paid ? "payment-paid" : "payment-pending"}><small>Payment status</small><strong>{orderResult.paid ? "PAID" : "PENDING"}</strong></div>
                 <div><small>Your delivery code</small><strong>{orderResult.deliveryCode}</strong></div>
-                <p>Give this code to the delivery agent only after receiving your prints.</p>
+                <p>{orderResult.paid ? "Give this code to the delivery agent only after receiving your prints." : "Your order will not be processed until Razorpay payment is complete."}</p>
+                {!orderResult.paid && orderResult.paymentConfigured && <button className="save-button" onClick={() => startRazorpayPayment(orderResult)}>Pay with Razorpay</button>}
+                {!orderResult.paid && !orderResult.paymentConfigured && <p className="panel-message">Razorpay test keys are required to activate payment.</p>}
                 <button className="save-button" onClick={() => { setCheckoutOpen(false); setOrderResult(null); }}>Done</button>
               </div>
             ) : (
@@ -394,9 +483,10 @@ export default function PrintBeeApp({ viewer, authConfigured }: { viewer: Viewer
                 <label className="checkout-field">Mobile number<input value={mobileNumber} onChange={(e) => setMobileNumber(e.target.value.replace(/\D/g, "").slice(0, 10))} placeholder="10-digit mobile number" inputMode="numeric" /></label>
                 <label className="checkout-field">Delivery location<select value={locationId} onChange={(e) => setLocationId(e.target.value)}><option value="">Select a location</option>{locations.map((location) => <option value={location.id} key={location.id}>{location.name}</option>)}</select></label>
                 {!locations.length && <p className="panel-message">No delivery locations are available yet. The admin must add one first.</p>}
-                <div className="checkout-total"><span>Order total</span><strong>{inr.format(cartTotal)}</strong></div>
+                <div className="fee-breakdown"><div><span>Printing subtotal</span><strong>{inr.format(cartTotal)}</strong></div><div><span>Delivery fee</span><strong>{inr.format(15)}</strong></div><div><span>Platform fee</span><strong>{inr.format(3.5)}</strong></div></div>
+                <div className="checkout-total"><span>To pay</span><strong>{inr.format(cartTotal + 18.5)}</strong></div>
                 {orderError && <p className="form-error">{orderError}</p>}
-                <button className="save-button" disabled={!locations.length} onClick={placeOrder}>Place order</button>
+                <button className="save-button" disabled={!locations.length} onClick={placeOrder}>Continue to Razorpay</button>
               </>
             )}
           </section>

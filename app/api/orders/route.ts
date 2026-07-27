@@ -17,9 +17,12 @@ export async function POST(request: Request) {
   const code = crypto.getRandomValues(new Uint32Array(1))[0] % 1_000_000;
   const deliveryCode = code.toString().padStart(6, "0");
   const orderNumber = `PB${Date.now().toString().slice(-8)}`;
-  const totalPaise = Math.max(0, Math.round(Number(body.totalPaise) || 0));
+  const printingSubtotalPaise = Math.max(0, Math.round(Number(body.totalPaise) || 0));
+  const deliveryFeePaise = 1500;
+  const platformFeePaise = 350;
+  const totalPaise = printingSubtotalPaise + deliveryFeePaise + platformFeePaise;
   const hash = await hashDeliveryCode(id, deliveryCode);
-  await database().prepare(`INSERT INTO orders (id, order_number, customer_email, customer_name, mobile_number, location_id, location_name, items_json, total_paise, delivery_code_hash, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PLACED', ?)`)
-    .bind(id, orderNumber, viewer.email, name, mobile, location.id, location.name, JSON.stringify(body.items), totalPaise, hash, new Date().toISOString()).run();
-  return NextResponse.json({ id, orderNumber, deliveryCode, locationName: location.name });
+  await database().prepare(`INSERT INTO orders (id, order_number, customer_email, customer_name, mobile_number, location_id, location_name, items_json, printing_subtotal_paise, delivery_fee_paise, platform_fee_paise, total_paise, delivery_code_hash, status, payment_status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PAYMENT_PENDING', 'PENDING', ?)`)
+    .bind(id, orderNumber, viewer.email, name, mobile, location.id, location.name, JSON.stringify(body.items), printingSubtotalPaise, deliveryFeePaise, platformFeePaise, totalPaise, hash, new Date().toISOString()).run();
+  return NextResponse.json({ id, orderNumber, deliveryCode, locationName: location.name, totalPaise, paymentConfigured: Boolean(process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET) });
 }
