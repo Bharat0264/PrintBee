@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { ChangeEvent, useEffect, useMemo, useState } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 import { PDFDocument } from "pdf-lib";
@@ -297,7 +296,7 @@ export default function PrintBeeApp({ viewer, authConfigured }: { viewer: Viewer
     <main>
       <header className="topbar">
         <a className="brand" href="#top" aria-label="PrintBee home">
-          <Image src="/printbee-logo.png" width={74} height={74} alt="PrintBee" priority />
+          <img src="/printbee-logo.png" width={74} height={74} alt="PrintBee" />
           <span><strong>Print<span>Bee</span></strong><small>Upload. Print. Delivered.</small></span>
         </a>
         <nav aria-label="Main navigation">
@@ -421,7 +420,7 @@ export default function PrintBeeApp({ viewer, authConfigured }: { viewer: Viewer
       </section>
 
       <footer>
-        <div className="footer-brand"><Image src="/printbee-logo.png" width={86} height={86} alt="" /><div><strong>Print<span>Bee</span></strong><p>Upload. Print. Delivered.</p></div></div>
+        <div className="footer-brand"><img src="/printbee-logo.png" width={86} height={86} alt="" /><div><strong>Print<span>Bee</span></strong><p>Upload. Print. Delivered.</p></div></div>
         <p>© 2026 PrintBee · Local A4 printing made easy.</p>
       </footer>
 
@@ -558,7 +557,7 @@ export default function PrintBeeApp({ viewer, authConfigured }: { viewer: Viewer
         <div className="modal-backdrop" role="presentation" onMouseDown={() => setLoginOpen(false)}>
           <section className="login-modal" role="dialog" aria-modal="true" aria-labelledby="login-title" onMouseDown={(e) => e.stopPropagation()}>
             <button className="close" onClick={() => setLoginOpen(false)} aria-label="Close">×</button>
-            <Image src="/printbee-logo.png" width={88} height={88} alt="PrintBee" />
+            <img src="/printbee-logo.png" width={88} height={88} alt="PrintBee" />
             <h2 id="login-title">Welcome to PrintBee</h2>
             <p>Sign in securely with Google to save your orders and track delivery.</p>
             <button className="google-button" onClick={signInWithGoogle}><span>G</span> Continue with Google</button>
