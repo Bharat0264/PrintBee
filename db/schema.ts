@@ -49,4 +49,7 @@ export const orders = sqliteTable("orders", {
   createdAt: text("created_at").notNull(),
   deliveredAt: text("delivered_at"),
   deliveredBy: text("delivered_by"),
+  cancellationReason: text("cancellation_reason"),
+  cancelledAt: text("cancelled_at"),
+  cancelledBy: text("cancelled_by"),
 });

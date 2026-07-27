@@ -250,6 +250,18 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
     await openAdminDashboard();
   };
 
+  const cancelOrder = async (orderId: string) => {
+    if (!window.confirm("Cancel this order because the paid amount does not match?")) return;
+    const response = await fetch("/api/admin/orders/cancel", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ orderId, reason: "Payment amount mismatch" }),
+    });
+    const data = await response.json();
+    setAdminMessage(response.ok ? "Order cancelled for payment amount mismatch." : data.error);
+    await openAdminDashboard();
+  };
+
   const openAdminDashboard = async () => {
     setAdminOpen(true);
     const response = await fetch("/api/admin/dashboard");
@@ -499,6 +511,8 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                     <strong>{inr.format(order.total_paise / 100)}</strong>
                     {order.payment_reference && <small>Payment ref: {order.payment_reference}</small>}
                     {order.payment_status === "PENDING" && order.payment_reference && <button className="mini-action" onClick={() => markPaid(order.id)}>Mark paid</button>}
+                    {order.status !== "DELIVERED" && order.status !== "CANCELLED" && <button className="cancel-action" onClick={() => cancelOrder(order.id)}>Cancel — amount mismatch</button>}
+                    {order.status === "CANCELLED" && <div className="cancelled-note"><strong>Cancelled</strong><small>{order.cancellation_reason}</small></div>}
                     <div className="document-details">
                       <strong>Documents</strong>
                       {order.items?.length ? order.items.map((item: any, index: number) => (
@@ -509,10 +523,11 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                       )) : <small>No document details saved for this legacy order.</small>}
                     </div>
                     <div className="file-links">{order.files?.length ? order.files.map((file: any) => <a key={file.id} href={`/api/admin/files/${file.id}/download`}>Download {file.original_name}</a>) : <span>Legacy order — document was not stored</span>}</div>
-                    <select value={order.status} onChange={(e) => updateOrderStatus(order.id, e.target.value)}>
+                    <select disabled={order.status === "CANCELLED"} value={order.status} onChange={(e) => updateOrderStatus(order.id, e.target.value)}>
+                      {order.status === "CANCELLED" && <option value="CANCELLED">Cancelled</option>}
                       <option value="CONFIRMED">Confirmed</option><option value="PRINTING">Printing</option><option value="READY_FOR_PICKUP">Ready for pickup</option><option value="RIDER_ASSIGNED">Rider assigned</option>
                     </select>
-                    <select value={order.rider_email ?? ""} onChange={(e) => assignRider(order.id, e.target.value)}>
+                    <select disabled={order.status === "CANCELLED"} value={order.rider_email ?? ""} onChange={(e) => assignRider(order.id, e.target.value)}>
                       <option value="">Assign rider</option>{dashboard.riders.map((rider: any) => <option key={rider.email} value={rider.email}>{rider.email}</option>)}
                     </select>
                   </article>
@@ -588,7 +603,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
           <section className="orders-modal" role="dialog" aria-modal="true" onMouseDown={(e) => e.stopPropagation()}>
             <button className="close" onClick={() => setMyOrdersOpen(false)} aria-label="Close">×</button>
             <div className="admin-badge">CUSTOMER</div><h2>My orders</h2>
-            {myOrders.length ? myOrders.map((order) => <article key={order.id}><div><strong>{order.order_number}</strong><small>{order.location_name} · {new Date(order.created_at).toLocaleDateString("en-IN")}</small></div><span className="status-chip">{order.payment_status} · {order.status}</span><strong>{inr.format(order.total_paise / 100)}</strong><div className="customer-code"><small>Delivery code</small><strong>{order.deliveryCode}</strong></div></article>) : <p>No orders yet.</p>}
+            {myOrders.length ? myOrders.map((order) => <article key={order.id}><div><strong>{order.order_number}</strong><small>{order.location_name} · {new Date(order.created_at).toLocaleDateString("en-IN")}</small>{order.cancellation_reason && <small>Cancelled: {order.cancellation_reason}</small>}</div><span className="status-chip">{order.payment_status} · {order.status}</span><strong>{inr.format(order.total_paise / 100)}</strong>{order.status !== "CANCELLED" && <div className="customer-code"><small>Delivery code</small><strong>{order.deliveryCode}</strong></div>}</article>) : <p>No orders yet.</p>}
           </section>
         </div>
       )}

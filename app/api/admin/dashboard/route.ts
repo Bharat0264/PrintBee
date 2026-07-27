@@ -8,7 +8,7 @@ export async function GET() {
   const db = database();
   const [summary, orders, riders, locations, files] = await Promise.all([
     db.prepare(`SELECT COUNT(*) total, SUM(CASE WHEN status='DELIVERED' THEN 1 ELSE 0 END) delivered, SUM(CASE WHEN payment_status='PAID' THEN 1 ELSE 0 END) paid, SUM(CASE WHEN payment_status='PENDING' THEN 1 ELSE 0 END) unpaid, SUM(CASE WHEN payment_status='PAID' THEN total_paise ELSE 0 END) revenue_paise, SUM(CASE WHEN status='READY_FOR_PICKUP' THEN 1 ELSE 0 END) ready FROM orders`).first(),
-    db.prepare(`SELECT id, order_number, customer_email, customer_name, mobile_number, location_name, items_json, printing_subtotal_paise, delivery_fee_paise, platform_fee_paise, total_paise, payment_status, payment_reference, status, rider_email, created_at FROM orders ORDER BY created_at DESC LIMIT 100`).all(),
+    db.prepare(`SELECT id, order_number, customer_email, customer_name, mobile_number, location_name, items_json, printing_subtotal_paise, delivery_fee_paise, platform_fee_paise, total_paise, payment_status, payment_reference, status, rider_email, cancellation_reason, cancelled_at, cancelled_by, created_at FROM orders ORDER BY created_at DESC LIMIT 100`).all(),
     db.prepare(`SELECT u.email, COUNT(o.id) assigned, SUM(CASE WHEN o.status='DELIVERED' THEN 1 ELSE 0 END) delivered FROM app_users u LEFT JOIN orders o ON o.rider_email=u.email WHERE u.role='AGENT' GROUP BY u.email ORDER BY delivered DESC`).all(),
     db.prepare("SELECT id, name, active FROM locations ORDER BY name").all(),
     db.prepare("SELECT id, order_id, original_name FROM uploads WHERE order_id IS NOT NULL ORDER BY created_at").all(),

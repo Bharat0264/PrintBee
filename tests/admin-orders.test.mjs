@@ -12,4 +12,6 @@ test("admin receives paid and unpaid order contact and document details", () => 
   assert.match(appSource, /order\.mobile_number/);
   assert.match(appSource, /order\.items\?\.length/);
   assert.match(appSource, /Download \{file\.original_name\}/);
+  assert.match(appSource, /Cancel — amount mismatch/);
+  assert.match(appSource, /Payment amount mismatch/);
 });
