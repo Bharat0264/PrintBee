@@ -9,8 +9,9 @@ const pageSource = await readFile(new URL("../app/page.tsx", import.meta.url), "
 test("checkout uses only the PrintBee Razorpay payment link", async () => {
   assert.match(appSource, /https:\/\/razorpay\.me\/@PrintBee/);
   assert.match(appSource, /Open Razorpay payment link/);
-  assert.match(appSource, /QRCode\.toDataURL\(RAZORPAY_PAYMENT_LINK/);
-  assert.match(appSource, /Scan to pay with Razorpay/);
+  assert.match(appSource, /QRCode\.toDataURL\(window\.location\.origin/);
+  assert.match(appSource, /Scan to open the app/);
+  assert.doesNotMatch(appSource, /Scan to pay with Razorpay/);
   assert.match(appSource, /Submit payment reference/);
   assert.doesNotMatch(appSource, /checkout\.razorpay\.com|startRazorpayPayment|paymentConfigured/);
   assert.doesNotMatch(orderSource, /RAZORPAY_KEY_ID|RAZORPAY_KEY_SECRET|paymentConfigured/);

@@ -80,7 +80,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   const [myOrdersOpen, setMyOrdersOpen] = useState(false);
   const [myOrders, setMyOrders] = useState<any[]>([]);
   const [paymentReference, setPaymentReference] = useState("");
-  const [paymentQr, setPaymentQr] = useState("");
+  const [appQr, setAppQr] = useState("");
   const [riderOrders, setRiderOrders] = useState<any[]>([]);
   const [saved, setSaved] = useState(false);
 
@@ -102,12 +102,12 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   }, [viewer]);
 
   useEffect(() => {
-    QRCode.toDataURL(RAZORPAY_PAYMENT_LINK, {
+    QRCode.toDataURL(window.location.origin, {
       width: 280,
       margin: 2,
       color: { dark: "#171a20", light: "#ffffff" },
       errorCorrectionLevel: "H",
-    }).then(setPaymentQr).catch(() => setPaymentQr(""));
+    }).then(setAppQr).catch(() => setAppQr(""));
   }, []);
 
   const selected = options.find((item) => item.id === mode)!;
@@ -414,6 +414,18 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
         <div><span>03</span><strong>We deliver</strong><p>Fresh prints arrive at your door.</p></div>
       </section>
 
+      <section className="app-scanner" aria-labelledby="app-scanner-title">
+        <div>
+          <div className="eyebrow"><span>●</span> Share PrintBee</div>
+          <h2 id="app-scanner-title">Scan to open the app</h2>
+          <p>Point any phone camera at this code to open PrintBee and start a print order.</p>
+        </div>
+        <div className="scanner-card">
+          {appQr ? <img src={appQr} width={220} height={220} alt="QR code to open the PrintBee application" /> : <span>Preparing scanner…</span>}
+          <strong>Open PrintBee</strong>
+        </div>
+      </section>
+
       <section className="pricing" id="pricing">
         <div className="section-intro">
           <div className="eyebrow"><span>●</span> Simple A4 pricing</div>
@@ -509,11 +521,6 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                 <p>{orderResult.paid ? "Give this code to the delivery agent only after receiving your prints." : `Pay exactly ${inr.format(orderResult.totalPaise / 100)} using the PrintBee payment link. Use ${orderResult.orderNumber} as the payment note.`}</p>
                 {!orderResult.paid && (
                   <>
-                    <div className="payment-scanner">
-                      <small>Scan to pay with Razorpay</small>
-                      {paymentQr ? <img src={paymentQr} width={220} height={220} alt="QR code for the PrintBee Razorpay payment link" /> : <span>Preparing scanner…</span>}
-                      <strong>{inr.format(orderResult.totalPaise / 100)}</strong>
-                    </div>
                     <a className="save-button" href={RAZORPAY_PAYMENT_LINK} target="_blank" rel="noreferrer">Open Razorpay payment link</a>
                     <label className="checkout-field">Razorpay payment ID / UTR<input value={paymentReference} onChange={(e) => setPaymentReference(e.target.value)} placeholder="Enter the reference after payment" /></label>
                     <button className="save-button" disabled={paymentReference.trim().length < 6} onClick={submitPaymentReference}>Submit payment reference</button>
