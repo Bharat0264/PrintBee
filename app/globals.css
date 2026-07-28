@@ -443,6 +443,9 @@ footer { border-top: 1px solid var(--line); padding: 28px max(24px, calc((100% -
 .assigned-orders article strong, .assigned-orders article small { display: block; }
 .assigned-orders article small { margin-top: 4px; color: var(--muted); font-size: 9px; }
 .assigned-orders article button { border: 0; border-radius: 8px; padding: 9px 11px; background: var(--ink); color: white; font-size: 9px; font-weight: 800; }
+.assigned-orders .customer-phone { color: var(--ink); font-size: 11px; font-weight: 900; letter-spacing: .4px; }
+.delivery-actions { display: flex; align-items: center; gap: 6px; }
+.delivery-actions a { border: 1px solid #d8b33c; border-radius: 8px; padding: 9px 11px; background: var(--yellow); color: var(--ink); font-size: 9px; font-weight: 900; text-decoration: none; white-space: nowrap; }
 .empty-partner-orders { padding: 30px; border-radius: 10px; background: #f5f3ee; color: var(--muted); text-align: center; font-size: 11px; }
 .otp-verification { display: grid; grid-template-columns: 1fr 220px auto; align-items: end; gap: 16px; margin-top: 18px; padding: 22px; border-radius: 18px; background: var(--yellow); }
 .otp-verification h2 { margin: 8px 0 4px; }
@@ -461,5 +464,8 @@ footer { border-top: 1px solid var(--line); padding: 28px max(24px, calc((100% -
   .assigned-orders article { grid-template-columns: 1fr auto; }
   .assigned-orders article > div:nth-child(2) { grid-column: 1; }
   .assigned-orders article button { grid-column: 1 / -1; }
+  .delivery-actions { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; }
+  .delivery-actions a { text-align: center; }
+  .delivery-actions button { grid-column: auto !important; }
   .otp-verification { grid-template-columns: 1fr; }
 }
