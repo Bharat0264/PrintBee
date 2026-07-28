@@ -75,6 +75,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   const [authMessage, setAuthMessage] = useState("");
   const [role, setRole] = useState<string | null>(viewer?.isAdmin ? "ADMIN" : null);
   const [approvalStatus, setApprovalStatus] = useState<string | null>(null);
+  const [loginMode, setLoginMode] = useState<"CUSTOMER" | "PARTNER">("CUSTOMER");
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [locations, setLocations] = useState<LocationOption[]>([]);
   const [customerName, setCustomerName] = useState("");
@@ -118,6 +119,16 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
     if (!viewer) return;
     fetch("/api/me").then((response) => response.json()).then((data) => { setRole(data.role); setApprovalStatus(data.approvalStatus ?? null); }).catch(() => {});
   }, [viewer]);
+
+  useEffect(() => {
+    const storedMode = window.localStorage.getItem("printbee-login-mode");
+    if (storedMode === "PARTNER") setLoginMode("PARTNER");
+  }, []);
+
+  useEffect(() => {
+    if (!viewer || viewer.isAdmin || loginMode !== "PARTNER") return;
+    loadRiderOrders();
+  }, [viewer, loginMode, approvalStatus]);
 
   useEffect(() => {
     QRCode.toDataURL(window.location.origin, {
@@ -205,7 +216,9 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
       )
     : null;
 
-  const signInWithGoogle = async () => {
+  const signInWithGoogle = async (mode: "CUSTOMER" | "PARTNER" = "CUSTOMER") => {
+    window.localStorage.setItem("printbee-login-mode", mode);
+    setLoginMode(mode);
     if (!supabase) return setAuthMessage("Authentication is awaiting Supabase configuration.");
     await supabase.auth.signInWithOAuth({
       provider: "google",
@@ -214,8 +227,15 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   };
 
   const signOut = async () => {
+    window.localStorage.removeItem("printbee-login-mode");
     await supabase?.auth.signOut();
     window.location.reload();
+  };
+
+  const switchLoginMode = (mode: "CUSTOMER" | "PARTNER") => {
+    window.localStorage.setItem("printbee-login-mode", mode);
+    setLoginMode(mode);
+    setLoginOpen(false);
   };
 
   const loadLocations = async () => {
@@ -423,6 +443,47 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   const checkoutDeliveryFee = (checkoutLocation?.delivery_fee_paise ?? 1500) / 100;
   const checkoutPlatformFee = (checkoutLocation?.platform_fee_paise ?? 350) / 100;
 
+  if (viewer && !viewer.isAdmin && loginMode === "PARTNER") {
+    const partnerApproved = role === "AGENT" && approvalStatus === "APPROVED";
+    return (
+      <main className="partner-portal">
+        <header className="partner-topbar">
+          <a className="brand" href="#" aria-label="PrintBee delivery partner"><img src="/printbee-logo.png" width={60} height={60} alt="PrintBee" /><span><strong>Print<span>Bee</span></strong><small>Delivery Partner</small></span></a>
+          <div><button onClick={() => switchLoginMode("CUSTOMER")}>Use PrintBee as customer</button><button onClick={signOut}>Sign out</button></div>
+        </header>
+        {!partnerApproved ? (
+          <section className="partner-application-card">
+            <div className="admin-badge">DELIVERY PARTNER APPLICATION</div>
+            <h1>{approvalStatus === "PENDING" ? "Verification pending" : "Complete your rider profile"}</h1>
+            {approvalStatus === "PENDING" ? <p>Your details were submitted successfully. Once verified by the admin, you can continue as a delivery partner.</p> : <>
+              <p>You are signed in with <strong>{viewer.email}</strong>. Enter your details and submit them for admin verification.</p>
+              <label>Full name<input value={riderApplication.name} onChange={(e) => setRiderApplication({ ...riderApplication, name: e.target.value })} placeholder="Your full name" /></label>
+              <label>Mobile number<input inputMode="numeric" value={riderApplication.mobileNumber} onChange={(e) => setRiderApplication({ ...riderApplication, mobileNumber: e.target.value.replace(/\D/g, "").slice(0, 10) })} placeholder="10-digit mobile number" /></label>
+              <button disabled={!riderApplication.name.trim() || riderApplication.mobileNumber.length !== 10} onClick={submitRiderApplication}>Submit for admin verification</button>
+            </>}
+            {approvalStatus === "REMOVED" && <p className="customer-error">Your delivery-partner access was removed. You may submit your details again for a new admin review.</p>}
+            {authMessage && <p className="auth-message">{authMessage}</p>}
+          </section>
+        ) : (
+          <div className="partner-dashboard">
+            <section className="partner-welcome"><div><div className="admin-badge">DELIVERY PARTNER</div><h1>Your delivery dashboard</h1><p>Only orders assigned to your account are shown here.</p></div><button onClick={loadRiderOrders}>Refresh orders</button></section>
+            {riderEarnings && <section className="partner-earnings">
+              <div><small>Successful rides</small><strong>{riderEarnings.totalRides}</strong></div><div><small>Total earnings</small><strong>{inr.format(riderEarnings.earnedPaise / 100)}</strong></div><div><small>Available balance</small><strong>{inr.format(riderEarnings.availablePaise / 100)}</strong></div>
+              <p>You earn 75% of the delivery fee for each OTP-verified delivery.</p>
+              <label>UPI ID<input value={withdrawUpi} onChange={(e) => setWithdrawUpi(e.target.value)} placeholder="yourname@upi" /></label><button disabled={riderEarnings.availablePaise <= 0 || !withdrawUpi.trim()} onClick={requestWithdrawal}>Withdraw available earnings</button>
+              <div className="partner-withdrawal-history">{riderEarnings.withdrawals?.map((withdrawal: any) => <span key={withdrawal.id}><b>{inr.format(withdrawal.amount_paise / 100)}</b><small>{withdrawal.status === "REQUESTED" ? "Withdraw requested" : withdrawal.status === "IN_PROGRESS" ? "In progress" : "Amount sent to bank"} · {withdrawal.upi_id}</small></span>)}</div>
+            </section>}
+            <section className="assigned-orders"><div className="section-title"><div><h2>Assigned orders</h2><p>One rider can receive multiple orders, including several orders at the same location.</p></div><span>{riderOrders.length} active</span></div>
+              {riderOrders.length ? riderOrders.map((order) => <article key={order.order_number} className={deliveryOrderNumber === order.order_number ? "selected" : ""}><div><strong>{order.order_number}</strong><small>{order.location_name}</small></div><div><strong>{order.customer_name}</strong><small>{order.mobile_number}</small></div><span className="status-chip">{order.status}</span><button onClick={() => { setDeliveryOrderNumber(order.order_number); setDeliveryCode(""); }}>Deliver & verify OTP</button></article>) : <div className="empty-partner-orders">No active orders are assigned to you.</div>}
+            </section>
+            {deliveryOrderNumber && <section className="otp-verification"><div><div className="admin-badge">FINAL DELIVERY STEP</div><h2>Verify customer OTP</h2><p>Order <strong>{deliveryOrderNumber}</strong>. Hand over the prints first, then ask the customer for the six-digit OTP.</p></div><label>Customer OTP<input className="code-input" value={deliveryCode} onChange={(e) => setDeliveryCode(e.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="000000" inputMode="numeric" /></label><button disabled={deliveryCode.length !== 6} onClick={verifyDelivery}>Verify OTP & mark delivered</button></section>}
+            {deliveryMessage && <p className="partner-message">{deliveryMessage}</p>}
+          </div>
+        )}
+      </main>
+    );
+  }
+
   return (
     <main>
       <header className="topbar">
@@ -434,7 +495,8 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
           <a href="#how">How it works</a>
           <a href="#pricing">Pricing</a>
           {viewer?.isAdmin && <button className="admin-link" onClick={openAdminDashboard}>Admin dashboard</button>}
-          {(role === "ADMIN" || (role === "AGENT" && approvalStatus === "APPROVED")) && <button className="admin-link" onClick={openDeliveryQueue}>Delivery</button>}
+          {role === "ADMIN" && <button className="admin-link" onClick={openDeliveryQueue}>Delivery</button>}
+          {role === "AGENT" && approvalStatus === "APPROVED" && <button className="admin-link" onClick={() => switchLoginMode("PARTNER")}>Partner portal</button>}
           {viewer && <button className="admin-link" onClick={openMyOrders}>My orders</button>}
           {viewer ? (
             <button className="login-link" onClick={signOut} title={viewer.email}>Sign out</button>
@@ -780,9 +842,9 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
             <button className="close" onClick={() => setLoginOpen(false)} aria-label="Close">×</button>
             <img src="/printbee-logo.png" width={88} height={88} alt="PrintBee" />
             <h2 id="login-title">Welcome to PrintBee</h2>
-            <p>Sign in securely with Google to save your orders and track delivery.</p>
-            <button className="google-button" onClick={signInWithGoogle}><span>G</span> Continue with Google</button>
-            <button className="partner-button" onClick={() => { setLoginOpen(false); setRiderApplicationOpen(true); }}>Register as a delivery partner / rider</button>
+            <p>Choose how you want to use PrintBee. The same Google email can be used in both modes.</p>
+            <button className="google-button" onClick={() => signInWithGoogle("CUSTOMER")}><span>G</span> Login with Google as user</button>
+            <button className="partner-button" onClick={() => signInWithGoogle("PARTNER")}><span>G</span> Login with Google as delivery partner</button>
             {approvalStatus === "PENDING" && <p className="auth-message">Your delivery partner application is awaiting admin verification.</p>}
             {authMessage && <p className="auth-message">{authMessage}</p>}
             <small>By continuing, you agree to PrintBee’s terms and privacy policy.</small>
@@ -797,7 +859,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
             <div className="admin-badge">DELIVERY PARTNER</div>
             <h2>Register as a rider</h2>
             <p>Submit the details once verified by admin you can continue as delivery partner.</p>
-            {!viewer && <button className="google-button" onClick={signInWithGoogle}><span>G</span> Sign in with Google first</button>}
+            {!viewer && <button className="google-button" onClick={() => signInWithGoogle("PARTNER")}><span>G</span> Login with Google as delivery partner</button>}
             <label className="checkout-field">Full name<input value={riderApplication.name} onChange={(e) => setRiderApplication({ ...riderApplication, name: e.target.value })} /></label>
             <label className="checkout-field">Mobile number<input inputMode="numeric" value={riderApplication.mobileNumber} onChange={(e) => setRiderApplication({ ...riderApplication, mobileNumber: e.target.value.replace(/\D/g, "").slice(0, 10) })} /></label>
             <button className="save-button" disabled={!viewer || !riderApplication.name.trim() || riderApplication.mobileNumber.length !== 10} onClick={submitRiderApplication}>Submit for admin verification</button>
