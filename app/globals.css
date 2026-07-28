@@ -420,7 +420,10 @@ footer { border-top: 1px solid var(--line); padding: 28px max(24px, calc((100% -
 .export-actions input { display: block; margin-top: 4px; border: 1px solid var(--line); border-radius: 8px; padding: 9px; background: white; }
 .export-actions button, .hidden-orders button { border: 0; border-radius: 8px; padding: 10px 12px; background: var(--ink); color: white; font-size: 9px; font-weight: 900; }
 .export-actions button:disabled { opacity: .45; }
-.hide-order-action { grid-column: 1 / -1; border: 1px solid #d7a79f; border-radius: 8px; padding: 9px; background: #fff0ed; color: #8e2f25; font-size: 9px; font-weight: 900; }
+.order-record-actions { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.hide-order-action { border: 1px solid #d7a79f; border-radius: 8px; padding: 9px; background: #fff0ed; color: #8e2f25; font-size: 9px; font-weight: 900; }
+.delete-order-action { border: 0; border-radius: 8px; padding: 9px; background: #991f18 !important; color: white !important; font-size: 9px; font-weight: 900; }
+.hidden-orders .delete-order-action { margin-left: 6px; }
 .hidden-orders { display: grid; gap: 8px; margin-bottom: 24px; }
 .hidden-orders article { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 18px; padding: 14px; border: 1px dashed #c9c5ba; border-radius: 11px; background: #f5f3ee; }
 .hidden-orders strong, .hidden-orders small { display: block; }
@@ -439,6 +442,7 @@ footer { border-top: 1px solid var(--line); padding: 28px max(24px, calc((100% -
   .rider-wallet > p, .rider-wallet > label, .rider-wallet > button, .rider-withdrawals { grid-column: 1; }
   .hidden-orders article { grid-template-columns: 1fr; }
   .hidden-orders article > span:last-child { text-align: left; }
+  .order-record-actions { grid-template-columns: 1fr; }
 }
 
 .partner-portal { min-height: 100vh; background: #f6f5f1; }

@@ -318,13 +318,17 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
     await openAdminDashboard();
   };
 
-  const resetDemoOrders = async () => {
-    const confirmation = window.prompt("This permanently deletes ALL orders and their stored files, while preserving users, locations, fees and riders. Type DELETE DEMO ORDERS to continue.");
-    if (confirmation !== "DELETE DEMO ORDERS") return setAdminMessage("Demo reset cancelled.");
-    const response = await fetch("/api/admin/demo-reset", { method: "POST" });
+  const deleteOrder = async (order: any) => {
+    const confirmation = window.prompt(`Permanently delete only order ${order.order_number} and its stored documents? This cannot be undone. Type ${order.order_number} to continue.`);
+    if (confirmation?.trim().toUpperCase() !== order.order_number) return setAdminMessage("Order deletion cancelled.");
+    const response = await fetch("/api/admin/orders/delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ orderId: order.id }),
+    });
     const data = await response.json();
-    setAdminMessage(response.ok ? `${data.deletedOrders} demo orders and ${data.deletedFiles} stored files deleted. Revenue is now ₹0.` : data.error);
-    await openAdminDashboard();
+    setAdminMessage(response.ok ? `${data.orderNumber} and ${data.deletedFiles} stored file${data.deletedFiles === 1 ? "" : "s"} permanently deleted.` : data.error);
+    if (response.ok) await openAdminDashboard();
   };
 
   const setOrderHidden = async (orderId: string, hidden: boolean) => {
@@ -827,7 +831,6 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                 <p>Review the UPI ID and move each request through the payout flow.</p>
                 <div className="withdrawal-admin">{dashboard.riderWithdrawals?.length ? dashboard.riderWithdrawals.map((withdrawal: any) => <article key={withdrawal.id}><span><strong>{withdrawal.rider_email}</strong><small>UPI: {withdrawal.upi_id}</small><small>Requested {new Date(withdrawal.requested_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}</small></span><strong>{inr.format(withdrawal.amount_paise / 100)}</strong><select value={withdrawal.status} onChange={(e) => updateWithdrawalStatus(withdrawal.id, e.target.value)}><option value="REQUESTED">Withdraw requested</option><option value="IN_PROGRESS">In progress</option><option value="SENT">Amount sent to bank</option></select></article>) : <p>No withdrawal requests yet.</p>}</div>
                 <h3>Live orders</h3>
-                <div className="demo-reset-panel"><div><strong>Demo data cleanup</strong><small>Deletes all orders and order files. Users, locations, fees and riders are preserved.</small></div><button onClick={resetDemoOrders}>Delete all demo orders</button></div>
                 <div className="admin-orders">{dashboard.orders?.length ? dashboard.orders.map((order: any) => (
                   <article key={order.id}>
                     <div className="order-customer">
@@ -864,7 +867,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                     <select disabled={order.status === "CANCELLED" || order.payment_status === "REJECTED"} value={order.rider_email ?? ""} onChange={(e) => assignRider(order.id, e.target.value)}>
                       <option value="">Assign rider</option>{dashboard.riders.map((rider: any) => <option key={rider.email} value={rider.email}>{rider.email}</option>)}
                     </select>
-                    <button className="hide-order-action" onClick={() => setOrderHidden(order.id, true)}>Hide from dashboard &amp; exports</button>
+                    <div className="order-record-actions"><button className="hide-order-action" onClick={() => setOrderHidden(order.id, true)}>Hide from dashboard &amp; exports</button><button className="delete-order-action" onClick={() => deleteOrder(order)}>Delete this order</button></div>
                   </article>
                 )) : <p>No orders yet.</p>}</div>
                 <h3>Hidden orders</h3>
@@ -873,7 +876,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                   <article key={order.id}>
                     <span><strong>{order.order_number}</strong><small>{order.customer_name} · {order.location_name}</small><small>Ordered {new Date(order.created_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}</small></span>
                     <span><strong>{inr.format(order.total_paise / 100)}</strong><small>{order.payment_status} · {order.status}</small></span>
-                    <span><small>Hidden {new Date(order.hidden_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}</small><button onClick={() => setOrderHidden(order.id, false)}>Restore order</button></span>
+                    <span><small>Hidden {new Date(order.hidden_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}</small><button onClick={() => setOrderHidden(order.id, false)}>Restore order</button><button className="delete-order-action" onClick={() => deleteOrder(order)}>Delete this order</button></span>
                   </article>
                 )) : <p>No hidden orders.</p>}</div>
               </div>
