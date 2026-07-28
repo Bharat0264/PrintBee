@@ -228,6 +228,7 @@ footer { border-top: 1px solid var(--line); padding: 28px max(24px, calc((100% -
 .checkout-modal .save-button:disabled { opacity: .4; cursor: not-allowed; }
 .form-error { color: #b42318 !important; font-weight: 700; }
 .payment-warning { margin: 14px 0; padding: 12px 14px; border: 1px solid #efb5ad; border-left: 4px solid #c83f32; border-radius: 9px; background: #fff4f2; color: #842b23; font-size: 11px; line-height: 1.5; }
+.pay-on-delivery-note { margin: 14px 0; padding: 12px 14px; border: 1px solid #ead28d; border-left: 4px solid var(--yellow); border-radius: 9px; background: #fff9e8; color: #684f0b; font-size: 11px; line-height: 1.5; }
 .order-success { text-align: center; }
 .order-success > span { width: 50px; height: 50px; display: grid; place-items: center; margin: auto; border-radius: 50%; background: var(--yellow); font-size: 23px; font-weight: 900; }
 .order-success > div { margin: 20px 0; padding: 18px; border-radius: 14px; background: var(--ink); color: white; }
@@ -380,6 +381,15 @@ footer { border-top: 1px solid var(--line); padding: 28px max(24px, calc((100% -
 .payment-review-actions button { border: 1px solid #e2b5af; border-radius: 7px; padding: 8px 5px; background: #fff4f2; color: #8d3027; font-size: 8px; font-weight: 900; }
 .payment-review-actions .mini-action { border: 0; background: #1a8f4b; color: white; }
 .payment-review-actions button:disabled { opacity: .45; }
+.admin-payment-qr { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 12px; border: 1px dashed #d4c06f; border-radius: 10px; background: #fffbed; }
+.admin-payment-qr label { flex: 1; color: #684f0b; font-size: 9px; font-weight: 900; }
+.admin-payment-qr input { display: block; width: 100%; margin-top: 6px; font-size: 9px; }
+.admin-payment-qr img { width: 92px; height: 92px; object-fit: contain; border: 5px solid white; border-radius: 7px; }
+.customer-payment-qr { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 14px; border-radius: 12px; background: #fff9e8; }
+.customer-payment-qr strong, .customer-payment-qr small { display: block; }
+.customer-payment-qr strong { font-size: 17px; }
+.customer-payment-qr small { max-width: 260px; margin-top: 5px; color: #735500; line-height: 1.4; }
+.customer-payment-qr img { width: 150px; height: 150px; object-fit: contain; border: 7px solid white; border-radius: 9px; }
 .partner-button { width: 100%; margin-top: 9px; border: 0; border-radius: 11px; padding: 13px; background: var(--ink); color: white; font-weight: 800; }
 .customer-code { gap: 16px; }
 .customer-code span, .customer-code small { display: block; }
@@ -446,6 +456,10 @@ footer { border-top: 1px solid var(--line); padding: 28px max(24px, calc((100% -
 .assigned-orders article strong, .assigned-orders article small { display: block; }
 .assigned-orders article small { margin-top: 4px; color: var(--muted); font-size: 9px; }
 .assigned-orders article button { border: 0; border-radius: 8px; padding: 9px 11px; background: var(--ink); color: white; font-size: 9px; font-weight: 800; }
+.order-payment-qr { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 14px; border-radius: 11px; background: #fff9dc; }
+.order-payment-qr strong, .order-payment-qr small { display: block; }
+.order-payment-qr small { max-width: 320px; margin-top: 5px; color: #735500; }
+.order-payment-qr img { width: 190px; height: 190px; object-fit: contain; border: 8px solid white; border-radius: 10px; }
 .assigned-orders .customer-phone { color: var(--ink); font-size: 11px; font-weight: 900; letter-spacing: .4px; }
 .delivery-actions { display: flex; align-items: center; gap: 6px; }
 .delivery-actions a { border: 1px solid #d8b33c; border-radius: 8px; padding: 9px 11px; background: var(--yellow); color: var(--ink); font-size: 9px; font-weight: 900; text-decoration: none; white-space: nowrap; }
@@ -471,4 +485,5 @@ footer { border-top: 1px solid var(--line); padding: 28px max(24px, calc((100% -
   .delivery-actions a { text-align: center; }
   .delivery-actions button { grid-column: auto !important; }
   .otp-verification { grid-template-columns: 1fr; }
+  .customer-payment-qr, .order-payment-qr { flex-direction: column; text-align: center; }
 }

@@ -8,8 +8,8 @@ export async function POST(request: Request) {
   const { orderId, decision, missing } = await request.json() as { orderId?: string; decision?: "APPROVE" | "REJECT"; missing?: "REFERENCE" | "AMOUNT" | "BOTH" };
   const db = database();
   if (decision === "APPROVE") {
-    const result = await db.prepare("UPDATE orders SET payment_status='PAID', status='CONFIRMED', payment_rejection_reason=NULL, payment_verified_at=?, payment_verified_by=? WHERE id=? AND payment_reference IS NOT NULL AND status NOT IN ('CANCELLED','DELIVERED')").bind(new Date().toISOString(), viewer.email, orderId).run();
-    if (!result.meta.changes) return NextResponse.json({ error: "A submitted payment reference is required" }, { status: 400 });
+    const result = await db.prepare("UPDATE orders SET payment_status='PAID', payment_rejection_reason=NULL, payment_verified_at=?, payment_verified_by=? WHERE id=? AND (payment_reference IS NOT NULL OR payment_status='PAY_ON_DELIVERY') AND status!='CANCELLED'").bind(new Date().toISOString(), viewer.email, orderId).run();
+    if (!result.meta.changes) return NextResponse.json({ error: "This payment cannot be approved" }, { status: 400 });
     return NextResponse.json({ approved: true });
   }
   const reasons = {

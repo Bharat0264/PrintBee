@@ -61,6 +61,9 @@ export const orders = sqliteTable("orders", {
   paymentRejectionReason: text("payment_rejection_reason"),
   paymentVerifiedAt: text("payment_verified_at"),
   paymentVerifiedBy: text("payment_verified_by"),
+  paymentQrStorageKey: text("payment_qr_storage_key"),
+  paymentQrFileName: text("payment_qr_file_name"),
+  paymentQrDeletedAt: text("payment_qr_deleted_at"),
 });
 
 export const riderPayments = sqliteTable("rider_payments", {

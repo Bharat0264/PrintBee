@@ -9,6 +9,6 @@ export async function POST(request: Request) {
   if (!viewer?.isAdmin) return NextResponse.json({ error: "Admin access required" }, { status: 403 });
   const { orderId, status } = await request.json() as { orderId?: string; status?: string };
   if (!status || !allowed.has(status)) return NextResponse.json({ error: "Invalid status" }, { status: 400 });
-  await database().prepare("UPDATE orders SET status=? WHERE id=? AND payment_status='PAID' AND status!='DELIVERED'").bind(status, orderId).run();
+  await database().prepare("UPDATE orders SET status=? WHERE id=? AND payment_status!='REJECTED' AND status NOT IN ('DELIVERED','CANCELLED')").bind(status, orderId).run();
   return NextResponse.json({ updated: true });
 }

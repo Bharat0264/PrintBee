@@ -32,7 +32,6 @@ const inr = new Intl.NumberFormat("en-IN", {
 type Viewer = { email: string; isAdmin: boolean } | null;
 type LocationOption = { id: string; name: string; delivery_fee_paise?: number; platform_fee_paise?: number };
 type SupabaseConfig = { url: string; anonKey: string } | null;
-const RAZORPAY_PAYMENT_LINK = "https://razorpay.me/@PrintBee";
 
 function printSummary(items: any[] = []) {
   const totals = { bwSingle: 0, bwDouble: 0, colourSingle: 0, colourDouble: 0 };
@@ -82,7 +81,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   const [mobileNumber, setMobileNumber] = useState("");
   const [locationId, setLocationId] = useState("");
   const [orderError, setOrderError] = useState("");
-  const [orderResult, setOrderResult] = useState<{ id: string; orderNumber: string; deliveryCode: string; locationName: string; totalPaise: number; paid: boolean } | null>(null);
+  const [orderResult, setOrderResult] = useState<{ id: string; orderNumber: string; deliveryCode: string; locationName: string; totalPaise: number; paid: boolean; paymentMode?: string } | null>(null);
   const [newLocation, setNewLocation] = useState("");
   const [agentEmail, setAgentEmail] = useState("");
   const [adminMessage, setAdminMessage] = useState("");
@@ -93,7 +92,6 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   const [dashboard, setDashboard] = useState<any>(null);
   const [myOrdersOpen, setMyOrdersOpen] = useState(false);
   const [myOrders, setMyOrders] = useState<any[]>([]);
-  const [paymentReference, setPaymentReference] = useState("");
   const [appQr, setAppQr] = useState("");
   const [riderOrders, setRiderOrders] = useState<any[]>([]);
   const [riderEarnings, setRiderEarnings] = useState<any>(null);
@@ -263,7 +261,6 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
     setCart([]);
     const pendingResult = { ...data, paid: false };
     setOrderResult(pendingResult);
-    setPaymentReference("");
   };
 
   const openMyOrders = async () => {
@@ -273,13 +270,6 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
     setMyOrdersOpen(true);
   };
 
-  const submitPaymentReference = async () => {
-    if (!orderResult) return;
-    const response = await fetch("/api/orders/payment-reference", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ orderId: orderResult.id, reference: paymentReference }) });
-    const data = await response.json();
-    if (!response.ok) return setOrderError(data.error);
-    setOrderError("Payment reference submitted for admin verification.");
-  };
 
   const markPaid = async (orderId: string) => {
     const response = await fetch("/api/admin/orders/mark-paid", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ orderId }) });
@@ -312,6 +302,16 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
     const response = await fetch("/api/admin/orders/delete-files", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ orderId }) });
     const data = await response.json();
     setAdminMessage(response.ok ? `${data.deleted} stored document${data.deleted === 1 ? "" : "s"} deleted. All order and payment records were preserved.` : data.error);
+    await openAdminDashboard();
+  };
+
+  const uploadPaymentQr = async (orderId: string, file?: File) => {
+    if (!file) return;
+    const form = new FormData();
+    form.append("file", file);
+    const response = await fetch(`/api/orders/${orderId}/payment-qr`, { method: "POST", body: form });
+    const data = await response.json();
+    setAdminMessage(response.ok ? "Order payment scanner uploaded. It is now visible to the customer and assigned rider." : data.error);
     await openAdminDashboard();
   };
 
@@ -474,7 +474,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
               <div className="partner-withdrawal-history">{riderEarnings.withdrawals?.map((withdrawal: any) => <span key={withdrawal.id}><b>{inr.format(withdrawal.amount_paise / 100)}</b><small>{withdrawal.status === "REQUESTED" ? "Withdraw requested" : withdrawal.status === "IN_PROGRESS" ? "In progress" : "Amount sent to bank"} · {withdrawal.upi_id}</small></span>)}</div>
             </section>}
             <section className="assigned-orders"><div className="section-title"><div><h2>Assigned orders</h2><p>One rider can receive multiple orders, including several orders at the same location.</p></div><span>{riderOrders.length} active</span></div>
-              {riderOrders.length ? riderOrders.map((order) => <article key={order.order_number} className={deliveryOrderNumber === order.order_number ? "selected" : ""}><div><strong>{order.order_number}</strong><small>{order.location_name}</small></div><div><strong>{order.customer_name}</strong><small className="customer-phone">{order.mobile_number}</small></div><span className="status-chip">{order.status}</span><div className="delivery-actions"><a href={`tel:${order.mobile_number}`} aria-label={`Call ${order.customer_name} at ${order.mobile_number}`}>Call customer</a><button onClick={() => { setDeliveryOrderNumber(order.order_number); setDeliveryCode(""); }}>Deliver & verify OTP</button></div></article>) : <div className="empty-partner-orders">No active orders are assigned to you.</div>}
+              {riderOrders.length ? riderOrders.map((order) => <article key={order.order_number} className={deliveryOrderNumber === order.order_number ? "selected" : ""}><div><strong>{order.order_number}</strong><small>{order.location_name}</small></div><div><strong>{order.customer_name}</strong><small className="customer-phone">{order.mobile_number}</small></div><span className="status-chip">{order.status}</span><div className="delivery-actions"><a href={`tel:${order.mobile_number}`} aria-label={`Call ${order.customer_name} at ${order.mobile_number}`}>Call customer</a><button onClick={() => { setDeliveryOrderNumber(order.order_number); setDeliveryCode(""); }}>Deliver & verify OTP</button></div>{Boolean(order.has_payment_qr) && <div className="order-payment-qr"><div><strong>Collect {inr.format(order.total_paise / 100)}</strong><small>Show this scanner to the customer for pay on delivery.</small></div><img src={`/api/orders/${order.id}/payment-qr`} alt={`Payment scanner for ${order.order_number}`} /></div>}</article>) : <div className="empty-partner-orders">No active orders are assigned to you.</div>}
             </section>
             {deliveryOrderNumber && <section className="otp-verification"><div><div className="admin-badge">FINAL DELIVERY STEP</div><h2>Verify customer OTP</h2><p>Order <strong>{deliveryOrderNumber}</strong>. Hand over the prints first, then ask the customer for the six-digit OTP.</p></div><label>Customer OTP<input className="code-input" value={deliveryCode} onChange={(e) => setDeliveryCode(e.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="000000" inputMode="numeric" /></label><button disabled={deliveryCode.length !== 6} onClick={verifyDelivery}>Verify OTP & mark delivered</button></section>}
             {deliveryMessage && <p className="partner-message">{deliveryMessage}</p>}
@@ -558,8 +558,8 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
           </div>
           <p className="estimate-note">{pages} pages × {copies} {copies === 1 ? "copy" : "copies"} × {inr.format(prices[mode])} · {selected.title}</p>
           <div className="payment-instruction" role="note">
-            <strong>Payment instruction</strong>
-            <span>Pay the exact order total and submit the correct Razorpay payment ID or UTR. Orders with a mismatched amount or payment reference will be cancelled.</span>
+            <strong>No prepaid payment</strong>
+            <span>Pay online using your order’s scanner or scan and pay when the delivery partner arrives.</span>
           </div>
         </section>
       </section>
@@ -725,8 +725,10 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                     </div>
                     <span className="status-chip">{order.payment_status} · {order.status}</span>
                     <strong>{inr.format(order.total_paise / 100)}</strong>
-                    <div className="payment-review-details"><span><small>Payment ID / UTR</small><strong>{order.payment_reference || "Not submitted"}</strong></span><span><small>Amount to receive</small><strong>{inr.format(order.total_paise / 100)}</strong></span></div>
-                    {order.payment_status !== "PAID" && order.status !== "CANCELLED" && <div className="payment-review-actions"><button className="mini-action" disabled={!order.payment_reference} onClick={() => reviewPayment(order.id, "APPROVE")}>Payment verified</button><button onClick={() => reviewPayment(order.id, "REJECT", "REFERENCE")}>Wrong payment ID</button><button onClick={() => reviewPayment(order.id, "REJECT", "AMOUNT")}>Wrong amount</button><button onClick={() => reviewPayment(order.id, "REJECT", "BOTH")}>Both mismatch</button></div>}
+                    <div className="payment-review-details"><span><small>Payment method</small><strong>{order.payment_status === "PAY_ON_DELIVERY" ? "Pay on delivery" : order.payment_reference || order.payment_status}</strong></span><span><small>Amount to collect</small><strong>{inr.format(order.total_paise / 100)}</strong></span></div>
+                    {!["DELIVERED", "CANCELLED"].includes(order.status) && <div className="admin-payment-qr"><label>{order.has_payment_qr ? "Replace order payment scanner" : "Add order payment scanner"}<input type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => uploadPaymentQr(order.id, e.target.files?.[0])} /></label>{Boolean(order.has_payment_qr) && <img src={`/api/orders/${order.id}/payment-qr`} alt={`Payment scanner for ${order.order_number}`} />}</div>}
+                    {order.payment_status === "PAY_ON_DELIVERY" && order.status !== "CANCELLED" && <div className="payment-review-actions"><button className="mini-action" onClick={() => reviewPayment(order.id, "APPROVE")}>Payment received & verified</button></div>}
+                    {order.payment_status === "PENDING" && order.status !== "CANCELLED" && <div className="payment-review-actions"><button className="mini-action" disabled={!order.payment_reference} onClick={() => reviewPayment(order.id, "APPROVE")}>Payment verified</button><button onClick={() => reviewPayment(order.id, "REJECT", "REFERENCE")}>Wrong payment ID</button><button onClick={() => reviewPayment(order.id, "REJECT", "AMOUNT")}>Wrong amount</button><button onClick={() => reviewPayment(order.id, "REJECT", "BOTH")}>Both mismatch</button></div>}
                     {order.payment_rejection_reason && <div className="cancelled-note"><strong>Payment rejected</strong><small>{order.payment_rejection_reason}</small></div>}
                     {order.status === "CANCELLED" && <div className="cancelled-note"><strong>Cancelled</strong><small>{order.cancellation_reason}</small></div>}
                     <div className="document-details">
@@ -741,11 +743,11 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                     </div>
                     <div className="file-links">{order.files?.length ? order.files.map((file: any) => file.deleted_at ? <span className="deleted-file" key={file.id}>{file.original_name} · deleted {new Date(file.deleted_at).toLocaleDateString("en-IN")}</span> : <a key={file.id} href={`/api/admin/files/${file.id}/download`}>Download {file.original_name}</a>) : <span>Legacy order — document was not stored</span>}</div>
                     {(["DELIVERED", "CANCELLED"].includes(String(order.status).toUpperCase()) || order.delivered_at || order.cancelled_at) && (order.files?.some((file: any) => !file.deleted_at) ? <button className="delete-files-action" onClick={() => deleteOrderFiles(order.id)}>Delete {order.files.filter((file: any) => !file.deleted_at).length} document{order.files.filter((file: any) => !file.deleted_at).length === 1 ? "" : "s"} from storage</button> : <div className="files-cleared-note">No stored documents remain for this order.</div>)}
-                    <select disabled={order.status === "CANCELLED" || order.payment_status !== "PAID"} value={order.status} onChange={(e) => updateOrderStatus(order.id, e.target.value)}>
+                    <select disabled={order.status === "CANCELLED" || order.payment_status === "REJECTED"} value={order.status} onChange={(e) => updateOrderStatus(order.id, e.target.value)}>
                       {order.status === "CANCELLED" && <option value="CANCELLED">Cancelled</option>}
                       <option value="CONFIRMED">Confirmed</option><option value="PRINTING">Printing</option><option value="READY_FOR_PICKUP">Ready for pickup</option><option value="RIDER_ASSIGNED">Rider assigned</option>
                     </select>
-                    <select disabled={order.status === "CANCELLED" || order.payment_status !== "PAID"} value={order.rider_email ?? ""} onChange={(e) => assignRider(order.id, e.target.value)}>
+                    <select disabled={order.status === "CANCELLED" || order.payment_status === "REJECTED"} value={order.rider_email ?? ""} onChange={(e) => assignRider(order.id, e.target.value)}>
                       <option value="">Assign rider</option>{dashboard.riders.map((rider: any) => <option key={rider.email} value={rider.email}>{rider.email}</option>)}
                     </select>
                   </article>
@@ -765,17 +767,9 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
               <div className="order-success">
                 <span>✓</span><h2>Order placed</h2>
                 <p>Order <strong>{orderResult.orderNumber}</strong> · {orderResult.locationName}</p>
-                <div className={orderResult.paid ? "payment-paid" : "payment-pending"}><small>Payment status</small><strong>{orderResult.paid ? "PAID" : "PENDING"}</strong></div>
+                <div className="payment-pending"><small>Payment method</small><strong>{orderResult.paymentMode === "PAY_ON_DELIVERY" ? "PAY ON DELIVERY" : orderResult.paid ? "PAID" : "PENDING"}</strong></div>
                 <div><small>Your delivery code</small><strong>{orderResult.deliveryCode}</strong></div>
-                <p>{orderResult.paid ? "Give this code to the delivery agent only after receiving your prints." : `Pay exactly ${inr.format(orderResult.totalPaise / 100)} using the PrintBee payment link. Use ${orderResult.orderNumber} as the payment note.`}</p>
-                {!orderResult.paid && (
-                  <>
-                    <div className="payment-warning" role="alert"><strong>Important:</strong> Pay exactly {inr.format(orderResult.totalPaise / 100)} and enter the matching payment ID or UTR below. If either the amount or reference does not match, this order will be cancelled.</div>
-                    <a className="save-button" href={RAZORPAY_PAYMENT_LINK} target="_blank" rel="noreferrer">Open Razorpay payment link</a>
-                    <label className="checkout-field">Razorpay payment ID / UTR<input value={paymentReference} onChange={(e) => setPaymentReference(e.target.value)} placeholder="Enter the reference after payment" /></label>
-                    <button className="save-button" disabled={paymentReference.trim().length < 6} onClick={submitPaymentReference}>Submit payment reference</button>
-                  </>
-                )}
+                <p>{orderResult.paymentMode === "PAY_ON_DELIVERY" ? `No prepaid payment is required. Pay exactly ${inr.format(orderResult.totalPaise / 100)} using the order scanner shown in My orders or by your delivery partner, then share the OTP only after receiving your prints.` : orderResult.paid ? "Give this code to the delivery agent only after receiving your prints." : `Pay exactly ${inr.format(orderResult.totalPaise / 100)} using the PrintBee payment link. Use ${orderResult.orderNumber} as the payment note.`}</p>
                 {orderError && <p className="panel-message">{orderError}</p>}
                 <button className="save-button" onClick={() => { setCheckoutOpen(false); setOrderResult(null); }}>Done</button>
               </div>
@@ -790,9 +784,9 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                 {!locations.length && <p className="panel-message">No delivery locations are available yet. The admin must add one first.</p>}
                 <div className="fee-breakdown"><div><span>Printing subtotal</span><strong>{inr.format(cartTotal)}</strong></div><div><span>Delivery fee</span><strong>{inr.format(checkoutDeliveryFee)}</strong></div><div><span>Platform fee</span><strong>{inr.format(checkoutPlatformFee)}</strong></div></div>
                 <div className="checkout-total"><span>To pay</span><strong>{inr.format(cartTotal + checkoutDeliveryFee + checkoutPlatformFee)}</strong></div>
-                <div className="payment-warning" role="alert"><strong>Payment verification required:</strong> You must pay the exact total and submit the matching Razorpay payment ID or UTR. A mismatched amount or reference will result in order cancellation.</div>
+                <div className="pay-on-delivery-note"><strong>Pay on delivery:</strong> No prepaid payment is required. Your order scanner will appear in My orders after the admin adds it, and your delivery partner can also show it at your doorstep.</div>
                 {orderError && <p className="form-error">{orderError}</p>}
-                <button className="save-button" disabled={!locations.length} onClick={placeOrder}>Place order and get payment link</button>
+                <button className="save-button" disabled={!locations.length} onClick={placeOrder}>Place pay-on-delivery order</button>
               </>
             )}
           </section>
@@ -832,7 +826,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
           <section className="orders-modal" role="dialog" aria-modal="true" onMouseDown={(e) => e.stopPropagation()}>
             <button className="close" onClick={() => setMyOrdersOpen(false)} aria-label="Close">×</button>
             <div className="admin-badge">CUSTOMER</div><h2>My orders</h2>
-            {myOrders.length ? myOrders.map((order) => <article key={order.id}><div><strong>{order.order_number}</strong><small>{order.location_name} · {new Date(order.created_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}</small>{order.cancellation_reason && <small>Cancelled: {order.cancellation_reason}</small>}</div><span className="status-chip">{order.payment_status} · {order.status}</span><strong>{inr.format(order.total_paise / 100)}</strong><div className="order-progress"><span className={order.payment_reference ? "done" : ""}>Payment submitted</span><span className={order.payment_status === "PENDING" && order.payment_reference ? "current" : order.payment_status === "PAID" ? "done" : ""}>Verification pending</span><span className={order.payment_status === "PAID" ? "done" : order.payment_status === "REJECTED" ? "rejected" : ""}>{order.payment_status === "REJECTED" ? "Payment rejected" : "Payment approved"}</span><span className={["PRINTING", "READY_FOR_PICKUP", "RIDER_ASSIGNED", "DELIVERED"].includes(order.status) ? "done" : ""}>Printing</span><span className={["RIDER_ASSIGNED", "DELIVERED"].includes(order.status) ? "done" : ""}>Rider assigned</span><span className={order.status === "DELIVERED" ? "done" : ""}>Delivered</span></div>{order.payment_rejection_reason && <div className="customer-error">{order.payment_rejection_reason}</div>}{order.rider_name && <div className="assigned-rider"><span><small>Delivery partner assigned</small><strong>{order.rider_name}</strong>{order.rider_mobile_number && <b>{order.rider_mobile_number}</b>}</span>{order.rider_mobile_number && <a href={`tel:${order.rider_mobile_number}`}>Call delivery partner</a>}</div>}{order.status !== "CANCELLED" && order.payment_status === "PAID" && <div className="customer-code"><span><small>Order ID</small><b>{order.order_number}</b></span><span><small>Delivery OTP · share only after receiving prints</small><strong>{order.deliveryCode}</strong></span></div>}</article>) : <p>No orders yet.</p>}
+            {myOrders.length ? myOrders.map((order) => <article key={order.id}><div><strong>{order.order_number}</strong><small>{order.location_name} · {new Date(order.created_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}</small>{order.cancellation_reason && <small>Cancelled: {order.cancellation_reason}</small>}</div><span className="status-chip">{order.payment_status === "PAY_ON_DELIVERY" ? "PAY ON DELIVERY" : order.payment_status} · {order.status}</span><strong>{inr.format(order.total_paise / 100)}</strong><div className="order-progress"><span className="done">Order confirmed</span><span className={["PRINTING", "READY_FOR_PICKUP", "RIDER_ASSIGNED", "DELIVERED"].includes(order.status) ? "done" : ""}>Printing</span><span className={["READY_FOR_PICKUP", "RIDER_ASSIGNED", "DELIVERED"].includes(order.status) ? "done" : ""}>Ready</span><span className={["RIDER_ASSIGNED", "DELIVERED"].includes(order.status) ? "done" : ""}>Rider assigned</span><span className={order.payment_status === "PAID" ? "done" : "current"}>{order.payment_status === "PAID" ? "Payment received" : "Pay on delivery"}</span><span className={order.status === "DELIVERED" ? "done" : ""}>Delivered</span></div>{order.payment_rejection_reason && <div className="customer-error">{order.payment_rejection_reason}</div>}{Boolean(order.has_payment_qr) && order.status !== "DELIVERED" && <div className="customer-payment-qr"><div><strong>Pay {inr.format(order.total_paise / 100)}</strong><small>Use this scanner now or pay when your delivery partner arrives.</small></div><img src={`/api/orders/${order.id}/payment-qr`} alt={`Payment scanner for ${order.order_number}`} /></div>}{order.rider_name && <div className="assigned-rider"><span><small>Delivery partner assigned</small><strong>{order.rider_name}</strong>{order.rider_mobile_number && <b>{order.rider_mobile_number}</b>}</span>{order.rider_mobile_number && <a href={`tel:${order.rider_mobile_number}`}>Call delivery partner</a>}</div>}{order.status !== "CANCELLED" && ["RIDER_ASSIGNED", "DELIVERED"].includes(order.status) && <div className="customer-code"><span><small>Order ID</small><b>{order.order_number}</b></span><span><small>Delivery OTP · share only after receiving prints</small><strong>{order.deliveryCode}</strong></span></div>}</article>) : <p>No orders yet.</p>}
           </section>
         </div>
       )}

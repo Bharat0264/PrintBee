@@ -10,8 +10,8 @@ export async function GET() {
     if (!agent) return NextResponse.json({ error: "Rider access required" }, { status: 403 });
   }
   const query = viewer.isAdmin
-    ? database().prepare("SELECT order_number, customer_name, mobile_number, location_name, total_paise, status, rider_email, created_at FROM orders WHERE rider_email IS NOT NULL AND status!='DELIVERED' ORDER BY created_at")
-    : database().prepare("SELECT order_number, customer_name, mobile_number, location_name, total_paise, status, rider_email, created_at FROM orders WHERE rider_email=? AND status!='DELIVERED' ORDER BY created_at").bind(viewer.email);
+    ? database().prepare("SELECT id, order_number, customer_name, mobile_number, location_name, total_paise, status, rider_email, payment_qr_storage_key IS NOT NULL has_payment_qr, created_at FROM orders WHERE rider_email IS NOT NULL AND status!='DELIVERED' ORDER BY created_at")
+    : database().prepare("SELECT id, order_number, customer_name, mobile_number, location_name, total_paise, status, rider_email, payment_qr_storage_key IS NOT NULL has_payment_qr, created_at FROM orders WHERE rider_email=? AND status!='DELIVERED' ORDER BY created_at").bind(viewer.email);
   const rows = await query.all();
   return NextResponse.json(rows.results);
 }

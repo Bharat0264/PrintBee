@@ -64,6 +64,13 @@
       "when": 1785229257781,
       "tag": "0008_smiling_killmonger",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1785233474198,
+      "tag": "0009_flowery_senator_kelly",
+      "breakpoints": true
     }
   ]
 }
