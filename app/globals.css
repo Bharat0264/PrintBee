@@ -268,6 +268,7 @@ footer { border-top: 1px solid var(--line); padding: 28px max(24px, calc((100% -
 .file-links > span { color: #a33a2b; font-size: 9px; font-weight: 700; }
 .file-links .deleted-file { padding: 6px 8px; border-radius: 6px; background: #f1efea; color: #777; }
 .delete-files-action { grid-column: 1 / -1; border: 1px solid #b63b31; border-radius: 8px; padding: 9px; background: #fff2f0; color: #962a22; font-size: 9px; font-weight: 900; }
+.files-cleared-note { grid-column: 1 / -1; padding: 9px; border-radius: 8px; background: #edf7f0; color: #27633d; font-size: 9px; font-weight: 800; }
 .cancel-action { grid-column: 1 / -1; border: 1px solid #d84d3f; border-radius: 7px; background: #fff2f0; color: #9e291f; padding: 8px; font-size: 10px; font-weight: 900; }
 .cancelled-note { grid-column: 1 / -1; border-radius: 8px; background: #fff2f0; color: #9e291f; padding: 9px; }
 .cancelled-note small { display: block; margin-top: 3px; }
