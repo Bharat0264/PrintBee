@@ -386,6 +386,23 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
     await updateLocationFees(location.id, Number(delivery), Number(platform));
   };
 
+  const renameLocation = async (location: any) => {
+    const name = window.prompt("Enter the new delivery location name", location.name);
+    if (!name || name.trim() === location.name) return;
+    const response = await fetch("/api/admin/locations/manage", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ locationId: location.id, action: "RENAME", name }) });
+    const data = await response.json();
+    setAdminMessage(response.ok ? `Location renamed to ${data.name}.` : data.error);
+    await openAdminDashboard();
+  };
+
+  const deleteLocation = async (location: any) => {
+    if (!window.confirm(`Remove "${location.name}" from customer delivery options? Historical order records will be preserved.`)) return;
+    const response = await fetch("/api/admin/locations/manage", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ locationId: location.id, action: "DELETE" }) });
+    const data = await response.json();
+    setAdminMessage(response.ok ? `${location.name} removed from delivery options.` : data.error);
+    await openAdminDashboard();
+  };
+
   const approveRider = async (email: string, approved: boolean) => {
     const response = await fetch("/api/admin/riders/approve", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, approved }) });
     const data = await response.json();
@@ -685,7 +702,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                   <div className="table-head"><span>Location & fees</span><span>Orders</span><span>Delivered</span><span>Revenue</span></div>
                   {dashboard.locationStats?.length ? dashboard.locationStats.map((location: any) => (
                     <div key={location.id}>
-                      <span><i className={location.active ? "active-dot" : ""} />{location.name}<small>{location.active ? "Active" : "Inactive"} · Delivery {inr.format((location.delivery_fee_paise ?? 1500) / 100)} · Platform {inr.format((location.platform_fee_paise ?? 350) / 100)}</small><button className="text-action" onClick={() => editLocationFees(location)}>Edit fees</button></span>
+                      <span><i className={location.active ? "active-dot" : ""} />{location.name}<small>{location.active ? "Active" : "Inactive"} · Delivery {inr.format((location.delivery_fee_paise ?? 1500) / 100)} · Platform {inr.format((location.platform_fee_paise ?? 350) / 100)}</small>{location.active && <span className="location-actions"><button className="text-action" onClick={() => renameLocation(location)}>Rename</button><button className="text-action" onClick={() => editLocationFees(location)}>Edit fees</button><button className="text-action delete" onClick={() => deleteLocation(location)}>Delete</button></span>}</span>
                       <strong>{location.orders ?? 0}</strong>
                       <strong>{location.delivered ?? 0}</strong>
                       <strong>{inr.format((location.revenue_paise ?? 0) / 100)}</strong>

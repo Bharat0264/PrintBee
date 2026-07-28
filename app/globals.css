@@ -357,6 +357,9 @@ footer { border-top: 1px solid var(--line); padding: 28px max(24px, calc((100% -
 }
 
 .text-action { margin-left: auto; border: 0; border-radius: 6px; padding: 5px 7px; background: var(--yellow-soft); color: #735500; font-size: 8px; font-weight: 900; }
+.location-actions { display: flex; gap: 5px; margin-left: auto; }
+.location-actions .text-action { margin-left: 0; white-space: nowrap; }
+.location-actions .text-action.delete { background: #fff0ed; color: #9b3027; }
 .application-list { display: grid; gap: 8px; }
 .application-list article { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 13px 15px; border: 1px solid var(--line); border-radius: 11px; background: white; }
 .application-list article span small { display: block; margin-top: 4px; color: var(--muted); font-size: 9px; }
