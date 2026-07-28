@@ -402,6 +402,10 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
             <button disabled={!fileName || countingPages} onClick={addToCart}>Add to cart <span>→</span></button>
           </div>
           <p className="estimate-note">{pages} pages × {copies} {copies === 1 ? "copy" : "copies"} × {inr.format(prices[mode])} · {selected.title}</p>
+          <div className="payment-instruction" role="note">
+            <strong>Payment instruction</strong>
+            <span>Pay the exact order total and submit the correct Razorpay payment ID or UTR. Orders with a mismatched amount or payment reference will be cancelled.</span>
+          </div>
         </section>
       </section>
 
@@ -592,6 +596,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                 <p>{orderResult.paid ? "Give this code to the delivery agent only after receiving your prints." : `Pay exactly ${inr.format(orderResult.totalPaise / 100)} using the PrintBee payment link. Use ${orderResult.orderNumber} as the payment note.`}</p>
                 {!orderResult.paid && (
                   <>
+                    <div className="payment-warning" role="alert"><strong>Important:</strong> Pay exactly {inr.format(orderResult.totalPaise / 100)} and enter the matching payment ID or UTR below. If either the amount or reference does not match, this order will be cancelled.</div>
                     <a className="save-button" href={RAZORPAY_PAYMENT_LINK} target="_blank" rel="noreferrer">Open Razorpay payment link</a>
                     <label className="checkout-field">Razorpay payment ID / UTR<input value={paymentReference} onChange={(e) => setPaymentReference(e.target.value)} placeholder="Enter the reference after payment" /></label>
                     <button className="save-button" disabled={paymentReference.trim().length < 6} onClick={submitPaymentReference}>Submit payment reference</button>
@@ -611,6 +616,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                 {!locations.length && <p className="panel-message">No delivery locations are available yet. The admin must add one first.</p>}
                 <div className="fee-breakdown"><div><span>Printing subtotal</span><strong>{inr.format(cartTotal)}</strong></div><div><span>Delivery fee</span><strong>{inr.format(15)}</strong></div><div><span>Platform fee</span><strong>{inr.format(3.5)}</strong></div></div>
                 <div className="checkout-total"><span>To pay</span><strong>{inr.format(cartTotal + 18.5)}</strong></div>
+                <div className="payment-warning" role="alert"><strong>Payment verification required:</strong> You must pay the exact total and submit the matching Razorpay payment ID or UTR. A mismatched amount or reference will result in order cancellation.</div>
                 {orderError && <p className="form-error">{orderError}</p>}
                 <button className="save-button" disabled={!locations.length} onClick={placeOrder}>Place order and get payment link</button>
               </>
