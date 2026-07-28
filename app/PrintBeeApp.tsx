@@ -315,6 +315,15 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
     await openAdminDashboard();
   };
 
+  const resetDemoOrders = async () => {
+    const confirmation = window.prompt("This permanently deletes ALL orders and their stored files, while preserving users, locations, fees and riders. Type DELETE DEMO ORDERS to continue.");
+    if (confirmation !== "DELETE DEMO ORDERS") return setAdminMessage("Demo reset cancelled.");
+    const response = await fetch("/api/admin/demo-reset", { method: "POST" });
+    const data = await response.json();
+    setAdminMessage(response.ok ? `${data.deletedOrders} demo orders and ${data.deletedFiles} stored files deleted. Revenue is now ₹0.` : data.error);
+    await openAdminDashboard();
+  };
+
   const openAdminDashboard = async () => {
     setAdminOpen(true);
     const response = await fetch("/api/admin/dashboard");
@@ -714,6 +723,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                 <p>Review the UPI ID and move each request through the payout flow.</p>
                 <div className="withdrawal-admin">{dashboard.riderWithdrawals?.length ? dashboard.riderWithdrawals.map((withdrawal: any) => <article key={withdrawal.id}><span><strong>{withdrawal.rider_email}</strong><small>UPI: {withdrawal.upi_id}</small><small>Requested {new Date(withdrawal.requested_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}</small></span><strong>{inr.format(withdrawal.amount_paise / 100)}</strong><select value={withdrawal.status} onChange={(e) => updateWithdrawalStatus(withdrawal.id, e.target.value)}><option value="REQUESTED">Withdraw requested</option><option value="IN_PROGRESS">In progress</option><option value="SENT">Amount sent to bank</option></select></article>) : <p>No withdrawal requests yet.</p>}</div>
                 <h3>Live orders</h3>
+                <div className="demo-reset-panel"><div><strong>Demo data cleanup</strong><small>Deletes all orders and order files. Users, locations, fees and riders are preserved.</small></div><button onClick={resetDemoOrders}>Delete all demo orders</button></div>
                 <div className="admin-orders">{dashboard.orders?.length ? dashboard.orders.map((order: any) => (
                   <article key={order.id}>
                     <div className="order-customer">
