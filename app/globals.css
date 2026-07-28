@@ -397,6 +397,7 @@ footer { border-top: 1px solid var(--line); padding: 28px max(24px, calc((100% -
 .customer-payment-qr strong { font-size: 17px; }
 .customer-payment-qr small { max-width: 260px; margin-top: 5px; color: #735500; line-height: 1.4; }
 .customer-payment-qr img { width: 150px; height: 150px; object-fit: contain; border: 7px solid white; border-radius: 9px; }
+.scanner-expand-button { border: 0; padding: 0; border-radius: 10px; background: transparent; cursor: zoom-in; }
 .partner-button { width: 100%; margin-top: 9px; border: 0; border-radius: 11px; padding: 13px; background: var(--ink); color: white; font-weight: 800; }
 .customer-code { gap: 16px; }
 .customer-code span, .customer-code small { display: block; }
@@ -488,6 +489,10 @@ footer { border-top: 1px solid var(--line); padding: 28px max(24px, calc((100% -
 .order-payment-qr strong, .order-payment-qr small { display: block; }
 .order-payment-qr small { max-width: 320px; margin-top: 5px; color: #735500; }
 .order-payment-qr img { width: 190px; height: 190px; object-fit: contain; border: 8px solid white; border-radius: 10px; }
+.scanner-fullscreen { position: fixed; z-index: 9999; inset: 0; display: grid; place-items: center; padding: 60px 20px 40px; background: rgba(10, 10, 12, .94); }
+.scanner-fullscreen img { width: min(86vw, 620px); height: min(86vw, 620px); max-height: 72vh; object-fit: contain; border: 14px solid white; border-radius: 18px; background: white; }
+.scanner-fullscreen > button { position: absolute; top: 18px; right: 18px; width: 44px; height: 44px; border: 0; border-radius: 50%; background: white; color: var(--ink); font-size: 28px; line-height: 1; font-weight: 900; }
+.scanner-fullscreen > strong { color: white; font-size: 11px; }
 .assigned-orders .customer-phone { color: var(--ink); font-size: 11px; font-weight: 900; letter-spacing: .4px; }
 .delivery-actions { display: flex; align-items: center; gap: 6px; }
 .delivery-actions a { border: 1px solid #d8b33c; border-radius: 8px; padding: 9px 11px; background: var(--yellow); color: var(--ink); font-size: 9px; font-weight: 900; text-decoration: none; white-space: nowrap; }
