@@ -105,6 +105,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   const [exportTo, setExportTo] = useState("");
   const [exporting, setExporting] = useState(false);
   const [expandedScanner, setExpandedScanner] = useState<{ src: string; alt: string } | null>(null);
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>("default");
 
   useEffect(() => {
     const stored = window.localStorage.getItem("printbee-a4-prices");
@@ -152,6 +153,18 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
       errorCorrectionLevel: "H",
     }).then(setAppQr).catch(() => setAppQr(""));
   }, []);
+
+  useEffect(() => {
+    if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
+    if ("Notification" in window) setNotificationPermission(Notification.permission);
+  }, []);
+
+  useEffect(() => {
+    if (!viewer || viewer.isAdmin || loginMode !== "CUSTOMER") return;
+    checkCustomerNotifications();
+    const refresh = window.setInterval(checkCustomerNotifications, 15000);
+    return () => window.clearInterval(refresh);
+  }, [viewer, loginMode, notificationPermission]);
 
   const selected = options.find((item) => item.id === mode)!;
   const total = useMemo(() => pages * copies * prices[mode], [pages, copies, prices, mode]);
@@ -304,6 +317,47 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
     const response = await fetch("/api/orders/my");
     if (response.ok) setMyOrders(await response.json());
     setMyOrdersOpen(true);
+  };
+
+  const sendOrderNotification = async (title: string, body: string, tag: string) => {
+    if (!("Notification" in window) || Notification.permission !== "granted") return;
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      await registration.showNotification(title, { body, tag, icon: "/printbee-logo.png", badge: "/printbee-logo.png" });
+    } catch {
+      new Notification(title, { body, tag, icon: "/printbee-logo.png" });
+    }
+  };
+
+  const enableNotifications = async () => {
+    if (!("Notification" in window)) return setAuthMessage("Mobile notifications are not supported by this browser.");
+    const permission = await Notification.requestPermission();
+    setNotificationPermission(permission);
+    if (permission === "granted") {
+      await sendOrderNotification("PrintBee notifications enabled", "We will notify you as your order moves from printing to delivery.", "printbee-enabled");
+    }
+  };
+
+  const checkCustomerNotifications = async () => {
+    try {
+      const response = await fetch("/api/orders/my");
+      if (!response.ok) return;
+      const orders = await response.json() as any[];
+      const storageKey = `printbee-order-notifications-${viewer?.email ?? "user"}`;
+      const previous = JSON.parse(window.localStorage.getItem(storageKey) ?? "{}") as Record<string, any>;
+      for (const order of orders) {
+        const before = previous[order.id];
+        if (!before && Date.now() - new Date(order.created_at).getTime() < 10 * 60 * 1000) await sendOrderNotification("Order received", `${order.order_number} has been received by PrintBee.`, `${order.id}-received`);
+        if (order.has_payment_qr && !before?.has_payment_qr) await sendOrderNotification("Payment QR generated", `${order.order_number}: Pay while we deliver. Open My Orders and scan the payment scanner. Displaying the scanner may take a little time.`, `${order.id}-qr`);
+        if (order.status === "PRINTING" && before?.status !== "PRINTING") await sendOrderNotification("Printing started", `${order.order_number} is now being printed.`, `${order.id}-printing`);
+        if (order.status === "READY_FOR_PICKUP" && before?.status !== "READY_FOR_PICKUP") await sendOrderNotification("Ready for pickup", `${order.order_number} is printed and ready for a delivery partner.`, `${order.id}-ready`);
+        if (order.status === "RIDER_ASSIGNED" && before?.status !== "RIDER_ASSIGNED") await sendOrderNotification("Delivery partner assigned", `${order.rider_name || "A delivery partner"} is assigned to ${order.order_number}.`, `${order.id}-rider`);
+        if (order.payment_status === "PAID" && before?.payment_status !== "PAID") await sendOrderNotification("Payment verified", `Payment for ${order.order_number} was received and verified. Share the OTP only after receiving your prints.`, `${order.id}-paid`);
+        if (order.status === "DELIVERED" && before?.status !== "DELIVERED") await sendOrderNotification("Order delivered", `${order.order_number} has been marked delivered. Thank you for using PrintBee.`, `${order.id}-delivered`);
+      }
+      const snapshot = Object.fromEntries(orders.map((order) => [order.id, { status: order.status, payment_status: order.payment_status, has_payment_qr: Boolean(order.has_payment_qr) }]));
+      window.localStorage.setItem(storageKey, JSON.stringify(snapshot));
+    } catch {}
   };
 
 
@@ -653,6 +707,12 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
           <p>Upload a PDF or image, choose your A4 print style, and get crisp prints delivered to your door.</p>
           <div className="trust-row">
             <span>✓ Secure files</span><span>✓ Clear pricing</span><span>✓ Doorstep delivery</span>
+          </div>
+          <div className="payment-home-note">
+            <strong>Scan the payment scanner from My Orders and pay while we deliver.</strong>
+            <span>Displaying the scanner may take some time after the admin uploads it.</span>
+            {viewer && !viewer.isAdmin && notificationPermission !== "granted" && <button onClick={enableNotifications}>Enable mobile order notifications</button>}
+            {notificationPermission === "granted" && <small>Mobile order notifications are enabled.</small>}
           </div>
         </div>
 

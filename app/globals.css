@@ -59,6 +59,10 @@ h1 { font-size: clamp(48px, 5vw, 78px); line-height: .98; letter-spacing: -4px; 
 h1 em { color: var(--yellow); font-style: normal; }
 .hero-copy > p { color: var(--muted); font-size: 18px; line-height: 1.7; max-width: 440px; }
 .trust-row { margin-top: 34px; display: flex; gap: 18px; flex-wrap: wrap; color: #454950; font-size: 12px; font-weight: 700; }
+.payment-home-note { display: grid; gap: 6px; margin-top: 18px; padding: 14px; border: 1px solid #e3c64d; border-radius: 12px; background: #fff8d5; color: #674f00; }
+.payment-home-note strong { font-size: 12px; line-height: 1.45; }
+.payment-home-note span, .payment-home-note small { font-size: 9px; line-height: 1.45; }
+.payment-home-note button { justify-self: start; margin-top: 4px; border: 0; border-radius: 8px; padding: 9px 11px; background: var(--ink); color: white; font-size: 9px; font-weight: 900; }
 .trust-row span::first-letter { color: var(--yellow); }
 
 .order-card {
