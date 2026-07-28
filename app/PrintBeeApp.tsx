@@ -310,6 +310,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
     setCart([]);
     const pendingResult = { ...data, paid: false };
     setOrderResult(pendingResult);
+    window.setTimeout(checkCustomerNotifications, 500);
   };
 
   const openMyOrders = async () => {
@@ -343,6 +344,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
       const response = await fetch("/api/orders/my");
       if (!response.ok) return;
       const orders = await response.json() as any[];
+      setMyOrders(orders);
       const storageKey = `printbee-order-notifications-${viewer?.email ?? "user"}`;
       const previous = JSON.parse(window.localStorage.getItem(storageKey) ?? "{}") as Record<string, any>;
       for (const order of orders) {
@@ -714,6 +716,19 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
             {viewer && !viewer.isAdmin && notificationPermission !== "granted" && <button onClick={enableNotifications}>Enable mobile order notifications</button>}
             {notificationPermission === "granted" && <small>Mobile order notifications are enabled.</small>}
           </div>
+          {viewer && !viewer.isAdmin && myOrders.some((order) => !["DELIVERED", "CANCELLED"].includes(order.status)) && (
+            <div className="home-active-orders">
+              <div><strong>Active order delivery OTP</strong><small>Share this OTP only after receiving your printed documents.</small></div>
+              {myOrders.filter((order) => !["DELIVERED", "CANCELLED"].includes(order.status)).map((order) => (
+                <article key={order.id}>
+                  <span><small>Order ID</small><strong>{order.order_number}</strong></span>
+                  <span><small>Delivery OTP</small><b>{order.deliveryCode}</b></span>
+                  <span><small>Status</small><strong>{order.status.replaceAll("_", " ")}</strong></span>
+                </article>
+              ))}
+              <button onClick={openMyOrders}>View all orders</button>
+            </div>
+          )}
         </div>
 
         <section className="order-card" aria-label="Create print order">

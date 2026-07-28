@@ -63,6 +63,15 @@ h1 em { color: var(--yellow); font-style: normal; }
 .payment-home-note strong { font-size: 12px; line-height: 1.45; }
 .payment-home-note span, .payment-home-note small { font-size: 9px; line-height: 1.45; }
 .payment-home-note button { justify-self: start; margin-top: 4px; border: 0; border-radius: 8px; padding: 9px 11px; background: var(--ink); color: white; font-size: 9px; font-weight: 900; }
+.home-active-orders { display: grid; gap: 8px; margin-top: 12px; padding: 14px; border-radius: 12px; background: var(--ink); color: white; }
+.home-active-orders > div strong, .home-active-orders > div small { display: block; }
+.home-active-orders > div small { margin-top: 4px; color: #b9bbc0; font-size: 9px; }
+.home-active-orders article { display: grid; grid-template-columns: 1fr 1fr 1.2fr; gap: 8px; padding: 10px; border-radius: 9px; background: #292b30; }
+.home-active-orders article small, .home-active-orders article strong, .home-active-orders article b { display: block; }
+.home-active-orders article small { color: #aaa; font-size: 7px; font-weight: 800; text-transform: uppercase; }
+.home-active-orders article strong { margin-top: 3px; font-size: 10px; }
+.home-active-orders article b { margin-top: 2px; color: var(--yellow); font-size: 20px; letter-spacing: 3px; }
+.home-active-orders > button { border: 0; border-radius: 8px; padding: 9px; background: var(--yellow); color: var(--ink); font-size: 9px; font-weight: 900; }
 .trust-row span::first-letter { color: var(--yellow); }
 
 .order-card {
