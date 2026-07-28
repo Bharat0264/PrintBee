@@ -362,6 +362,13 @@ footer { border-top: 1px solid var(--line); padding: 28px max(24px, calc((100% -
 .active-users article small { margin-top: 3px; color: var(--muted); font-size: 8px; }
 .active-users article > span:nth-last-child(-n+2) { text-align: right; }
 .user-avatar { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; background: var(--yellow); color: var(--ink); font-size: 13px; font-weight: 900; }
+.revenue-table { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; background: white; }
+.revenue-table > div, .revenue-table > article { min-width: 760px; display: grid; grid-template-columns: 120px 120px minmax(180px, 1fr) 110px minmax(210px, 1fr); align-items: center; gap: 14px; padding: 13px 15px; border-bottom: 1px solid var(--line); }
+.revenue-table > :last-child { border-bottom: 0; }
+.revenue-head { background: #f2f0ea; color: var(--muted); font-size: 8px; font-weight: 900; letter-spacing: .7px; text-transform: uppercase; }
+.revenue-table article span strong, .revenue-table article span small { display: block; }
+.revenue-table article small { margin-top: 4px; color: var(--muted); font-size: 8px; line-height: 1.35; }
+.revenue-table article > strong:last-of-type, .revenue-table article > span:last-child > strong { color: #17633a; }
 .document-details .print-summary { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; border: 0; padding: 0 0 9px; }
 .document-details .print-summary span { padding: 7px; border-radius: 6px; background: #eceae4; font-size: 9px; }
 .payment-review-details { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }

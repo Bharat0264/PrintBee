@@ -627,6 +627,12 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                 <div className="active-users">
                   {dashboard.activeUsers?.length ? dashboard.activeUsers.map((user: any) => <article key={user.email}><span className="user-avatar">{(user.name || user.email).slice(0, 1).toUpperCase()}</span><span><strong>{user.name}</strong><small>{user.email} · {user.mobile_number}</small><small>Last order {new Date(user.last_order_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}</small></span><span><strong>{user.order_count}</strong><small>Orders</small></span><span><strong>{inr.format((user.paid_spend_paise ?? 0) / 100)}</strong><small>Paid spend</small></span></article>) : <p>No active users yet.</p>}
                 </div>
+                <h3>Revenue</h3>
+                <p>Paid order revenue, rider earnings, and PrintBee revenue per order.</p>
+                <div className="revenue-table">
+                  <div className="revenue-head"><span>Order</span><span>Revenue</span><span>Delivery partner</span><span>Rider fee</span><span>Admin revenue</span></div>
+                  {dashboard.revenueOrders?.length ? dashboard.revenueOrders.map((entry: any) => <article key={entry.order_number}><span><strong>{entry.order_number}</strong><small>{new Date(entry.created_at).toLocaleDateString("en-IN")}</small></span><strong>{inr.format(entry.revenue_paise / 100)}</strong><span><strong>{entry.rider_name}</strong><small>{entry.rider_email || "Awaiting assignment"}</small></span><strong>{inr.format(entry.rider_fee_paise / 100)}</strong><span><strong>{inr.format(entry.admin_revenue_paise / 100)}</strong><small>Print {inr.format(entry.printing_subtotal_paise / 100)} + platform {inr.format(entry.platform_fee_paise / 100)} + 20% delivery</small></span></article>) : <p>No paid-order revenue yet.</p>}
+                </div>
                 <h3>Rider performance</h3>
                 <div className="rider-stats">{dashboard.riders?.length ? dashboard.riders.map((rider: any) => <div key={rider.email}><span><b>{rider.name || "Delivery partner"}</b><small>{rider.email} · {rider.mobile_number || "No mobile"}</small><small>{rider.delivered ?? 0} successful rides · {rider.assigned ?? 0} assigned</small></span><strong>{inr.format((rider.earned_paise ?? 0) / 100)}<small>Total earned</small></strong><button className="remove-rider" onClick={() => removeRider(rider.email)}>Remove partner</button></div>) : <p>No riders added yet.</p>}</div>
                 <div className="payout-panel">
