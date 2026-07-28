@@ -28,6 +28,7 @@ const inr = new Intl.NumberFormat("en-IN", {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
 });
+const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 
 type Viewer = { email: string; isAdmin: boolean } | null;
 type LocationOption = { id: string; name: string; delivery_fee_paise?: number; platform_fee_paise?: number };
@@ -146,6 +147,13 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   const handleFile = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
+    if (file.size > MAX_UPLOAD_BYTES) {
+      event.target.value = "";
+      setFileName("");
+      setSelectedFile(null);
+      setUploadError(`"${file.name}" is too large. Please upload a PDF or image smaller than 25 MB.`);
+      return;
+    }
     setFileName(file.name);
     setSelectedFile(file);
     setUploadError("");
@@ -173,13 +181,27 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   const addToCart = async () => {
     if (!viewer) return setLoginOpen(true);
     if (!fileName || !selectedFile || countingPages) return;
+    if (selectedFile.size > MAX_UPLOAD_BYTES) return setUploadError("This file is larger than the 25 MB upload limit.");
     setCountingPages(true);
+    setUploadError("");
     const form = new FormData();
     form.append("file", selectedFile);
     form.append("pageCount", String(pages));
-    const uploadResponse = await fetch("/api/uploads", { method: "POST", body: form });
-    const uploaded = await uploadResponse.json();
-    if (!uploadResponse.ok) { setCountingPages(false); return setUploadError(uploaded.error); }
+    let uploaded: any;
+    try {
+      const uploadResponse = await fetch("/api/uploads", { method: "POST", body: form });
+      const responseText = await uploadResponse.text();
+      try {
+        uploaded = responseText ? JSON.parse(responseText) : {};
+      } catch {
+        uploaded = { error: uploadResponse.status === 413 || responseText.toLowerCase().includes("payload too large") ? "This document is too large to upload. Please compress it below 25 MB and try again." : "The upload service returned an unexpected response. Please try again." };
+      }
+      if (!uploadResponse.ok || !uploaded.uploadId) return setUploadError(uploaded.error ?? "Document upload failed. Please try again.");
+    } catch {
+      return setUploadError("The document could not be uploaded. Check your connection and try again.");
+    } finally {
+      setCountingPages(false);
+    }
     setCart((items) => [
       ...items,
       {
@@ -198,7 +220,6 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
     setSelectedFile(null);
     setPages(1);
     setCopies(1);
-    setCountingPages(false);
   };
 
   const cartTotal = cart.reduce((sum, item) => sum + item.total, 0);
@@ -635,7 +656,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
             <strong>{fileName || "Choose a document"}</strong>
             <small>{countingPages ? "Counting pages…" : fileName ? `${pages} ${pages === 1 ? "page" : "pages"} detected` : "or drag and drop it here"}</small>
           </label>
-          <p className="file-retention-note"><strong>Document privacy:</strong> Your uploaded files will be deleted once the order is delivered or cancelled.</p>
+          <p className="file-retention-note"><strong>Document privacy:</strong> Your uploaded files will be deleted once the order is delivered or cancelled. Maximum file size: 25 MB.</p>
           {uploadError && <p className="upload-error">{uploadError}</p>}
 
           <div className="field-label"><span className="step">2</span> Choose print type</div>
