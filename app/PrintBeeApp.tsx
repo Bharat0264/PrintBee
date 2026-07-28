@@ -594,6 +594,11 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                 </div>
                 <h3>Pending rider applications</h3>
                 <div className="application-list">{dashboard.riderApplications?.length ? dashboard.riderApplications.map((application: any) => <article key={application.email}><span><strong>{application.name}</strong><small>{application.email} · {application.mobile_number}</small></span><div><button onClick={() => approveRider(application.email, true)}>Approve</button><button className="reject" onClick={() => approveRider(application.email, false)}>Reject</button></div></article>) : <p>No rider applications awaiting review.</p>}</div>
+                <h3>Active users</h3>
+                <p>Customers who have placed orders, sorted by latest activity.</p>
+                <div className="active-users">
+                  {dashboard.activeUsers?.length ? dashboard.activeUsers.map((user: any) => <article key={user.email}><span className="user-avatar">{(user.name || user.email).slice(0, 1).toUpperCase()}</span><span><strong>{user.name}</strong><small>{user.email} · {user.mobile_number}</small><small>Last order {new Date(user.last_order_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}</small></span><span><strong>{user.order_count}</strong><small>Orders</small></span><span><strong>{inr.format((user.paid_spend_paise ?? 0) / 100)}</strong><small>Paid spend</small></span></article>) : <p>No active users yet.</p>}
+                </div>
                 <h3>Rider performance</h3>
                 <div className="rider-stats">{dashboard.riders?.length ? dashboard.riders.map((rider: any) => <div key={rider.email}><span>{rider.email}<small>{rider.delivered ?? 0} delivered · {rider.assigned ?? 0} assigned</small></span><strong>{inr.format((rider.income_paise ?? 0) / 100)}<small>Total paid</small></strong></div>) : <p>No riders added yet.</p>}</div>
                 <div className="payout-panel">
