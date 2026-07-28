@@ -95,6 +95,8 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   const [paymentReference, setPaymentReference] = useState("");
   const [appQr, setAppQr] = useState("");
   const [riderOrders, setRiderOrders] = useState<any[]>([]);
+  const [riderEarnings, setRiderEarnings] = useState<any>(null);
+  const [withdrawUpi, setWithdrawUpi] = useState("");
   const [saved, setSaved] = useState(false);
   const [riderPayment, setRiderPayment] = useState({ riderEmail: "", amount: "", paymentDate: new Date().toISOString().slice(0, 10), note: "" });
   const [riderApplicationOpen, setRiderApplicationOpen] = useState(false);
@@ -362,6 +364,21 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
     await openAdminDashboard();
   };
 
+  const removeRider = async (email: string) => {
+    if (!window.confirm(`Remove ${email} from the delivery application? Their completed ride and payment history will be preserved.`)) return;
+    const response = await fetch("/api/admin/riders/remove", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email }) });
+    const data = await response.json();
+    setAdminMessage(response.ok ? "Delivery partner removed. Active assigned orders were returned to ready for pickup." : data.error);
+    await openAdminDashboard();
+  };
+
+  const updateWithdrawalStatus = async (withdrawalId: string, status: string) => {
+    const response = await fetch("/api/admin/withdrawals/status", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ withdrawalId, status }) });
+    const data = await response.json();
+    setAdminMessage(response.ok ? "Withdrawal status updated." : data.error);
+    await openAdminDashboard();
+  };
+
   const submitRiderApplication = async () => {
     if (!viewer) return setAuthMessage("Sign in with Google first, then choose delivery partner registration again.");
     const response = await fetch("/api/rider/application", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(riderApplication) });
@@ -384,6 +401,17 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   const loadRiderOrders = async () => {
     const response = await fetch("/api/rider/orders");
     if (response.ok) setRiderOrders(await response.json());
+    if (!viewer?.isAdmin) {
+      const earningsResponse = await fetch("/api/rider/earnings");
+      if (earningsResponse.ok) setRiderEarnings(await earningsResponse.json());
+    }
+  };
+
+  const requestWithdrawal = async () => {
+    const response = await fetch("/api/rider/earnings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ upiId: withdrawUpi }) });
+    const data = await response.json();
+    setDeliveryMessage(response.ok ? `Withdrawal requested for ${inr.format(data.amountPaise / 100)}.` : data.error);
+    if (response.ok) { setWithdrawUpi(""); await loadRiderOrders(); }
   };
 
   const openDeliveryQueue = async () => {
@@ -600,7 +628,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                   {dashboard.activeUsers?.length ? dashboard.activeUsers.map((user: any) => <article key={user.email}><span className="user-avatar">{(user.name || user.email).slice(0, 1).toUpperCase()}</span><span><strong>{user.name}</strong><small>{user.email} · {user.mobile_number}</small><small>Last order {new Date(user.last_order_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}</small></span><span><strong>{user.order_count}</strong><small>Orders</small></span><span><strong>{inr.format((user.paid_spend_paise ?? 0) / 100)}</strong><small>Paid spend</small></span></article>) : <p>No active users yet.</p>}
                 </div>
                 <h3>Rider performance</h3>
-                <div className="rider-stats">{dashboard.riders?.length ? dashboard.riders.map((rider: any) => <div key={rider.email}><span>{rider.email}<small>{rider.delivered ?? 0} delivered · {rider.assigned ?? 0} assigned</small></span><strong>{inr.format((rider.income_paise ?? 0) / 100)}<small>Total paid</small></strong></div>) : <p>No riders added yet.</p>}</div>
+                <div className="rider-stats">{dashboard.riders?.length ? dashboard.riders.map((rider: any) => <div key={rider.email}><span><b>{rider.name || "Delivery partner"}</b><small>{rider.email} · {rider.mobile_number || "No mobile"}</small><small>{rider.delivered ?? 0} successful rides · {rider.assigned ?? 0} assigned</small></span><strong>{inr.format((rider.earned_paise ?? 0) / 100)}<small>Total earned</small></strong><button className="remove-rider" onClick={() => removeRider(rider.email)}>Remove partner</button></div>) : <p>No riders added yet.</p>}</div>
                 <div className="payout-panel">
                   <div><h3>Record rider payment</h3><p>Save an amount paid to a rider for a specific day.</p></div>
                   <div className="payout-form">
@@ -613,6 +641,9 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                 </div>
                 <h3>Recent rider payments</h3>
                 <div className="payout-history">{dashboard.riderPayments?.length ? dashboard.riderPayments.slice(0, 12).map((payment: any) => <article key={payment.id}><span><strong>{payment.rider_email}</strong><small>{new Date(`${payment.payment_date}T00:00:00`).toLocaleDateString("en-IN")}{payment.note ? ` · ${payment.note}` : ""}</small></span><strong>{inr.format(payment.amount_paise / 100)}</strong></article>) : <p>No rider payments recorded yet.</p>}</div>
+                <h3>Rider withdrawal requests</h3>
+                <p>Review the UPI ID and move each request through the payout flow.</p>
+                <div className="withdrawal-admin">{dashboard.riderWithdrawals?.length ? dashboard.riderWithdrawals.map((withdrawal: any) => <article key={withdrawal.id}><span><strong>{withdrawal.rider_email}</strong><small>UPI: {withdrawal.upi_id}</small><small>Requested {new Date(withdrawal.requested_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}</small></span><strong>{inr.format(withdrawal.amount_paise / 100)}</strong><select value={withdrawal.status} onChange={(e) => updateWithdrawalStatus(withdrawal.id, e.target.value)}><option value="REQUESTED">Withdraw requested</option><option value="IN_PROGRESS">In progress</option><option value="SENT">Amount sent to bank</option></select></article>) : <p>No withdrawal requests yet.</p>}</div>
                 <h3>Live orders</h3>
                 <div className="admin-orders">{dashboard.orders?.length ? dashboard.orders.map((order: any) => (
                   <article key={order.id}>
@@ -706,6 +737,15 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
             <div className="admin-badge">DELIVERY AGENT</div>
             <h2 id="delivery-title">Verify delivery</h2>
             <p>Ask the customer for their six-digit code only after handing over the prints.</p>
+            {!viewer?.isAdmin && riderEarnings && <div className="rider-wallet">
+              <div><small>Successful rides</small><strong>{riderEarnings.totalRides}</strong></div>
+              <div><small>Total earned</small><strong>{inr.format(riderEarnings.earnedPaise / 100)}</strong></div>
+              <div><small>Available to withdraw</small><strong>{inr.format(riderEarnings.availablePaise / 100)}</strong></div>
+              <p>You earn 75% of the delivery fee for every successfully delivered order.</p>
+              <label>UPI ID<input value={withdrawUpi} onChange={(e) => setWithdrawUpi(e.target.value)} placeholder="yourname@upi" /></label>
+              <button disabled={riderEarnings.availablePaise <= 0 || !withdrawUpi.trim()} onClick={requestWithdrawal}>Withdraw available earnings</button>
+              <div className="rider-withdrawals">{riderEarnings.withdrawals?.map((withdrawal: any) => <span key={withdrawal.id}><b>{inr.format(withdrawal.amount_paise / 100)}</b><small>{withdrawal.status === "REQUESTED" ? "Withdraw requested" : withdrawal.status === "IN_PROGRESS" ? "In progress" : "Amount sent to bank"} · {withdrawal.upi_id}</small></span>)}</div>
+            </div>}
             <div className="rider-queue">
               <h3>My assigned orders</h3>
               {riderOrders.length ? riderOrders.map((order) => <button key={order.order_number} onClick={() => setDeliveryOrderNumber(order.order_number)}><strong>{order.order_number}</strong><span>{order.customer_name} · {order.location_name}</span><small>{order.mobile_number} · {order.status}</small></button>) : <p>No active assigned orders.</p>}

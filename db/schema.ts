@@ -72,3 +72,14 @@ export const riderPayments = sqliteTable("rider_payments", {
   recordedBy: text("recorded_by").notNull(),
   createdAt: text("created_at").notNull(),
 });
+
+export const riderWithdrawals = sqliteTable("rider_withdrawals", {
+  id: text("id").primaryKey(),
+  riderEmail: text("rider_email").notNull(),
+  upiId: text("upi_id").notNull(),
+  amountPaise: integer("amount_paise").notNull(),
+  status: text("status").notNull().default("REQUESTED"),
+  requestedAt: text("requested_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+  updatedBy: text("updated_by"),
+});

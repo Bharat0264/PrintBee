@@ -169,6 +169,11 @@ footer { border-top: 1px solid var(--line); padding: 28px max(24px, calc((100% -
 .admin-portal .rider-stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; border: 0; }
 .admin-portal .rider-stats > div { border: 1px solid var(--line); border-radius: 12px; padding: 15px; background: white; }
 .admin-portal .rider-stats span small, .admin-portal .rider-stats strong small { display: block; margin-top: 5px; font-size: 9px; color: var(--muted); }
+.remove-rider { grid-column: 1 / -1; border: 0; border-radius: 7px; padding: 7px; background: #fff0ed; color: #9b3027; font-size: 8px; font-weight: 900; }
+.withdrawal-admin { display: grid; gap: 8px; }
+.withdrawal-admin article { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 14px; padding: 13px 15px; border: 1px solid var(--line); border-radius: 11px; background: white; }
+.withdrawal-admin article span small { display: block; margin-top: 4px; color: var(--muted); font-size: 8px; }
+.withdrawal-admin select { border: 1px solid var(--line); border-radius: 8px; padding: 8px; background: white; font-size: 9px; }
 .payout-panel { margin-top: 24px; padding: 22px; border-radius: 16px; background: var(--ink); color: white; }
 .payout-panel h3 { margin: 0 0 4px; color: white; }
 .payout-panel p { margin: 0 0 16px; color: #aaa; font-size: 11px; }
@@ -279,6 +284,19 @@ footer { border-top: 1px solid var(--line); padding: 28px max(24px, calc((100% -
 .customer-code { grid-column: 1 / -1; padding: 10px; border-radius: 8px; background: var(--ink); color: white; display: flex; justify-content: space-between; align-items: center; }
 .customer-code strong { color: var(--yellow); letter-spacing: 5px; font-size: 19px; }
 .rider-queue { margin: 18px 0; padding: 14px; border-radius: 12px; background: #f7f6f2; }
+.rider-wallet { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 18px 0; padding: 14px; border-radius: 13px; background: var(--ink); color: white; }
+.rider-wallet > div { padding: 10px; border-radius: 9px; background: #292b30; }
+.rider-wallet small, .rider-wallet strong { display: block; }
+.rider-wallet small { color: #aaa; font-size: 8px; }
+.rider-wallet strong { margin-top: 4px; color: var(--yellow); font-size: 17px; }
+.rider-wallet > p, .rider-wallet > label, .rider-wallet > button, .rider-withdrawals { grid-column: 1 / -1; }
+.rider-wallet > p { margin: 4px 0; color: #bbb; font-size: 9px; }
+.rider-wallet > label { color: #bbb; font-size: 9px; font-weight: 800; }
+.rider-wallet input { width: 100%; margin-top: 5px; border: 1px solid #484a50; border-radius: 8px; padding: 10px; background: #292b30; color: white; }
+.rider-wallet > button { border: 0; border-radius: 8px; padding: 10px; background: var(--yellow); color: var(--ink); font-weight: 900; }
+.rider-wallet > button:disabled { opacity: .45; }
+.rider-withdrawals { display: grid; gap: 5px; padding: 0 !important; background: transparent !important; }
+.rider-withdrawals span { display: flex; justify-content: space-between; gap: 10px; padding: 8px; border-radius: 7px; background: #292b30; font-size: 9px; }
 .rider-queue h3 { margin: 0 0 10px; font-size: 14px; }
 .rider-queue > button { width: 100%; display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; text-align: left; border: 0; border-bottom: 1px solid var(--line); background: transparent; padding: 10px 0; }
 .rider-queue > button:last-child { border-bottom: 0; }
@@ -373,4 +391,8 @@ footer { border-top: 1px solid var(--line); padding: 28px max(24px, calc((100% -
   .payment-review-actions { grid-template-columns: 1fr 1fr; }
   .active-users article { grid-template-columns: auto 1fr; }
   .active-users article > span:nth-last-child(-n+2) { text-align: left; }
+  .withdrawal-admin article { grid-template-columns: 1fr auto; }
+  .withdrawal-admin select { grid-column: 1 / -1; }
+  .rider-wallet { grid-template-columns: 1fr; }
+  .rider-wallet > p, .rider-wallet > label, .rider-wallet > button, .rider-withdrawals { grid-column: 1; }
 }
