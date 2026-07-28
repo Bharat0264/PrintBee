@@ -16,7 +16,6 @@ export async function POST(request: Request) {
   const id = crypto.randomUUID();
   const code = crypto.getRandomValues(new Uint32Array(1))[0] % 1_000_000;
   const deliveryCode = code.toString().padStart(6, "0");
-  const orderNumber = `PB${Date.now().toString().slice(-8)}`;
   const printingSubtotalPaise = Math.max(0, Math.round(Number(body.totalPaise) || 0));
   const deliveryFeePaise = location.delivery_fee_paise ?? 1500;
   const platformFeePaise = location.platform_fee_paise ?? 350;
@@ -30,6 +29,9 @@ export async function POST(request: Request) {
   const hash = await hashDeliveryCode(id, deliveryCode);
   const encryptedCode = await encryptDeliveryCode(deliveryCode);
   const db = database();
+  const sequence = await db.prepare("UPDATE order_sequences SET next_value=next_value+1 WHERE id='orders' RETURNING next_value-1 number").first<{ number: number }>();
+  if (!sequence) return NextResponse.json({ error: "Order numbering is temporarily unavailable" }, { status: 503 });
+  const orderNumber = `PB${String(sequence.number).padStart(3, "0")}`;
   await db.prepare(`INSERT INTO orders (id, order_number, customer_email, customer_name, mobile_number, location_id, location_name, items_json, printing_subtotal_paise, delivery_fee_paise, platform_fee_paise, total_paise, delivery_code_hash, delivery_code_encrypted, status, payment_status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PAYMENT_PENDING', 'PENDING', ?)`)
     .bind(id, orderNumber, viewer.email, name, mobile, location.id, location.name, JSON.stringify(body.items), printingSubtotalPaise, deliveryFeePaise, platformFeePaise, totalPaise, hash, encryptedCode, new Date().toISOString()).run();
   await db.batch(uploadIds.map((uploadId) => db.prepare("UPDATE uploads SET order_id=? WHERE id=?").bind(id, uploadId)));

@@ -83,3 +83,8 @@ export const riderWithdrawals = sqliteTable("rider_withdrawals", {
   updatedAt: text("updated_at").notNull(),
   updatedBy: text("updated_by"),
 });
+
+export const orderSequences = sqliteTable("order_sequences", {
+  id: text("id").primaryKey(),
+  nextValue: integer("next_value").notNull().default(1),
+});
