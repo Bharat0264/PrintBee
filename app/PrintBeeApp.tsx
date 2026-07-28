@@ -528,6 +528,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
             <strong>{fileName || "Choose a document"}</strong>
             <small>{countingPages ? "Counting pages…" : fileName ? `${pages} ${pages === 1 ? "page" : "pages"} detected` : "or drag and drop it here"}</small>
           </label>
+          <p className="file-retention-note"><strong>Document privacy:</strong> Your uploaded files will be deleted once the order is delivered or cancelled.</p>
           {uploadError && <p className="upload-error">{uploadError}</p>}
 
           <div className="field-label"><span className="step">2</span> Choose print type</div>
