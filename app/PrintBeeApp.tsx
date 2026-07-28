@@ -285,6 +285,14 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
     await openAdminDashboard();
   };
 
+  const deleteOrderFiles = async (orderId: string) => {
+    if (!window.confirm("Delete the stored documents for this completed order? Order, customer and payment records will be preserved.")) return;
+    const response = await fetch("/api/admin/orders/delete-files", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ orderId }) });
+    const data = await response.json();
+    setAdminMessage(response.ok ? `${data.deleted} stored document${data.deleted === 1 ? "" : "s"} deleted. All order and payment records were preserved.` : data.error);
+    await openAdminDashboard();
+  };
+
   const openAdminDashboard = async () => {
     setAdminOpen(true);
     const response = await fetch("/api/admin/dashboard");
@@ -626,7 +634,8 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                         </div>
                       )) : <small>No document details saved for this legacy order.</small>}
                     </div>
-                    <div className="file-links">{order.files?.length ? order.files.map((file: any) => <a key={file.id} href={`/api/admin/files/${file.id}/download`}>Download {file.original_name}</a>) : <span>Legacy order — document was not stored</span>}</div>
+                    <div className="file-links">{order.files?.length ? order.files.map((file: any) => file.deleted_at ? <span className="deleted-file" key={file.id}>{file.original_name} · deleted {new Date(file.deleted_at).toLocaleDateString("en-IN")}</span> : <a key={file.id} href={`/api/admin/files/${file.id}/download`}>Download {file.original_name}</a>) : <span>Legacy order — document was not stored</span>}</div>
+                    {["DELIVERED", "CANCELLED"].includes(order.status) && order.files?.some((file: any) => !file.deleted_at) && <button className="delete-files-action" onClick={() => deleteOrderFiles(order.id)}>Delete documents from storage</button>}
                     <select disabled={order.status === "CANCELLED" || order.payment_status !== "PAID"} value={order.status} onChange={(e) => updateOrderStatus(order.id, e.target.value)}>
                       {order.status === "CANCELLED" && <option value="CANCELLED">Cancelled</option>}
                       <option value="CONFIRMED">Confirmed</option><option value="PRINTING">Printing</option><option value="READY_FOR_PICKUP">Ready for pickup</option><option value="RIDER_ASSIGNED">Rider assigned</option>

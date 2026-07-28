@@ -13,11 +13,11 @@ export async function GET() {
     db.prepare("SELECT email, name, mobile_number, created_at FROM app_users WHERE role='AGENT' AND approval_status='PENDING' ORDER BY created_at").all(),
     db.prepare("SELECT id, name, active, delivery_fee_paise, platform_fee_paise FROM locations ORDER BY name").all(),
     db.prepare(`SELECT l.id, l.name, l.active, l.delivery_fee_paise, l.platform_fee_paise, COUNT(o.id) orders, SUM(CASE WHEN o.status='DELIVERED' THEN 1 ELSE 0 END) delivered, COALESCE(SUM(CASE WHEN o.payment_status='PAID' THEN o.total_paise ELSE 0 END), 0) revenue_paise FROM locations l LEFT JOIN orders o ON o.location_id=l.id GROUP BY l.id, l.name, l.active ORDER BY revenue_paise DESC, l.name`).all(),
-    db.prepare("SELECT id, order_id, original_name FROM uploads WHERE order_id IS NOT NULL ORDER BY created_at").all(),
+    db.prepare("SELECT id, order_id, original_name, deleted_at FROM uploads WHERE order_id IS NOT NULL ORDER BY created_at").all(),
     db.prepare("SELECT id, rider_email, amount_paise, payment_date, note, recorded_by, created_at FROM rider_payments ORDER BY payment_date DESC, created_at DESC LIMIT 100").all(),
   ]);
   const filesByOrder = new Map<string, unknown[]>();
-  for (const file of files.results as Array<{ id: string; order_id: string; original_name: string }>) {
+  for (const file of files.results as Array<{ id: string; order_id: string; original_name: string; deleted_at: string | null }>) {
     const current = filesByOrder.get(file.order_id) ?? [];
     current.push(file);
     filesByOrder.set(file.order_id, current);

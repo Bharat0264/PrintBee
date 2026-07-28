@@ -28,6 +28,7 @@ export const uploads = sqliteTable("uploads", {
   pageCount: integer("page_count").notNull(),
   orderId: text("order_id"),
   createdAt: text("created_at").notNull(),
+  deletedAt: text("deleted_at"),
 });
 
 export const orders = sqliteTable("orders", {
