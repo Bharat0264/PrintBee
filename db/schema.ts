@@ -53,3 +53,13 @@ export const orders = sqliteTable("orders", {
   cancelledAt: text("cancelled_at"),
   cancelledBy: text("cancelled_by"),
 });
+
+export const riderPayments = sqliteTable("rider_payments", {
+  id: text("id").primaryKey(),
+  riderEmail: text("rider_email").notNull(),
+  amountPaise: integer("amount_paise").notNull(),
+  paymentDate: text("payment_date").notNull(),
+  note: text("note"),
+  recordedBy: text("recorded_by").notNull(),
+  createdAt: text("created_at").notNull(),
+});

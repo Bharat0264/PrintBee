@@ -83,6 +83,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   const [appQr, setAppQr] = useState("");
   const [riderOrders, setRiderOrders] = useState<any[]>([]);
   const [saved, setSaved] = useState(false);
+  const [riderPayment, setRiderPayment] = useState({ riderEmail: "", amount: "", paymentDate: new Date().toISOString().slice(0, 10), note: "" });
 
   useEffect(() => {
     const stored = window.localStorage.getItem("printbee-a4-prices");
@@ -295,6 +296,20 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
     if (response.ok) setAgentEmail("");
   };
 
+  const recordRiderPayment = async () => {
+    const response = await fetch("/api/admin/rider-payments", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...riderPayment, amount: Number(riderPayment.amount) }),
+    });
+    const data = await response.json();
+    setAdminMessage(response.ok ? "Rider payment recorded successfully." : data.error);
+    if (response.ok) {
+      setRiderPayment((current) => ({ ...current, amount: "", note: "" }));
+      await openAdminDashboard();
+    }
+  };
+
   const verifyDelivery = async () => {
     const response = await fetch("/api/orders/verify-delivery", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ orderNumber: deliveryOrderNumber, code: deliveryCode }) });
     const data = await response.json();
@@ -462,7 +477,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
 
       {adminOpen && (
         <div className="modal-backdrop" role="presentation" onMouseDown={() => setAdminOpen(false)}>
-          <section className="admin-modal" role="dialog" aria-modal="true" aria-labelledby="admin-title" onMouseDown={(e) => e.stopPropagation()}>
+          <section className="admin-modal admin-portal" role="dialog" aria-modal="true" aria-labelledby="admin-title" onMouseDown={(e) => e.stopPropagation()}>
             <button className="close" onClick={() => setAdminOpen(false)} aria-label="Close">×</button>
             <div className="admin-badge">ADMIN</div>
             <h2 id="admin-title">A4 pricing controls</h2>
@@ -496,8 +511,33 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                   <div><small>Ready</small><strong>{dashboard.summary?.ready ?? 0}</strong></div>
                   <div><small>Paid revenue</small><strong>{inr.format((dashboard.summary?.revenue_paise ?? 0) / 100)}</strong></div>
                 </div>
+                <h3>Location performance</h3>
+                <p>Orders and paid revenue across every delivery location.</p>
+                <div className="location-table">
+                  <div className="table-head"><span>Location</span><span>Orders</span><span>Delivered</span><span>Revenue</span></div>
+                  {dashboard.locationStats?.length ? dashboard.locationStats.map((location: any) => (
+                    <div key={location.id}>
+                      <span><i className={location.active ? "active-dot" : ""} />{location.name}<small>{location.active ? "Active" : "Inactive"}</small></span>
+                      <strong>{location.orders ?? 0}</strong>
+                      <strong>{location.delivered ?? 0}</strong>
+                      <strong>{inr.format((location.revenue_paise ?? 0) / 100)}</strong>
+                    </div>
+                  )) : <p>No locations added yet.</p>}
+                </div>
                 <h3>Rider performance</h3>
-                <div className="rider-stats">{dashboard.riders?.length ? dashboard.riders.map((rider: any) => <div key={rider.email}><span>{rider.email}</span><strong>{rider.delivered ?? 0} delivered</strong><small>{rider.assigned ?? 0} assigned</small></div>) : <p>No riders added yet.</p>}</div>
+                <div className="rider-stats">{dashboard.riders?.length ? dashboard.riders.map((rider: any) => <div key={rider.email}><span>{rider.email}<small>{rider.delivered ?? 0} delivered · {rider.assigned ?? 0} assigned</small></span><strong>{inr.format((rider.income_paise ?? 0) / 100)}<small>Total paid</small></strong></div>) : <p>No riders added yet.</p>}</div>
+                <div className="payout-panel">
+                  <div><h3>Record rider payment</h3><p>Save an amount paid to a rider for a specific day.</p></div>
+                  <div className="payout-form">
+                    <label>Rider<select value={riderPayment.riderEmail} onChange={(e) => setRiderPayment({ ...riderPayment, riderEmail: e.target.value })}><option value="">Select rider</option>{dashboard.riders?.map((rider: any) => <option key={rider.email} value={rider.email}>{rider.email}</option>)}</select></label>
+                    <label>Amount (₹)<input type="number" min="1" step="0.01" value={riderPayment.amount} onChange={(e) => setRiderPayment({ ...riderPayment, amount: e.target.value })} placeholder="500" /></label>
+                    <label>Date<input type="date" value={riderPayment.paymentDate} onChange={(e) => setRiderPayment({ ...riderPayment, paymentDate: e.target.value })} /></label>
+                    <label>Note<input value={riderPayment.note} onChange={(e) => setRiderPayment({ ...riderPayment, note: e.target.value })} placeholder="Optional note" /></label>
+                    <button onClick={recordRiderPayment} disabled={!riderPayment.riderEmail || !riderPayment.amount}>Record payment</button>
+                  </div>
+                </div>
+                <h3>Recent rider payments</h3>
+                <div className="payout-history">{dashboard.riderPayments?.length ? dashboard.riderPayments.slice(0, 12).map((payment: any) => <article key={payment.id}><span><strong>{payment.rider_email}</strong><small>{new Date(`${payment.payment_date}T00:00:00`).toLocaleDateString("en-IN")}{payment.note ? ` · ${payment.note}` : ""}</small></span><strong>{inr.format(payment.amount_paise / 100)}</strong></article>) : <p>No rider payments recorded yet.</p>}</div>
                 <h3>Live orders</h3>
                 <div className="admin-orders">{dashboard.orders?.length ? dashboard.orders.map((order: any) => (
                   <article key={order.id}>

@@ -146,6 +146,38 @@ footer { border-top: 1px solid var(--line); padding: 28px max(24px, calc((100% -
 
 .modal-backdrop { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; padding: 20px; background: rgba(20,21,23,.66); backdrop-filter: blur(6px); }
 .admin-modal { width: min(560px, 100%); max-height: 90vh; overflow-y: auto; position: relative; background: #fff; border-radius: 22px; padding: 30px; box-shadow: 0 30px 100px rgba(0,0,0,.3); }
+.admin-portal { width: min(1120px, 100%); padding: 34px; background: #fbfaf7; }
+.admin-portal > h2 { font-size: clamp(30px, 4vw, 46px); letter-spacing: -1.8px; }
+.admin-portal > p { max-width: 600px; }
+.admin-portal .dashboard-block { margin-top: 28px; }
+.admin-portal .metric-grid { grid-template-columns: repeat(6, 1fr); margin-bottom: 30px; }
+.admin-portal .metric-grid div { min-height: 92px; padding: 16px; background: white; border: 1px solid var(--line); }
+.admin-portal .metric-grid div:last-child { grid-column: span 2; background: var(--ink); color: white; }
+.admin-portal .metric-grid div:last-child small { color: #bbb; }
+.admin-portal .metric-grid div:last-child strong { color: var(--yellow); }
+.admin-portal h3 { margin-top: 28px; font-size: 18px; }
+.location-table { overflow-x: auto; border: 1px solid var(--line); border-radius: 14px; background: white; }
+.location-table > div { min-width: 650px; display: grid; grid-template-columns: minmax(220px, 1fr) 90px 90px 140px; align-items: center; gap: 16px; padding: 15px 18px; border-bottom: 1px solid var(--line); }
+.location-table > div:last-child { border-bottom: 0; }
+.location-table .table-head { background: #f2f0ea; color: var(--muted); font-size: 9px; font-weight: 900; letter-spacing: .8px; text-transform: uppercase; }
+.location-table > div > span:first-child { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 800; }
+.location-table small { display: block; color: var(--muted); font-size: 9px; font-weight: 600; }
+.active-dot { width: 8px; height: 8px; flex: 0 0 auto; border-radius: 50%; background: #2faa63; box-shadow: 0 0 0 3px #e5f7ec; }
+.admin-portal .rider-stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; border: 0; }
+.admin-portal .rider-stats > div { border: 1px solid var(--line); border-radius: 12px; padding: 15px; background: white; }
+.admin-portal .rider-stats span small, .admin-portal .rider-stats strong small { display: block; margin-top: 5px; font-size: 9px; color: var(--muted); }
+.payout-panel { margin-top: 24px; padding: 22px; border-radius: 16px; background: var(--ink); color: white; }
+.payout-panel h3 { margin: 0 0 4px; color: white; }
+.payout-panel p { margin: 0 0 16px; color: #aaa; font-size: 11px; }
+.payout-form { display: grid; grid-template-columns: 1.2fr .7fr .8fr 1fr auto; align-items: end; gap: 10px; }
+.payout-form label { color: #bbb; font-size: 9px; font-weight: 800; }
+.payout-form input, .payout-form select { width: 100%; display: block; margin-top: 6px; border: 1px solid #444; border-radius: 9px; padding: 10px; background: #282a2f; color: white; }
+.payout-form button { height: 38px; border: 0; border-radius: 9px; padding: 0 18px; background: var(--yellow); color: var(--ink); font-weight: 900; }
+.payout-form button:disabled { opacity: .45; }
+.payout-history { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.payout-history article { display: flex; align-items: center; justify-content: space-between; gap: 15px; padding: 13px 15px; border: 1px solid var(--line); border-radius: 11px; background: white; font-size: 11px; }
+.payout-history article span small { display: block; margin-top: 4px; color: var(--muted); font-size: 9px; }
+.admin-portal .admin-orders { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .close { position: absolute; right: 20px; top: 16px; border: 0; background: transparent; font-size: 28px; }
 .admin-badge { display: inline-block; background: var(--yellow-soft); color: #8a6200; border-radius: 6px; padding: 6px 9px; font-size: 9px; font-weight: 900; letter-spacing: 1px; }
 .admin-modal h2 { font-size: 28px; margin: 14px 0 8px; }
@@ -262,6 +294,11 @@ footer { border-top: 1px solid var(--line); padding: 28px max(24px, calc((100% -
   .how > div { border-right: 0; border-bottom: 1px solid #393c41; }
   .pricing { grid-template-columns: 1fr; gap: 30px; }
   footer { flex-direction: column; gap: 12px; text-align: center; }
+  .admin-portal .metric-grid { grid-template-columns: repeat(2, 1fr); }
+  .admin-portal .metric-grid div:last-child { grid-column: span 2; }
+  .admin-portal .rider-stats, .payout-history, .admin-portal .admin-orders { grid-template-columns: 1fr; }
+  .payout-form { grid-template-columns: 1fr 1fr; }
+  .payout-form button { grid-column: 1 / -1; }
 }
 
 @media (max-width: 480px) {
@@ -275,6 +312,9 @@ footer { border-top: 1px solid var(--line); padding: 28px max(24px, calc((100% -
   .price-list article { padding: 15px 13px; }
   .price-list p { display: none; }
   .admin-modal { padding: 24px 18px; }
+  .admin-portal { padding: 24px 14px; max-height: 96vh; border-radius: 16px; }
+  .admin-portal .metric-grid { grid-template-columns: 1fr 1fr; }
+  .payout-form { grid-template-columns: 1fr; }
   .cart-heading { align-items: start; }
   .cart-heading > strong { font-size: 22px; }
   .cart-item { grid-template-columns: auto 1fr auto; gap: 10px; }
