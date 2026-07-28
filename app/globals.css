@@ -489,6 +489,9 @@ footer { border-top: 1px solid var(--line); padding: 28px max(24px, calc((100% -
 .order-payment-qr strong, .order-payment-qr small { display: block; }
 .order-payment-qr small { max-width: 320px; margin-top: 5px; color: #735500; }
 .order-payment-qr img { width: 190px; height: 190px; object-fit: contain; border: 8px solid white; border-radius: 10px; }
+.payment-cleared-note { grid-column: 1 / -1; padding: 12px; border: 1px solid #a9d8bd; border-radius: 10px; background: #e9f8ef; color: #17633a; }
+.payment-cleared-note strong, .payment-cleared-note small { display: block; }
+.payment-cleared-note small { margin-top: 4px; color: #397552; font-size: 9px; line-height: 1.45; }
 .scanner-fullscreen { position: fixed; z-index: 9999; inset: 0; display: grid; place-items: center; padding: 60px 20px 40px; background: rgba(10, 10, 12, .94); }
 .scanner-fullscreen img { width: min(86vw, 620px); height: min(86vw, 620px); max-height: 72vh; object-fit: contain; border: 14px solid white; border-radius: 18px; background: white; }
 .scanner-fullscreen > button { position: absolute; top: 18px; right: 18px; width: 44px; height: 44px; border: 0; border-radius: 50%; background: white; color: var(--ink); font-size: 28px; line-height: 1; font-weight: 900; }
