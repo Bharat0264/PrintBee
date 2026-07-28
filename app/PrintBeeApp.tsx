@@ -2,7 +2,7 @@
 
 import { ChangeEvent, useEffect, useMemo, useState } from "react";
 import { createBrowserClient } from "@supabase/ssr";
-import { PDFDocument } from "pdf-lib";
+import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import QRCode from "qrcode";
 
 type PrintMode = "bw-single" | "bw-double" | "colour-single" | "colour-double";
@@ -100,6 +100,9 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   const [riderPayment, setRiderPayment] = useState({ riderEmail: "", amount: "", paymentDate: new Date().toISOString().slice(0, 10), note: "" });
   const [riderApplicationOpen, setRiderApplicationOpen] = useState(false);
   const [riderApplication, setRiderApplication] = useState({ name: "", mobileNumber: "" });
+  const [exportFrom, setExportFrom] = useState("");
+  const [exportTo, setExportTo] = useState("");
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     const stored = window.localStorage.getItem("printbee-a4-prices");
@@ -322,6 +325,80 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
     const data = await response.json();
     setAdminMessage(response.ok ? `${data.deletedOrders} demo orders and ${data.deletedFiles} stored files deleted. Revenue is now ₹0.` : data.error);
     await openAdminDashboard();
+  };
+
+  const setOrderHidden = async (orderId: string, hidden: boolean) => {
+    if (hidden && !window.confirm("Hide this order from the main dashboard, revenue, profit, location and rider totals, and all exports? You can restore it from Hidden orders.")) return;
+    const response = await fetch("/api/admin/orders/visibility", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ orderId, hidden }),
+    });
+    const data = await response.json();
+    setAdminMessage(response.ok ? (hidden ? "Order moved to Hidden orders." : "Order restored to the main dashboard and calculations.") : data.error);
+    if (response.ok) await openAdminDashboard();
+  };
+
+  const exportOrdersPdf = async (range: "1d" | "30d" | "custom") => {
+    if (range === "custom" && (!exportFrom || !exportTo)) return setAdminMessage("Choose both custom export dates.");
+    setExporting(true);
+    setAdminMessage("");
+    try {
+      const query = new URLSearchParams({ range });
+      if (range === "custom") {
+        query.set("from", exportFrom);
+        query.set("to", exportTo);
+      }
+      const response = await fetch(`/api/admin/orders/export?${query}`);
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? "Export could not be created");
+      const pdf = await PDFDocument.create();
+      const regular = await pdf.embedFont(StandardFonts.Helvetica);
+      const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+      const pageSize: [number, number] = [595.28, 841.89];
+      let page = pdf.addPage(pageSize);
+      let y = 800;
+      const drawHeader = () => {
+        page.drawText("PrintBee Orders Report", { x: 40, y, size: 18, font: bold, color: rgb(0.08, 0.08, 0.1) });
+        y -= 22;
+        page.drawText(`${new Date(data.from).toLocaleString("en-IN")} to ${new Date(data.to).toLocaleString("en-IN")} | Visible orders only`, { x: 40, y, size: 8, font: regular });
+        y -= 18;
+      };
+      drawHeader();
+      let collected = 0;
+      for (const order of data.orders as any[]) {
+        if (y < 105) {
+          page = pdf.addPage(pageSize);
+          y = 800;
+          drawHeader();
+        }
+        collected += order.payment_status === "PAID" ? Number(order.total_paise) : 0;
+        page.drawText(`${order.order_number} | ${new Date(order.created_at).toLocaleString("en-IN")}`, { x: 40, y, size: 10, font: bold });
+        y -= 13;
+        page.drawText(`${order.customer_name} | ${order.mobile_number} | ${order.location_name}`.slice(0, 92), { x: 40, y, size: 8, font: regular });
+        y -= 12;
+        page.drawText(`Print INR ${(order.printing_subtotal_paise / 100).toFixed(2)} | Delivery INR ${(order.delivery_fee_paise / 100).toFixed(2)} | Platform INR ${(order.platform_fee_paise / 100).toFixed(2)} | Total INR ${(order.total_paise / 100).toFixed(2)}`, { x: 40, y, size: 8, font: regular });
+        y -= 12;
+        page.drawText(`${order.payment_status} | ${order.status} | Rider: ${order.rider_email || "Not assigned"}`.slice(0, 100), { x: 40, y, size: 8, font: regular });
+        y -= 18;
+      }
+      if (!data.orders.length) page.drawText("No visible orders were found in this date range.", { x: 40, y, size: 11, font: regular });
+      const firstPage = pdf.getPages()[0];
+      firstPage.drawText(`Orders: ${data.orders.length}   Paid revenue: INR ${(collected / 100).toFixed(2)}`, { x: 40, y: 28, size: 9, font: bold });
+      const bytes = await pdf.save();
+      const blob = new Blob([bytes as BlobPart], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `printbee-orders-${range === "custom" ? `${exportFrom}-to-${exportTo}` : range}.pdf`;
+      link.click();
+      URL.revokeObjectURL(url);
+      setAdminMessage(`PDF exported with ${data.orders.length} visible order${data.orders.length === 1 ? "" : "s"}.`);
+    } catch (error) {
+      setAdminMessage(error instanceof Error ? error.message : "Export could not be created");
+    } finally {
+      setExporting(false);
+    }
   };
 
   const openAdminDashboard = async () => {
@@ -722,6 +799,16 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                   <div className="revenue-head"><span>Order</span><span>Revenue</span><span>Delivery partner</span><span>Rider fee</span><span>Admin revenue</span></div>
                   {dashboard.revenueOrders?.length ? dashboard.revenueOrders.map((entry: any) => <article key={entry.order_number}><span><strong>{entry.order_number}</strong><small>{new Date(entry.created_at).toLocaleDateString("en-IN")}</small></span><strong>{inr.format(entry.revenue_paise / 100)}</strong><span><strong>{entry.rider_name}</strong><small>{entry.rider_email || "Awaiting assignment"}</small></span><strong>{inr.format(entry.rider_fee_paise / 100)}</strong><span><strong>{inr.format(entry.admin_revenue_paise / 100)}</strong><small>Print {inr.format(entry.printing_subtotal_paise / 100)} + platform {inr.format(entry.platform_fee_paise / 100)} + 20% delivery</small></span></article>) : <p>No paid-order revenue yet.</p>}
                 </div>
+                <div className="order-export-panel">
+                  <div><h3>Export orders</h3><p>Download a PDF containing visible orders only. Hidden orders are excluded.</p></div>
+                  <div className="export-actions">
+                    <button disabled={exporting} onClick={() => exportOrdersPdf("1d")}>Last 1 day PDF</button>
+                    <button disabled={exporting} onClick={() => exportOrdersPdf("30d")}>Last 30 days PDF</button>
+                    <label>From<input type="date" value={exportFrom} onChange={(e) => setExportFrom(e.target.value)} /></label>
+                    <label>To<input type="date" value={exportTo} onChange={(e) => setExportTo(e.target.value)} /></label>
+                    <button disabled={exporting || !exportFrom || !exportTo} onClick={() => exportOrdersPdf("custom")}>{exporting ? "Creating PDF..." : "Export custom PDF"}</button>
+                  </div>
+                </div>
                 <h3>Rider performance</h3>
                 <div className="rider-stats">{dashboard.riders?.length ? dashboard.riders.map((rider: any) => <div key={rider.email}><span><b>{rider.name || "Delivery partner"}</b><small>{rider.email} · {rider.mobile_number || "No mobile"}</small><small>{rider.delivered ?? 0} successful rides · {rider.assigned ?? 0} assigned</small></span><strong>{inr.format((rider.earned_paise ?? 0) / 100)}<small>Total earned</small></strong><button className="remove-rider" onClick={() => removeRider(rider.email)}>Remove partner</button></div>) : <p>No riders added yet.</p>}</div>
                 <div className="payout-panel">
@@ -777,8 +864,18 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                     <select disabled={order.status === "CANCELLED" || order.payment_status === "REJECTED"} value={order.rider_email ?? ""} onChange={(e) => assignRider(order.id, e.target.value)}>
                       <option value="">Assign rider</option>{dashboard.riders.map((rider: any) => <option key={rider.email} value={rider.email}>{rider.email}</option>)}
                     </select>
+                    <button className="hide-order-action" onClick={() => setOrderHidden(order.id, true)}>Hide from dashboard &amp; exports</button>
                   </article>
                 )) : <p>No orders yet.</p>}</div>
+                <h3>Hidden orders</h3>
+                <p>Archived orders are excluded from the dashboard, revenue/profit, location and rider totals, active users, and exports.</p>
+                <div className="hidden-orders">{dashboard.hiddenOrders?.length ? dashboard.hiddenOrders.map((order: any) => (
+                  <article key={order.id}>
+                    <span><strong>{order.order_number}</strong><small>{order.customer_name} · {order.location_name}</small><small>Ordered {new Date(order.created_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}</small></span>
+                    <span><strong>{inr.format(order.total_paise / 100)}</strong><small>{order.payment_status} · {order.status}</small></span>
+                    <span><small>Hidden {new Date(order.hidden_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}</small><button onClick={() => setOrderHidden(order.id, false)}>Restore order</button></span>
+                  </article>
+                )) : <p>No hidden orders.</p>}</div>
               </div>
             )}
             <small className="admin-note">Prices are saved on this device for the current demo.</small>

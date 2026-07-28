@@ -412,6 +412,21 @@ footer { border-top: 1px solid var(--line); padding: 28px max(24px, calc((100% -
 .assigned-rider small { color: var(--muted); font-size: 8px; margin-bottom: 3px; }
 .assigned-rider b { display: block; margin-top: 3px; font-size: 11px; }
 .assigned-rider a { border-radius: 7px; padding: 8px 10px; background: var(--yellow); color: var(--ink); font-size: 9px; font-weight: 900; text-decoration: none; white-space: nowrap; }
+.order-export-panel { margin: 24px 0; padding: 18px; border: 1px solid #e2c85a; border-radius: 14px; background: #fff9dc; }
+.order-export-panel h3 { margin: 0 0 4px; }
+.order-export-panel p { margin: 0 0 14px; color: #735500; }
+.export-actions { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; }
+.export-actions label { color: var(--muted); font-size: 8px; font-weight: 900; text-transform: uppercase; }
+.export-actions input { display: block; margin-top: 4px; border: 1px solid var(--line); border-radius: 8px; padding: 9px; background: white; }
+.export-actions button, .hidden-orders button { border: 0; border-radius: 8px; padding: 10px 12px; background: var(--ink); color: white; font-size: 9px; font-weight: 900; }
+.export-actions button:disabled { opacity: .45; }
+.hide-order-action { grid-column: 1 / -1; border: 1px solid #d7a79f; border-radius: 8px; padding: 9px; background: #fff0ed; color: #8e2f25; font-size: 9px; font-weight: 900; }
+.hidden-orders { display: grid; gap: 8px; margin-bottom: 24px; }
+.hidden-orders article { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 18px; padding: 14px; border: 1px dashed #c9c5ba; border-radius: 11px; background: #f5f3ee; }
+.hidden-orders strong, .hidden-orders small { display: block; }
+.hidden-orders small { margin-top: 4px; color: var(--muted); font-size: 8px; }
+.hidden-orders article > span:last-child { text-align: right; }
+.hidden-orders button { margin-top: 6px; background: var(--yellow); color: var(--ink); }
 
 @media (max-width: 600px) {
   .order-progress { grid-template-columns: repeat(3, 1fr); }
@@ -422,6 +437,8 @@ footer { border-top: 1px solid var(--line); padding: 28px max(24px, calc((100% -
   .withdrawal-admin select { grid-column: 1 / -1; }
   .rider-wallet { grid-template-columns: 1fr; }
   .rider-wallet > p, .rider-wallet > label, .rider-wallet > button, .rider-withdrawals { grid-column: 1; }
+  .hidden-orders article { grid-template-columns: 1fr; }
+  .hidden-orders article > span:last-child { text-align: left; }
 }
 
 .partner-portal { min-height: 100vh; background: #f6f5f1; }

@@ -64,6 +64,8 @@ export const orders = sqliteTable("orders", {
   paymentQrStorageKey: text("payment_qr_storage_key"),
   paymentQrFileName: text("payment_qr_file_name"),
   paymentQrDeletedAt: text("payment_qr_deleted_at"),
+  hiddenAt: text("hidden_at"),
+  hiddenBy: text("hidden_by"),
 });
 
 export const riderPayments = sqliteTable("rider_payments", {
