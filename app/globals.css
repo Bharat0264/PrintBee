@@ -71,6 +71,13 @@ h1 em { color: var(--yellow); font-style: normal; }
 .home-active-orders article small { color: #aaa; font-size: 7px; font-weight: 800; text-transform: uppercase; }
 .home-active-orders article strong { margin-top: 3px; font-size: 10px; }
 .home-active-orders article b { margin-top: 2px; color: var(--yellow); font-size: 20px; letter-spacing: 3px; }
+.home-payment-scanner { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 4px; padding: 10px; border-radius: 9px; background: #fff8d5; color: var(--ink); }
+.home-payment-scanner span strong, .home-payment-scanner span small { display: block; }
+.home-payment-scanner span small { max-width: 250px; margin-top: 4px; color: #735500; font-size: 8px; line-height: 1.45; }
+.home-payment-scanner img { width: 118px; height: 118px; object-fit: contain; border: 6px solid white; border-radius: 8px; }
+.home-payment-verified { grid-column: 1 / -1; padding: 9px; border-radius: 8px; background: #e4f5eb; color: #17633a; }
+.home-payment-verified strong, .home-payment-verified small { display: block; }
+.home-payment-verified small { margin-top: 3px; color: #397552 !important; text-transform: none !important; }
 .home-active-orders > button { border: 0; border-radius: 8px; padding: 9px; background: var(--yellow); color: var(--ink); font-size: 9px; font-weight: 900; }
 .trust-row span::first-letter { color: var(--yellow); }
 
@@ -457,6 +464,9 @@ footer { border-top: 1px solid var(--line); padding: 28px max(24px, calc((100% -
   .hidden-orders article { grid-template-columns: 1fr; }
   .hidden-orders article > span:last-child { text-align: left; }
   .order-record-actions { grid-template-columns: 1fr; }
+  .home-active-orders article { grid-template-columns: 1fr 1fr; }
+  .home-active-orders article > span:last-of-type { grid-column: 1 / -1; }
+  .home-payment-scanner { flex-direction: column; text-align: center; }
 }
 
 .partner-portal { min-height: 100vh; background: #f6f5f1; }

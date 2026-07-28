@@ -724,6 +724,15 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                   <span><small>Order ID</small><strong>{order.order_number}</strong></span>
                   <span><small>Delivery OTP</small><b>{order.deliveryCode}</b></span>
                   <span><small>Status</small><strong>{order.status.replaceAll("_", " ")}</strong></span>
+                  {Boolean(order.has_payment_qr) && order.payment_status !== "PAID" && (
+                    <div className="home-payment-scanner">
+                      <span><strong>Payment scanner ready</strong><small>Pay while we deliver. Tap the scanner to open it full-screen.</small></span>
+                      <button className="scanner-expand-button" onClick={() => setExpandedScanner({ src: `/api/orders/${order.id}/payment-qr`, alt: `Payment scanner for ${order.order_number}` })}>
+                        <img src={`/api/orders/${order.id}/payment-qr`} alt={`Payment scanner for ${order.order_number}`} />
+                      </button>
+                    </div>
+                  )}
+                  {order.payment_status === "PAID" && <div className="home-payment-verified"><strong>Payment received and verified</strong><small>The payment scanner has been removed. Keep this OTP until delivery.</small></div>}
                 </article>
               ))}
               <button onClick={openMyOrders}>View all orders</button>
