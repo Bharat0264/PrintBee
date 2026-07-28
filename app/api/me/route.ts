@@ -6,6 +6,6 @@ export async function GET() {
   const viewer = await getViewer();
   if (!viewer) return NextResponse.json({ role: null });
   if (viewer.isAdmin) return NextResponse.json({ role: "ADMIN" });
-  const row = await database().prepare("SELECT role FROM app_users WHERE email = ?").bind(viewer.email).first<{ role: string }>();
-  return NextResponse.json({ role: row?.role ?? "CUSTOMER" });
+  const row = await database().prepare("SELECT role, approval_status FROM app_users WHERE email = ?").bind(viewer.email).first<{ role: string; approval_status: string }>();
+  return NextResponse.json({ role: row?.role ?? "CUSTOMER", approvalStatus: row?.approval_status ?? null });
 }

@@ -5,12 +5,17 @@ export const locations = sqliteTable("locations", {
   name: text("name").notNull(),
   active: integer("active", { mode: "boolean" }).notNull().default(true),
   createdAt: text("created_at").notNull(),
+  deliveryFeePaise: integer("delivery_fee_paise").notNull().default(1500),
+  platformFeePaise: integer("platform_fee_paise").notNull().default(350),
 });
 
 export const appUsers = sqliteTable("app_users", {
   email: text("email").primaryKey(),
   role: text("role", { enum: ["ADMIN", "AGENT"] }).notNull(),
   createdAt: text("created_at").notNull(),
+  name: text("name"),
+  mobileNumber: text("mobile_number"),
+  approvalStatus: text("approval_status").notNull().default("APPROVED"),
 });
 
 export const uploads = sqliteTable("uploads", {
@@ -52,6 +57,9 @@ export const orders = sqliteTable("orders", {
   cancellationReason: text("cancellation_reason"),
   cancelledAt: text("cancelled_at"),
   cancelledBy: text("cancelled_by"),
+  paymentRejectionReason: text("payment_rejection_reason"),
+  paymentVerifiedAt: text("payment_verified_at"),
+  paymentVerifiedBy: text("payment_verified_by"),
 });
 
 export const riderPayments = sqliteTable("rider_payments", {

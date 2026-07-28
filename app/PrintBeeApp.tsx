@@ -30,9 +30,21 @@ const inr = new Intl.NumberFormat("en-IN", {
 });
 
 type Viewer = { email: string; isAdmin: boolean } | null;
-type LocationOption = { id: string; name: string };
+type LocationOption = { id: string; name: string; delivery_fee_paise?: number; platform_fee_paise?: number };
 type SupabaseConfig = { url: string; anonKey: string } | null;
 const RAZORPAY_PAYMENT_LINK = "https://razorpay.me/@PrintBee";
+
+function printSummary(items: any[] = []) {
+  const totals = { bwSingle: 0, bwDouble: 0, colourSingle: 0, colourDouble: 0 };
+  for (const item of items) {
+    const pages = Math.max(1, Number(item.pages) || 1) * Math.max(1, Number(item.copies) || 1);
+    if (item.mode === "bw-single") totals.bwSingle += pages;
+    if (item.mode === "bw-double") totals.bwDouble += pages;
+    if (item.mode === "colour-single") totals.colourSingle += pages;
+    if (item.mode === "colour-double") totals.colourDouble += pages;
+  }
+  return totals;
+}
 
 type CartItem = {
   id: string;
@@ -62,6 +74,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   const [loginOpen, setLoginOpen] = useState(false);
   const [authMessage, setAuthMessage] = useState("");
   const [role, setRole] = useState<string | null>(viewer?.isAdmin ? "ADMIN" : null);
+  const [approvalStatus, setApprovalStatus] = useState<string | null>(null);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [locations, setLocations] = useState<LocationOption[]>([]);
   const [customerName, setCustomerName] = useState("");
@@ -84,6 +97,8 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   const [riderOrders, setRiderOrders] = useState<any[]>([]);
   const [saved, setSaved] = useState(false);
   const [riderPayment, setRiderPayment] = useState({ riderEmail: "", amount: "", paymentDate: new Date().toISOString().slice(0, 10), note: "" });
+  const [riderApplicationOpen, setRiderApplicationOpen] = useState(false);
+  const [riderApplication, setRiderApplication] = useState({ name: "", mobileNumber: "" });
 
   useEffect(() => {
     const stored = window.localStorage.getItem("printbee-a4-prices");
@@ -99,7 +114,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
 
   useEffect(() => {
     if (!viewer) return;
-    fetch("/api/me").then((response) => response.json()).then((data) => setRole(data.role)).catch(() => {});
+    fetch("/api/me").then((response) => response.json()).then((data) => { setRole(data.role); setApprovalStatus(data.approvalStatus ?? null); }).catch(() => {});
   }, [viewer]);
 
   useEffect(() => {
@@ -263,6 +278,13 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
     await openAdminDashboard();
   };
 
+  const reviewPayment = async (orderId: string, decision: "APPROVE" | "REJECT", missing?: "REFERENCE" | "AMOUNT" | "BOTH") => {
+    const response = await fetch("/api/admin/orders/payment-review", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ orderId, decision, missing }) });
+    const data = await response.json();
+    setAdminMessage(response.ok ? (decision === "APPROVE" ? "Payment approved. Order can now move to printing." : data.reason) : data.error);
+    await openAdminDashboard();
+  };
+
   const openAdminDashboard = async () => {
     setAdminOpen(true);
     const response = await fetch("/api/admin/dashboard");
@@ -310,6 +332,36 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
     }
   };
 
+  const updateLocationFees = async (locationId: string, deliveryFee: number, platformFee: number) => {
+    const response = await fetch("/api/admin/locations/fees", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ locationId, deliveryFee, platformFee }) });
+    const data = await response.json();
+    setAdminMessage(response.ok ? "Location fees updated." : data.error);
+    await openAdminDashboard();
+  };
+
+  const editLocationFees = async (location: any) => {
+    const delivery = window.prompt(`Delivery charge for ${location.name} (₹)`, String((location.delivery_fee_paise ?? 1500) / 100));
+    if (delivery === null) return;
+    const platform = window.prompt(`Platform fee for ${location.name} (₹)`, String((location.platform_fee_paise ?? 350) / 100));
+    if (platform === null) return;
+    await updateLocationFees(location.id, Number(delivery), Number(platform));
+  };
+
+  const approveRider = async (email: string, approved: boolean) => {
+    const response = await fetch("/api/admin/riders/approve", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, approved }) });
+    const data = await response.json();
+    setAdminMessage(response.ok ? `Rider application ${approved ? "approved" : "rejected"}.` : data.error);
+    await openAdminDashboard();
+  };
+
+  const submitRiderApplication = async () => {
+    if (!viewer) return setAuthMessage("Sign in with Google first, then choose delivery partner registration again.");
+    const response = await fetch("/api/rider/application", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(riderApplication) });
+    const data = await response.json();
+    setAuthMessage(response.ok ? "Details submitted. Once verified by admin, you can continue as a delivery partner." : data.error);
+    if (response.ok) setApprovalStatus("PENDING");
+  };
+
   const verifyDelivery = async () => {
     const response = await fetch("/api/orders/verify-delivery", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ orderNumber: deliveryOrderNumber, code: deliveryCode }) });
     const data = await response.json();
@@ -331,6 +383,10 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
     setDeliveryOpen(true);
   };
 
+  const checkoutLocation = locations.find((location) => location.id === locationId);
+  const checkoutDeliveryFee = (checkoutLocation?.delivery_fee_paise ?? 1500) / 100;
+  const checkoutPlatformFee = (checkoutLocation?.platform_fee_paise ?? 350) / 100;
+
   return (
     <main>
       <header className="topbar">
@@ -342,7 +398,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
           <a href="#how">How it works</a>
           <a href="#pricing">Pricing</a>
           {viewer?.isAdmin && <button className="admin-link" onClick={openAdminDashboard}>Admin dashboard</button>}
-          {(role === "ADMIN" || role === "AGENT") && <button className="admin-link" onClick={openDeliveryQueue}>Delivery</button>}
+          {(role === "ADMIN" || (role === "AGENT" && approvalStatus === "APPROVED")) && <button className="admin-link" onClick={openDeliveryQueue}>Delivery</button>}
           {viewer && <button className="admin-link" onClick={openMyOrders}>My orders</button>}
           {viewer ? (
             <button className="login-link" onClick={signOut} title={viewer.email}>Sign out</button>
@@ -518,16 +574,18 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                 <h3>Location performance</h3>
                 <p>Orders and paid revenue across every delivery location.</p>
                 <div className="location-table">
-                  <div className="table-head"><span>Location</span><span>Orders</span><span>Delivered</span><span>Revenue</span></div>
+                  <div className="table-head"><span>Location & fees</span><span>Orders</span><span>Delivered</span><span>Revenue</span></div>
                   {dashboard.locationStats?.length ? dashboard.locationStats.map((location: any) => (
                     <div key={location.id}>
-                      <span><i className={location.active ? "active-dot" : ""} />{location.name}<small>{location.active ? "Active" : "Inactive"}</small></span>
+                      <span><i className={location.active ? "active-dot" : ""} />{location.name}<small>{location.active ? "Active" : "Inactive"} · Delivery {inr.format((location.delivery_fee_paise ?? 1500) / 100)} · Platform {inr.format((location.platform_fee_paise ?? 350) / 100)}</small><button className="text-action" onClick={() => editLocationFees(location)}>Edit fees</button></span>
                       <strong>{location.orders ?? 0}</strong>
                       <strong>{location.delivered ?? 0}</strong>
                       <strong>{inr.format((location.revenue_paise ?? 0) / 100)}</strong>
                     </div>
                   )) : <p>No locations added yet.</p>}
                 </div>
+                <h3>Pending rider applications</h3>
+                <div className="application-list">{dashboard.riderApplications?.length ? dashboard.riderApplications.map((application: any) => <article key={application.email}><span><strong>{application.name}</strong><small>{application.email} · {application.mobile_number}</small></span><div><button onClick={() => approveRider(application.email, true)}>Approve</button><button className="reject" onClick={() => approveRider(application.email, false)}>Reject</button></div></article>) : <p>No rider applications awaiting review.</p>}</div>
                 <h3>Rider performance</h3>
                 <div className="rider-stats">{dashboard.riders?.length ? dashboard.riders.map((rider: any) => <div key={rider.email}><span>{rider.email}<small>{rider.delivered ?? 0} delivered · {rider.assigned ?? 0} assigned</small></span><strong>{inr.format((rider.income_paise ?? 0) / 100)}<small>Total paid</small></strong></div>) : <p>No riders added yet.</p>}</div>
                 <div className="payout-panel">
@@ -547,18 +605,20 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                   <article key={order.id}>
                     <div className="order-customer">
                       <strong>{order.order_number}</strong>
-                      <small>{order.customer_name} · {order.mobile_number}</small>
-                      <small>{order.customer_email} · {order.location_name}</small>
-                      <small>Placed {new Date(order.created_at).toLocaleString("en-IN")}</small>
+                      <small><b>Customer:</b> {order.customer_name} · {order.mobile_number}</small>
+                      <small><b>Email:</b> {order.customer_email}</small>
+                      <small><b>Delivery:</b> {order.location_name}</small>
+                      <small><b>Ordered:</b> {new Date(order.created_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}</small>
                     </div>
                     <span className="status-chip">{order.payment_status} · {order.status}</span>
                     <strong>{inr.format(order.total_paise / 100)}</strong>
-                    {order.payment_reference && <small>Payment ref: {order.payment_reference}</small>}
-                    {order.payment_status === "PENDING" && order.payment_reference && <button className="mini-action" onClick={() => markPaid(order.id)}>Mark paid</button>}
-                    {order.status !== "DELIVERED" && order.status !== "CANCELLED" && <button className="cancel-action" onClick={() => cancelOrder(order.id)}>Cancel — amount mismatch</button>}
+                    <div className="payment-review-details"><span><small>Payment ID / UTR</small><strong>{order.payment_reference || "Not submitted"}</strong></span><span><small>Amount to receive</small><strong>{inr.format(order.total_paise / 100)}</strong></span></div>
+                    {order.payment_status !== "PAID" && order.status !== "CANCELLED" && <div className="payment-review-actions"><button className="mini-action" disabled={!order.payment_reference} onClick={() => reviewPayment(order.id, "APPROVE")}>Payment verified</button><button onClick={() => reviewPayment(order.id, "REJECT", "REFERENCE")}>Wrong payment ID</button><button onClick={() => reviewPayment(order.id, "REJECT", "AMOUNT")}>Wrong amount</button><button onClick={() => reviewPayment(order.id, "REJECT", "BOTH")}>Both mismatch</button></div>}
+                    {order.payment_rejection_reason && <div className="cancelled-note"><strong>Payment rejected</strong><small>{order.payment_rejection_reason}</small></div>}
                     {order.status === "CANCELLED" && <div className="cancelled-note"><strong>Cancelled</strong><small>{order.cancellation_reason}</small></div>}
                     <div className="document-details">
                       <strong>Documents</strong>
+                      {(() => { const total = printSummary(order.items); return <div className="print-summary"><span>B&amp;W single: {total.bwSingle} pages</span><span>B&amp;W double: {total.bwDouble} pages</span><span>Colour single: {total.colourSingle} pages</span><span>Colour double: {total.colourDouble} pages</span></div>; })()}
                       {order.items?.length ? order.items.map((item: any, index: number) => (
                         <div key={`${item.uploadId ?? item.fileName}-${index}`}>
                           <span>{item.fileName ?? `Document ${index + 1}`}</span>
@@ -567,11 +627,11 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                       )) : <small>No document details saved for this legacy order.</small>}
                     </div>
                     <div className="file-links">{order.files?.length ? order.files.map((file: any) => <a key={file.id} href={`/api/admin/files/${file.id}/download`}>Download {file.original_name}</a>) : <span>Legacy order — document was not stored</span>}</div>
-                    <select disabled={order.status === "CANCELLED"} value={order.status} onChange={(e) => updateOrderStatus(order.id, e.target.value)}>
+                    <select disabled={order.status === "CANCELLED" || order.payment_status !== "PAID"} value={order.status} onChange={(e) => updateOrderStatus(order.id, e.target.value)}>
                       {order.status === "CANCELLED" && <option value="CANCELLED">Cancelled</option>}
                       <option value="CONFIRMED">Confirmed</option><option value="PRINTING">Printing</option><option value="READY_FOR_PICKUP">Ready for pickup</option><option value="RIDER_ASSIGNED">Rider assigned</option>
                     </select>
-                    <select disabled={order.status === "CANCELLED"} value={order.rider_email ?? ""} onChange={(e) => assignRider(order.id, e.target.value)}>
+                    <select disabled={order.status === "CANCELLED" || order.payment_status !== "PAID"} value={order.rider_email ?? ""} onChange={(e) => assignRider(order.id, e.target.value)}>
                       <option value="">Assign rider</option>{dashboard.riders.map((rider: any) => <option key={rider.email} value={rider.email}>{rider.email}</option>)}
                     </select>
                   </article>
@@ -614,8 +674,8 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                 <label className="checkout-field">Mobile number<input value={mobileNumber} onChange={(e) => setMobileNumber(e.target.value.replace(/\D/g, "").slice(0, 10))} placeholder="10-digit mobile number" inputMode="numeric" /></label>
                 <label className="checkout-field">Delivery location<select value={locationId} onChange={(e) => setLocationId(e.target.value)}><option value="">Select a location</option>{locations.map((location) => <option value={location.id} key={location.id}>{location.name}</option>)}</select></label>
                 {!locations.length && <p className="panel-message">No delivery locations are available yet. The admin must add one first.</p>}
-                <div className="fee-breakdown"><div><span>Printing subtotal</span><strong>{inr.format(cartTotal)}</strong></div><div><span>Delivery fee</span><strong>{inr.format(15)}</strong></div><div><span>Platform fee</span><strong>{inr.format(3.5)}</strong></div></div>
-                <div className="checkout-total"><span>To pay</span><strong>{inr.format(cartTotal + 18.5)}</strong></div>
+                <div className="fee-breakdown"><div><span>Printing subtotal</span><strong>{inr.format(cartTotal)}</strong></div><div><span>Delivery fee</span><strong>{inr.format(checkoutDeliveryFee)}</strong></div><div><span>Platform fee</span><strong>{inr.format(checkoutPlatformFee)}</strong></div></div>
+                <div className="checkout-total"><span>To pay</span><strong>{inr.format(cartTotal + checkoutDeliveryFee + checkoutPlatformFee)}</strong></div>
                 <div className="payment-warning" role="alert"><strong>Payment verification required:</strong> You must pay the exact total and submit the matching Razorpay payment ID or UTR. A mismatched amount or reference will result in order cancellation.</div>
                 {orderError && <p className="form-error">{orderError}</p>}
                 <button className="save-button" disabled={!locations.length} onClick={placeOrder}>Place order and get payment link</button>
@@ -649,7 +709,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
           <section className="orders-modal" role="dialog" aria-modal="true" onMouseDown={(e) => e.stopPropagation()}>
             <button className="close" onClick={() => setMyOrdersOpen(false)} aria-label="Close">×</button>
             <div className="admin-badge">CUSTOMER</div><h2>My orders</h2>
-            {myOrders.length ? myOrders.map((order) => <article key={order.id}><div><strong>{order.order_number}</strong><small>{order.location_name} · {new Date(order.created_at).toLocaleDateString("en-IN")}</small>{order.cancellation_reason && <small>Cancelled: {order.cancellation_reason}</small>}</div><span className="status-chip">{order.payment_status} · {order.status}</span><strong>{inr.format(order.total_paise / 100)}</strong>{order.status !== "CANCELLED" && <div className="customer-code"><small>Delivery code</small><strong>{order.deliveryCode}</strong></div>}</article>) : <p>No orders yet.</p>}
+            {myOrders.length ? myOrders.map((order) => <article key={order.id}><div><strong>{order.order_number}</strong><small>{order.location_name} · {new Date(order.created_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}</small>{order.cancellation_reason && <small>Cancelled: {order.cancellation_reason}</small>}</div><span className="status-chip">{order.payment_status} · {order.status}</span><strong>{inr.format(order.total_paise / 100)}</strong><div className="order-progress"><span className={order.payment_reference ? "done" : ""}>Payment submitted</span><span className={order.payment_status === "PENDING" && order.payment_reference ? "current" : order.payment_status === "PAID" ? "done" : ""}>Verification pending</span><span className={order.payment_status === "PAID" ? "done" : order.payment_status === "REJECTED" ? "rejected" : ""}>{order.payment_status === "REJECTED" ? "Payment rejected" : "Payment approved"}</span><span className={["PRINTING", "READY_FOR_PICKUP", "RIDER_ASSIGNED", "DELIVERED"].includes(order.status) ? "done" : ""}>Printing</span><span className={["RIDER_ASSIGNED", "DELIVERED"].includes(order.status) ? "done" : ""}>Rider assigned</span><span className={order.status === "DELIVERED" ? "done" : ""}>Delivered</span></div>{order.payment_rejection_reason && <div className="customer-error">{order.payment_rejection_reason}</div>}{order.rider_email && <div className="assigned-rider"><small>Delivery partner assigned</small><strong>{order.rider_email}</strong></div>}{order.status !== "CANCELLED" && order.payment_status === "PAID" && <div className="customer-code"><span><small>Order ID</small><b>{order.order_number}</b></span><span><small>Delivery OTP · share only after receiving prints</small><strong>{order.deliveryCode}</strong></span></div>}</article>) : <p>No orders yet.</p>}
           </section>
         </div>
       )}
@@ -662,8 +722,26 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
             <h2 id="login-title">Welcome to PrintBee</h2>
             <p>Sign in securely with Google to save your orders and track delivery.</p>
             <button className="google-button" onClick={signInWithGoogle}><span>G</span> Continue with Google</button>
+            <button className="partner-button" onClick={() => { setLoginOpen(false); setRiderApplicationOpen(true); }}>Register as a delivery partner / rider</button>
+            {approvalStatus === "PENDING" && <p className="auth-message">Your delivery partner application is awaiting admin verification.</p>}
             {authMessage && <p className="auth-message">{authMessage}</p>}
             <small>By continuing, you agree to PrintBee’s terms and privacy policy.</small>
+          </section>
+        </div>
+      )}
+
+      {riderApplicationOpen && (
+        <div className="modal-backdrop" role="presentation" onMouseDown={() => setRiderApplicationOpen(false)}>
+          <section className="login-modal" role="dialog" aria-modal="true" onMouseDown={(e) => e.stopPropagation()}>
+            <button className="close" onClick={() => setRiderApplicationOpen(false)} aria-label="Close">×</button>
+            <div className="admin-badge">DELIVERY PARTNER</div>
+            <h2>Register as a rider</h2>
+            <p>Submit the details once verified by admin you can continue as delivery partner.</p>
+            {!viewer && <button className="google-button" onClick={signInWithGoogle}><span>G</span> Sign in with Google first</button>}
+            <label className="checkout-field">Full name<input value={riderApplication.name} onChange={(e) => setRiderApplication({ ...riderApplication, name: e.target.value })} /></label>
+            <label className="checkout-field">Mobile number<input inputMode="numeric" value={riderApplication.mobileNumber} onChange={(e) => setRiderApplication({ ...riderApplication, mobileNumber: e.target.value.replace(/\D/g, "").slice(0, 10) })} /></label>
+            <button className="save-button" disabled={!viewer || !riderApplication.name.trim() || riderApplication.mobileNumber.length !== 10} onClick={submitRiderApplication}>Submit for admin verification</button>
+            {authMessage && <p className="auth-message">{authMessage}</p>}
           </section>
         </div>
       )}

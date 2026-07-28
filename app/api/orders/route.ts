@@ -11,15 +11,15 @@ export async function POST(request: Request) {
   if (!name || !mobile || mobile.length !== 10 || !body.locationId || !body.items?.length) {
     return NextResponse.json({ error: "Name, 10-digit mobile, location and cart items are required" }, { status: 400 });
   }
-  const location = await database().prepare("SELECT id, name FROM locations WHERE id = ? AND active = 1").bind(body.locationId).first<{ id: string; name: string }>();
+  const location = await database().prepare("SELECT id, name, delivery_fee_paise, platform_fee_paise FROM locations WHERE id = ? AND active = 1").bind(body.locationId).first<{ id: string; name: string; delivery_fee_paise: number; platform_fee_paise: number }>();
   if (!location) return NextResponse.json({ error: "Choose an available delivery location" }, { status: 400 });
   const id = crypto.randomUUID();
   const code = crypto.getRandomValues(new Uint32Array(1))[0] % 1_000_000;
   const deliveryCode = code.toString().padStart(6, "0");
   const orderNumber = `PB${Date.now().toString().slice(-8)}`;
   const printingSubtotalPaise = Math.max(0, Math.round(Number(body.totalPaise) || 0));
-  const deliveryFeePaise = 1500;
-  const platformFeePaise = 350;
+  const deliveryFeePaise = location.delivery_fee_paise ?? 1500;
+  const platformFeePaise = location.platform_fee_paise ?? 350;
   const totalPaise = printingSubtotalPaise + deliveryFeePaise + platformFeePaise;
   const uploadIds = body.items.map((item: any) => item.uploadId).filter(Boolean);
   if (uploadIds.length !== body.items.length) return NextResponse.json({ error: "Every cart item must finish uploading" }, { status: 400 });

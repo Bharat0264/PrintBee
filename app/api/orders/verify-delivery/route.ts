@@ -6,7 +6,7 @@ export async function POST(request: Request) {
   const viewer = await getViewer();
   if (!viewer) return NextResponse.json({ error: "Sign in required" }, { status: 401 });
   if (!viewer.isAdmin) {
-    const agent = await database().prepare("SELECT role FROM app_users WHERE email = ? AND role = 'AGENT'").bind(viewer.email).first();
+    const agent = await database().prepare("SELECT role FROM app_users WHERE email = ? AND role = 'AGENT' AND approval_status='APPROVED'").bind(viewer.email).first();
     if (!agent) return NextResponse.json({ error: "Delivery-agent access required" }, { status: 403 });
   }
   const { orderNumber, code } = await request.json() as { orderNumber?: string; code?: string };
@@ -17,6 +17,7 @@ export async function POST(request: Request) {
   if (!viewer.isAdmin && order.rider_email !== viewer.email) return NextResponse.json({ error: "This order is assigned to another rider" }, { status: 403 });
   const candidate = await hashDeliveryCode(order.id, code?.trim() ?? "");
   if (candidate !== order.delivery_code_hash) return NextResponse.json({ error: "Delivery code does not match" }, { status: 400 });
-  await database().prepare("UPDATE orders SET status = 'DELIVERED', delivered_at = ?, delivered_by = ? WHERE id = ? AND status = 'PLACED'").bind(new Date().toISOString(), viewer.email, order.id).run();
+  const updated = await database().prepare("UPDATE orders SET status = 'DELIVERED', delivered_at = ?, delivered_by = ? WHERE id = ? AND status = 'RIDER_ASSIGNED'").bind(new Date().toISOString(), viewer.email, order.id).run();
+  if (!updated.meta.changes) return NextResponse.json({ error: "Order must be assigned to a rider before delivery" }, { status: 400 });
   return NextResponse.json({ delivered: true });
 }
