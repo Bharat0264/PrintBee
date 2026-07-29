@@ -297,6 +297,7 @@ footer { border-top: 1px solid var(--line); padding: 28px max(24px, calc((100% -
 .code-input { text-align: center; letter-spacing: 7px; font-size: 22px; font-weight: 900; }
 .fee-breakdown { padding: 13px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 .fee-breakdown div { display: flex; justify-content: space-between; padding: 5px 0; color: var(--muted); font-size: 12px; }
+.fee-breakdown .binding-charge-row { margin: 4px 0; padding: 8px 10px; border-radius: 7px; background: var(--yellow-soft); color: #725500; font-weight: 800; }
 .dashboard-block { margin-top: 20px; }
 .metric-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
 .metric-grid div { padding: 13px; border-radius: 11px; background: #f7f6f2; }

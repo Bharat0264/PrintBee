@@ -303,6 +303,8 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   };
 
   const cartTotal = cart.reduce((sum, item) => sum + item.total, 0);
+  const cartServiceCharges = cart.reduce((sum, item) => sum + (item.servicePrice || 0), 0);
+  const cartPrintingTotal = cartTotal - cartServiceCharges;
 
   const savePrices = () => {
     setPrices(draftPrices);
@@ -1131,7 +1133,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                 <label className="checkout-field">Mobile number<input value={mobileNumber} onChange={(e) => setMobileNumber(e.target.value.replace(/\D/g, "").slice(0, 10))} placeholder="10-digit mobile number" inputMode="numeric" /></label>
                 <label className="checkout-field">Delivery location<select value={locationId} onChange={(e) => setLocationId(e.target.value)}><option value="">Select a location</option>{locations.map((location) => <option value={location.id} key={location.id}>{location.name}</option>)}</select></label>
                 {!locations.length && <p className="panel-message">No delivery locations are available yet. The admin must add one first.</p>}
-                <div className="fee-breakdown"><div><span>Printing subtotal</span><strong>{inr.format(cartTotal)}</strong></div><div><span>Delivery fee</span><strong>{inr.format(checkoutDeliveryFee)}</strong></div><div><span>Platform fee</span><strong>{inr.format(checkoutPlatformFee)}</strong></div></div>
+                <div className="fee-breakdown"><div><span>Printing subtotal</span><strong>{inr.format(cartPrintingTotal)}</strong></div>{cartServiceCharges > 0 && <div className="binding-charge-row"><span>Binding charges</span><strong>{inr.format(cartServiceCharges)}</strong></div>}<div><span>Delivery fee</span><strong>{inr.format(checkoutDeliveryFee)}</strong></div><div><span>Platform fee</span><strong>{inr.format(checkoutPlatformFee)}</strong></div></div>
                 <div className="checkout-total"><span>To pay</span><strong>{inr.format(cartTotal + checkoutDeliveryFee + checkoutPlatformFee)}</strong></div>
                 <div className="pay-on-delivery-note"><strong>Pay on delivery:</strong> No prepaid payment is required. Your order scanner will appear in My orders after the admin adds it, and your delivery partner can also show it at your doorstep.</div>
                 {orderError && <p className="form-error">{orderError}</p>}
