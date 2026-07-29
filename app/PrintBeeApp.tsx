@@ -32,6 +32,7 @@ const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 
 type Viewer = { email: string; isAdmin: boolean } | null;
 type LocationOption = { id: string; name: string; delivery_fee_paise?: number; platform_fee_paise?: number };
+type PrintService = { id: string; name: string; description: string; active: number; is_binding: number };
 type SupabaseConfig = { url: string; anonKey: string } | null;
 
 function printSummary(items: any[] = []) {
@@ -56,6 +57,10 @@ type CartItem = {
   mode: PrintMode;
   unitPrice: number;
   total: number;
+  serviceId: string;
+  serviceName: string;
+  printInstructions?: string;
+  whatsappNumber?: string;
 };
 
 export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer; supabaseConfig: SupabaseConfig }) {
@@ -106,6 +111,13 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   const [exporting, setExporting] = useState(false);
   const [expandedScanner, setExpandedScanner] = useState<{ src: string; alt: string } | null>(null);
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>("default");
+  const [adminSection, setAdminSection] = useState<"dashboard" | "orders" | "locations" | "riders" | "services">("dashboard");
+  const [dashboardRange, setDashboardRange] = useState<"today" | "week" | "month">("today");
+  const [printServices, setPrintServices] = useState<PrintService[]>([]);
+  const [serviceId, setServiceId] = useState("document-printing");
+  const [printInstructions, setPrintInstructions] = useState("");
+  const [whatsappNumber, setWhatsappNumber] = useState("");
+  const [newService, setNewService] = useState({ name: "", description: "", isBinding: false });
 
   useEffect(() => {
     const stored = window.localStorage.getItem("printbee-a4-prices");
@@ -157,7 +169,40 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   useEffect(() => {
     if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
     if ("Notification" in window) setNotificationPermission(Notification.permission);
+    fetch("/api/print-services").then((response) => response.ok ? response.json() : []).then(setPrintServices).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!adminOpen || adminSection !== "orders") return;
+    let lastNewest = dashboard?.orders?.[0]?.id ?? "";
+    const refresh = window.setInterval(async () => {
+      const response = await fetch("/api/admin/dashboard", { cache: "no-store" });
+      if (!response.ok) return;
+      const next = await response.json();
+      const newest = next.orders?.[0]?.id ?? "";
+      if (lastNewest && newest && newest !== lastNewest) {
+        try {
+          const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+          const context = new AudioContextClass();
+          [0, 0.22].forEach((delay) => {
+            const oscillator = context.createOscillator();
+            const gain = context.createGain();
+            oscillator.frequency.value = 880;
+            gain.gain.setValueAtTime(0.0001, context.currentTime + delay);
+            gain.gain.exponentialRampToValueAtTime(0.35, context.currentTime + delay + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + delay + 0.18);
+            oscillator.connect(gain).connect(context.destination);
+            oscillator.start(context.currentTime + delay);
+            oscillator.stop(context.currentTime + delay + 0.2);
+          });
+        } catch {}
+        sendOrderNotification("New PrintBee order", `${next.orders[0].order_number} has just arrived.`, `admin-${newest}`);
+      }
+      lastNewest = newest;
+      setDashboard(next);
+    }, 5000);
+    return () => window.clearInterval(refresh);
+  }, [adminOpen, adminSection]);
 
   useEffect(() => {
     if (!viewer || viewer.isAdmin || loginMode !== "CUSTOMER") return;
@@ -227,6 +272,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
     } finally {
       setCountingPages(false);
     }
+    const service = printServices.find((item) => item.id === serviceId);
     setCart((items) => [
       ...items,
       {
@@ -239,12 +285,17 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
         mode,
         unitPrice: prices[mode],
         total,
+        serviceId,
+        serviceName: service?.name ?? "Document printing",
+        printInstructions: printInstructions.trim(),
+        whatsappNumber: whatsappNumber.replace(/\D/g, ""),
       },
     ]);
     setFileName("");
     setSelectedFile(null);
     setPages(1);
     setCopies(1);
+    setPrintInstructions("");
   };
 
   const cartTotal = cart.reduce((sum, item) => sum + item.total, 0);
@@ -527,6 +578,22 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
     if (response.ok) setAgentEmail("");
   };
 
+  const addPrintService = async () => {
+    const response = await fetch("/api/print-services", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(newService) });
+    const data = await response.json();
+    setAdminMessage(response.ok ? `${data.name} added to the customer print menu.` : data.error);
+    if (response.ok) {
+      setNewService({ name: "", description: "", isBinding: false });
+      const servicesResponse = await fetch("/api/print-services");
+      if (servicesResponse.ok) setPrintServices(await servicesResponse.json());
+    }
+  };
+
+  const removePrintService = async (id: string) => {
+    const response = await fetch("/api/print-services", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
+    if (response.ok) setPrintServices((items) => items.filter((item) => item.id !== id));
+  };
+
   const recordRiderPayment = async () => {
     const response = await fetch("/api/admin/rider-payments", {
       method: "POST",
@@ -755,7 +822,22 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
           <p className="file-retention-note"><strong>Document privacy:</strong> Your uploaded files will be deleted once the order is delivered or cancelled. Maximum file size: 25 MB.</p>
           {uploadError && <p className="upload-error">{uploadError}</p>}
 
-          <div className="field-label"><span className="step">2</span> Choose print type</div>
+          <div className="field-label"><span className="step">2</span> Choose service</div>
+          <label className="service-picker">Print service
+            <select value={serviceId} onChange={(e) => setServiceId(e.target.value)}>
+              {printServices.map((service) => <option key={service.id} value={service.id}>{service.name}</option>)}
+            </select>
+          </label>
+          {Boolean(printServices.find((service) => service.id === serviceId)?.is_binding) && (
+            <div className="binding-fields">
+              <strong>Binding instructions</strong>
+              <p>Binding work takes 15–25 minutes to deliver based on your location.</p>
+              <label>WhatsApp number<input value={whatsappNumber} onChange={(e) => setWhatsappNumber(e.target.value.replace(/\D/g, "").slice(0, 10))} inputMode="numeric" placeholder="10-digit WhatsApp number" /></label>
+              <label>Colour / B&amp;W page instructions<textarea maxLength={125} value={printInstructions} onChange={(e) => setPrintInstructions(e.target.value)} placeholder="Example: Pages 1–4 and 12 in colour; all remaining pages in B&W." /><small>{printInstructions.length}/125 characters</small></label>
+            </div>
+          )}
+
+          <div className="field-label"><span className="step">3</span> Choose print type</div>
           <div className="option-grid">
             {options.map((item) => (
               <button
@@ -778,7 +860,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
 
           <div className="estimate">
             <div><small>Estimated print total</small><strong>{inr.format(total)}</strong></div>
-            <button disabled={!fileName || countingPages} onClick={addToCart}>Add to cart <span>→</span></button>
+            <button disabled={!fileName || countingPages || (Boolean(printServices.find((service) => service.id === serviceId)?.is_binding) && whatsappNumber.length !== 10)} onClick={addToCart}>Add to cart <span>→</span></button>
           </div>
           <p className="estimate-note">{pages} pages × {copies} {copies === 1 ? "copy" : "copies"} × {inr.format(prices[mode])} · {selected.title}</p>
           <div className="payment-instruction" role="note">
@@ -803,7 +885,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                 return (
                   <article className="cart-item" key={item.id}>
                     <div className="file-badge">{item.fileType === "PDF" ? "PDF" : "IMG"}</div>
-                    <div className="cart-file"><h3>{item.fileName}</h3><p>{item.pages} {item.pages === 1 ? "page" : "pages"} · A4 · {itemOption.title} · {item.copies} {item.copies === 1 ? "copy" : "copies"}</p><small>{item.pages} × {item.copies} × {inr.format(item.unitPrice)}</small></div>
+                    <div className="cart-file"><h3>{item.fileName}</h3><p>{item.serviceName} · {item.pages} {item.pages === 1 ? "page" : "pages"} · A4 · {itemOption.title} · {item.copies} {item.copies === 1 ? "copy" : "copies"}</p>{item.printInstructions && <p>{item.printInstructions} · WhatsApp {item.whatsappNumber}</p>}<small>{item.pages} × {item.copies} × {inr.format(item.unitPrice)}</small></div>
                     <strong>{inr.format(item.total)}</strong>
                     <button className="remove-item" onClick={() => setCart((items) => items.filter((current) => current.id !== item.id))} aria-label={`Remove ${item.fileName}`}>×</button>
                   </article>
@@ -861,9 +943,16 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
       {adminOpen && (
         <div className="modal-backdrop" role="presentation" onMouseDown={() => setAdminOpen(false)}>
           <section className="admin-modal admin-portal" role="dialog" aria-modal="true" aria-labelledby="admin-title" onMouseDown={(e) => e.stopPropagation()}>
+            <aside className="admin-sidebar">
+              <div className="admin-sidebar-brand"><img src="/printbee-logo.png" alt="" /><strong>PrintBee Admin</strong></div>
+              {([["dashboard", "Dashboard", "⌂"], ["orders", "Orders", "▤"], ["locations", "Locations", "⌖"], ["riders", "Rider approvals", "♙"], ["services", "Print services", "＋"]] as const).map(([id, label, icon]) => <button key={id} className={adminSection === id ? "active" : ""} onClick={() => { setAdminSection(id); document.getElementById(`admin-${id}`)?.scrollIntoView({ behavior: "smooth" }); }}><span>{icon}</span>{label}{id === "orders" && <b>{dashboard?.orders?.length ?? 0}</b>}</button>)}
+              {notificationPermission !== "granted" && <button onClick={enableNotifications}><span>♬</span>Enable order alerts</button>}
+              <button className="admin-sidebar-exit" onClick={() => setAdminOpen(false)}>← Back to website</button>
+            </aside>
+            <div className="admin-main">
             <button className="close" onClick={() => setAdminOpen(false)} aria-label="Close">×</button>
             <div className="admin-badge">ADMIN</div>
-            <h2 id="admin-title">A4 pricing controls</h2>
+            <h2 id="admin-services">Print service controls</h2>
             <p>Update the customer price per printed page. Changes appear everywhere immediately.</p>
             <div className="admin-prices">
               {options.map((item) => (
@@ -874,8 +963,13 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
               ))}
             </div>
             <button className="save-button" onClick={savePrices}>{saved ? "Prices saved ✓" : "Save new prices"}</button>
+            <div className="service-admin">
+              <h3>Add a print or finishing service</h3>
+              <div className="service-admin-form"><input value={newService.name} onChange={(e) => setNewService({ ...newService, name: e.target.value })} placeholder="Example: Soft binding" /><input maxLength={125} value={newService.description} onChange={(e) => setNewService({ ...newService, description: e.target.value })} placeholder="Description (125 characters)" /><label><input type="checkbox" checked={newService.isBinding} onChange={(e) => setNewService({ ...newService, isBinding: e.target.checked })} /> Request page instructions and WhatsApp</label><button onClick={addPrintService}>Add service</button></div>
+              <div className="service-chips">{printServices.map((service) => <span key={service.id}><b>{service.name}</b><small>{service.description}</small>{!["document-printing", "document-binding"].includes(service.id) && <button onClick={() => removePrintService(service.id)}>Remove</button>}</span>)}</div>
+            </div>
             <div className="admin-divider" />
-            <h3>Delivery locations</h3>
+            <h3 id="admin-locations">Delivery locations</h3>
             <p>Customers can select only locations added here.</p>
             <div className="inline-admin-form"><input value={newLocation} onChange={(e) => setNewLocation(e.target.value)} placeholder="Example: Madhapur" /><button onClick={addLocation}>Add</button></div>
             <h3>Delivery agents</h3>
@@ -885,7 +979,8 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
             {dashboard && (
               <div className="dashboard-block">
                 <div className="admin-divider" />
-                <h2>Operations dashboard</h2>
+                <h2 id="admin-dashboard">Operations dashboard</h2>
+                <div className="dashboard-range"><button className={dashboardRange === "today" ? "active" : ""} onClick={() => setDashboardRange("today")}>Today</button><button className={dashboardRange === "week" ? "active" : ""} onClick={() => setDashboardRange("week")}>This week</button><button className={dashboardRange === "month" ? "active" : ""} onClick={() => setDashboardRange("month")}>This month</button></div>
                 <div className="metric-grid">
                   <div><small>Total orders</small><strong>{dashboard.summary?.total ?? 0}</strong></div>
                   <div><small>Paid</small><strong>{dashboard.summary?.paid ?? 0}</strong></div>
@@ -893,6 +988,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                   <div><small>Delivered</small><strong>{dashboard.summary?.delivered ?? 0}</strong></div>
                   <div><small>Ready</small><strong>{dashboard.summary?.ready ?? 0}</strong></div>
                   <div><small>Paid revenue</small><strong>{inr.format((dashboard.summary?.revenue_paise ?? 0) / 100)}</strong></div>
+                  {(() => { const now = new Date(); const start = dashboardRange === "today" ? new Date(now.getFullYear(), now.getMonth(), now.getDate()) : dashboardRange === "week" ? new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6) : new Date(now.getFullYear(), now.getMonth(), 1); const totals = printSummary(dashboard.orders.filter((order: any) => new Date(order.created_at) >= start).flatMap((order: any) => order.items || [])); return <><div><small>B&amp;W pages</small><strong>{totals.bwSingle + totals.bwDouble}</strong></div><div><small>Colour pages</small><strong>{totals.colourSingle + totals.colourDouble}</strong></div></>; })()}
                 </div>
                 <h3>Location performance</h3>
                 <p>Orders and paid revenue across every delivery location.</p>
@@ -907,7 +1003,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                     </div>
                   )) : <p>No locations added yet.</p>}
                 </div>
-                <h3>Pending rider applications</h3>
+                <h3 id="admin-riders">Pending rider applications</h3>
                 <div className="application-list">{dashboard.riderApplications?.length ? dashboard.riderApplications.map((application: any) => <article key={application.email}><span><strong>{application.name}</strong><small>{application.email} · {application.mobile_number}</small></span><div><button onClick={() => approveRider(application.email, true)}>Approve</button><button className="reject" onClick={() => approveRider(application.email, false)}>Reject</button></div></article>) : <p>No rider applications awaiting review.</p>}</div>
                 <h3>Active users</h3>
                 <p>Customers who have placed orders, sorted by latest activity.</p>
@@ -947,7 +1043,8 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                 <h3>Rider withdrawal requests</h3>
                 <p>Review the UPI ID and move each request through the payout flow.</p>
                 <div className="withdrawal-admin">{dashboard.riderWithdrawals?.length ? dashboard.riderWithdrawals.map((withdrawal: any) => <article key={withdrawal.id}><span><strong>{withdrawal.rider_email}</strong><small>UPI: {withdrawal.upi_id}</small><small>Requested {new Date(withdrawal.requested_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}</small></span><strong>{inr.format(withdrawal.amount_paise / 100)}</strong><select value={withdrawal.status} onChange={(e) => updateWithdrawalStatus(withdrawal.id, e.target.value)}><option value="REQUESTED">Withdraw requested</option><option value="IN_PROGRESS">In progress</option><option value="SENT">Amount sent to bank</option></select></article>) : <p>No withdrawal requests yet.</p>}</div>
-                <h3>Live orders</h3>
+                <h3 id="admin-orders">Live orders <small className="live-refresh">● Live · refreshes every 5 seconds</small></h3>
+                <div className="orders-table-head"><span>Order &amp; documents</span><span>Payment QR</span><span>Status</span><span>Delivery partner</span><span>Earnings</span><span>Export</span></div>
                 <div className="admin-orders">{dashboard.orders?.length ? dashboard.orders.map((order: any) => (
                   <article key={order.id}>
                     <div className="order-customer">
@@ -972,7 +1069,8 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                       {order.items?.length ? order.items.map((item: any, index: number) => (
                         <div key={`${item.uploadId ?? item.fileName}-${index}`}>
                           <span>{item.fileName ?? `Document ${index + 1}`}</span>
-                          <small>{item.pages ?? 1} pages · {item.copies ?? 1} copies · {options.find((option) => option.id === item.mode)?.title ?? item.mode ?? "A4 print"}</small>
+                          <small>Doc {index + 1}: {item.pages ?? 1} pages · {item.copies ?? 1} copies · {options.find((option) => option.id === item.mode)?.title ?? item.mode ?? "A4 print"}{item.serviceName ? ` · ${item.serviceName}` : ""}</small>
+                          {item.printInstructions && <small><b>Instructions:</b> {item.printInstructions} · WhatsApp {item.whatsappNumber}</small>}
                         </div>
                       )) : <small>No document details saved for this legacy order.</small>}
                     </div>
@@ -985,6 +1083,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                     <select disabled={order.status === "CANCELLED" || order.payment_status === "REJECTED"} value={order.rider_email ?? ""} onChange={(e) => assignRider(order.id, e.target.value)}>
                       <option value="">Assign rider</option>{dashboard.riders.map((rider: any) => <option key={rider.email} value={rider.email}>{rider.email}</option>)}
                     </select>
+                    <div className="order-earnings"><span>Rider <b>{inr.format((order.delivery_fee_paise * .75) / 100)}</b></span><span>Admin <b>{inr.format((order.printing_subtotal_paise + order.platform_fee_paise + order.delivery_fee_paise * .2) / 100)}</b></span></div>
                     <div className="order-record-actions"><button className="hide-order-action" onClick={() => setOrderHidden(order.id, true)}>Hide from dashboard &amp; exports</button><button className="delete-order-action" onClick={() => deleteOrder(order)}>Delete this order</button></div>
                   </article>
                 )) : <p>No orders yet.</p>}</div>
@@ -999,7 +1098,8 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                 )) : <p>No hidden orders.</p>}</div>
               </div>
             )}
-            <small className="admin-note">Prices are saved on this device for the current demo.</small>
+            <small className="admin-note">Print services are shared with all customers. A4 prices are saved on this device.</small>
+            </div>
           </section>
         </div>
       )}
