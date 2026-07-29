@@ -113,6 +113,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   const [expandedScanner, setExpandedScanner] = useState<{ src: string; alt: string } | null>(null);
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>("default");
   const [notificationMessage, setNotificationMessage] = useState("");
+  const [notificationToast, setNotificationToast] = useState<{ title: string; body: string } | null>(null);
   const [adminSection, setAdminSection] = useState<"dashboard" | "orders" | "locations" | "riders" | "services">("dashboard");
   const [dashboardRange, setDashboardRange] = useState<"today" | "week" | "month">("today");
   const [printServices, setPrintServices] = useState<PrintService[]>([]);
@@ -177,6 +178,12 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
     if ("Notification" in window) setNotificationPermission(Notification.permission);
     fetch("/api/print-services").then((response) => response.ok ? response.json() : []).then(setPrintServices).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!notificationToast) return;
+    const timer = window.setTimeout(() => setNotificationToast(null), 6000);
+    return () => window.clearTimeout(timer);
+  }, [notificationToast]);
 
   useEffect(() => {
     if (!adminOpen || adminSection !== "orders") return;
@@ -383,6 +390,20 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   };
 
   const sendOrderNotification = async (title: string, body: string, tag: string) => {
+    setNotificationToast({ title, body });
+    navigator.vibrate?.([180, 80, 180]);
+    try {
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      const context = new AudioContextClass();
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+      oscillator.frequency.value = 880;
+      gain.gain.setValueAtTime(0.25, context.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.35);
+      oscillator.connect(gain).connect(context.destination);
+      oscillator.start();
+      oscillator.stop(context.currentTime + 0.36);
+    } catch {}
     if (!("Notification" in window) || Notification.permission !== "granted") return false;
     try {
       if ("serviceWorker" in navigator) {
@@ -783,6 +804,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
 
   return (
     <main>
+      {notificationToast && <div className="notification-toast" role="status" aria-live="assertive"><span>🔔</span><div><strong>{notificationToast.title}</strong><p>{notificationToast.body}</p></div><button onClick={() => setNotificationToast(null)} aria-label="Dismiss notification">×</button></div>}
       <header className="topbar">
         <a className="brand" href="#top" aria-label="PrintBee home">
           <img src="/printbee-logo.png" width={74} height={74} alt="PrintBee" />
@@ -815,7 +837,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
             <strong>Scan the payment scanner from My Orders and pay while we deliver.</strong>
             <span>Displaying the scanner may take some time after the admin uploads it.</span>
             {viewer && !viewer.isAdmin && notificationPermission !== "granted" && <button onClick={enableNotifications}>Enable mobile order notifications</button>}
-            {notificationPermission === "granted" && <button onClick={testNotifications}>Send test notification</button>}
+            {notificationPermission === "granted" && <button onClick={testNotifications}>Test alerts: sound + banner</button>}
             {notificationMessage && <small className="notification-message">{notificationMessage}</small>}
           </div>
           {viewer && !viewer.isAdmin && myOrders.some((order) => !["DELIVERED", "CANCELLED"].includes(order.status)) && (
@@ -982,7 +1004,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
               <div className="admin-sidebar-brand"><img src="/printbee-logo.png" alt="" /><strong>PrintBee Admin</strong></div>
               {([["dashboard", "Dashboard", "⌂"], ["orders", "Orders", "▤"], ["locations", "Locations", "⌖"], ["riders", "Rider approvals", "♙"], ["services", "Print services", "＋"]] as const).map(([id, label, icon]) => <button key={id} className={adminSection === id ? "active" : ""} onClick={() => { setAdminSection(id); document.getElementById(`admin-${id}`)?.scrollIntoView({ behavior: "smooth" }); }}><span>{icon}</span>{label}{id === "orders" && <b>{dashboard?.orders?.length ?? 0}</b>}</button>)}
               {notificationPermission !== "granted" && <button onClick={enableNotifications}><span>♬</span>Enable order alerts</button>}
-              {notificationPermission === "granted" && <button onClick={testNotifications}><span>♬</span>Test order alerts</button>}
+              {notificationPermission === "granted" && <button onClick={testNotifications}><span>♬</span>Test sound + banner</button>}
               <button className="admin-sidebar-exit" onClick={() => setAdminOpen(false)}>← Back to website</button>
             </aside>
             <div className="admin-main">
