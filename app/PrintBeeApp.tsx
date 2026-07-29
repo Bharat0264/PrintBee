@@ -112,6 +112,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   const [exporting, setExporting] = useState(false);
   const [expandedScanner, setExpandedScanner] = useState<{ src: string; alt: string } | null>(null);
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>("default");
+  const [notificationMessage, setNotificationMessage] = useState("");
   const [adminSection, setAdminSection] = useState<"dashboard" | "orders" | "locations" | "riders" | "services">("dashboard");
   const [dashboardRange, setDashboardRange] = useState<"today" | "week" | "month">("today");
   const [printServices, setPrintServices] = useState<PrintService[]>([]);
@@ -152,7 +153,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   useEffect(() => {
     if (!myOrdersOpen || !viewer) return;
     const refresh = window.setInterval(async () => {
-      const response = await fetch("/api/orders/my");
+      const response = await fetch("/api/orders/my", { cache: "no-store" });
       if (response.ok) setMyOrders(await response.json());
     }, 15000);
     return () => window.clearInterval(refresh);
@@ -168,7 +169,11 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   }, []);
 
   useEffect(() => {
-    if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/sw.js", { updateViaCache: "none" })
+        .then((registration) => registration.update())
+        .catch(() => setNotificationMessage("Notification setup failed. Reload the page and try again."));
+    }
     if ("Notification" in window) setNotificationPermission(Notification.permission);
     fetch("/api/print-services").then((response) => response.ok ? response.json() : []).then(setPrintServices).catch(() => {});
   }, []);
@@ -372,33 +377,56 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
 
   const openMyOrders = async () => {
     if (!viewer) return setLoginOpen(true);
-    const response = await fetch("/api/orders/my");
+    const response = await fetch("/api/orders/my", { cache: "no-store" });
     if (response.ok) setMyOrders(await response.json());
     setMyOrdersOpen(true);
   };
 
   const sendOrderNotification = async (title: string, body: string, tag: string) => {
-    if (!("Notification" in window) || Notification.permission !== "granted") return;
+    if (!("Notification" in window) || Notification.permission !== "granted") return false;
     try {
-      const registration = await navigator.serviceWorker.ready;
-      await registration.showNotification(title, { body, tag, icon: "/printbee-logo.png", badge: "/printbee-logo.png" });
+      if ("serviceWorker" in navigator) {
+        const registration = await Promise.race([
+          navigator.serviceWorker.ready,
+          new Promise<never>((_, reject) => window.setTimeout(() => reject(new Error("Service worker timeout")), 3000)),
+        ]);
+        await registration.showNotification(title, { body, tag, icon: "/printbee-logo.png", badge: "/printbee-logo.png" });
+      } else {
+        new Notification(title, { body, tag, icon: "/printbee-logo.png" });
+      }
+      return true;
     } catch {
-      new Notification(title, { body, tag, icon: "/printbee-logo.png" });
+      try {
+        new Notification(title, { body, tag, icon: "/printbee-logo.png" });
+        return true;
+      } catch {
+        return false;
+      }
     }
   };
 
   const enableNotifications = async () => {
-    if (!("Notification" in window)) return setAuthMessage("Mobile notifications are not supported by this browser.");
+    setNotificationMessage("");
+    if (!("Notification" in window)) return setNotificationMessage("This browser does not support notifications. On iPhone, add PrintBee to the Home Screen and open it from there.");
     const permission = await Notification.requestPermission();
     setNotificationPermission(permission);
     if (permission === "granted") {
-      await sendOrderNotification("PrintBee notifications enabled", "We will notify you as your order moves from printing to delivery.", "printbee-enabled");
+      window.localStorage.removeItem(`printbee-order-notifications-${viewer?.email ?? "user"}`);
+      const sent = await sendOrderNotification("PrintBee notifications enabled", "This is a test. Order updates will appear like this while PrintBee is open.", `printbee-enabled-${Date.now()}`);
+      setNotificationMessage(sent ? "Test notification sent. Check your notification tray." : "Permission was granted, but this browser blocked the test notification.");
+    } else if (permission === "denied") {
+      setNotificationMessage("Notifications are blocked. Allow them in your browser’s site settings, then reload PrintBee.");
     }
+  };
+
+  const testNotifications = async () => {
+    const sent = await sendOrderNotification("PrintBee test notification", "Notifications are working on this device.", `printbee-test-${Date.now()}`);
+    setNotificationMessage(sent ? "Test notification sent. Check your notification tray." : "The browser did not deliver the notification. Check site and device notification settings.");
   };
 
   const checkCustomerNotifications = async () => {
     try {
-      const response = await fetch("/api/orders/my");
+      const response = await fetch("/api/orders/my", { cache: "no-store" });
       if (!response.ok) return;
       const orders = await response.json() as any[];
       setMyOrders(orders);
@@ -787,7 +815,8 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
             <strong>Scan the payment scanner from My Orders and pay while we deliver.</strong>
             <span>Displaying the scanner may take some time after the admin uploads it.</span>
             {viewer && !viewer.isAdmin && notificationPermission !== "granted" && <button onClick={enableNotifications}>Enable mobile order notifications</button>}
-            {notificationPermission === "granted" && <small>Mobile order notifications are enabled.</small>}
+            {notificationPermission === "granted" && <button onClick={testNotifications}>Send test notification</button>}
+            {notificationMessage && <small className="notification-message">{notificationMessage}</small>}
           </div>
           {viewer && !viewer.isAdmin && myOrders.some((order) => !["DELIVERED", "CANCELLED"].includes(order.status)) && (
             <div className="home-active-orders">
@@ -953,11 +982,13 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
               <div className="admin-sidebar-brand"><img src="/printbee-logo.png" alt="" /><strong>PrintBee Admin</strong></div>
               {([["dashboard", "Dashboard", "⌂"], ["orders", "Orders", "▤"], ["locations", "Locations", "⌖"], ["riders", "Rider approvals", "♙"], ["services", "Print services", "＋"]] as const).map(([id, label, icon]) => <button key={id} className={adminSection === id ? "active" : ""} onClick={() => { setAdminSection(id); document.getElementById(`admin-${id}`)?.scrollIntoView({ behavior: "smooth" }); }}><span>{icon}</span>{label}{id === "orders" && <b>{dashboard?.orders?.length ?? 0}</b>}</button>)}
               {notificationPermission !== "granted" && <button onClick={enableNotifications}><span>♬</span>Enable order alerts</button>}
+              {notificationPermission === "granted" && <button onClick={testNotifications}><span>♬</span>Test order alerts</button>}
               <button className="admin-sidebar-exit" onClick={() => setAdminOpen(false)}>← Back to website</button>
             </aside>
             <div className="admin-main">
             <button className="close" onClick={() => setAdminOpen(false)} aria-label="Close">×</button>
             <div className="admin-badge">ADMIN</div>
+            {notificationMessage && <p className="panel-message">{notificationMessage}</p>}
             <h2 id="admin-services">Print service controls</h2>
             <p>Update the customer price per printed page. Changes appear everywhere immediately.</p>
             <div className="admin-prices">
