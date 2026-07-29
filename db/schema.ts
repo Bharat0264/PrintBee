@@ -100,5 +100,6 @@ export const printServices = sqliteTable("print_services", {
   description: text("description").notNull().default(""),
   active: integer("active", { mode: "boolean" }).notNull().default(true),
   isBinding: integer("is_binding", { mode: "boolean" }).notNull().default(false),
+  pricePaise: integer("price_paise").notNull().default(0),
   createdAt: text("created_at").notNull(),
 });

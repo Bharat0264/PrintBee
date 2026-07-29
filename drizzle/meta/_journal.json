@@ -85,6 +85,13 @@
       "when": 1785326400000,
       "tag": "0011_print_services",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1785330000000,
+      "tag": "0012_service_prices",
+      "breakpoints": true
     }
   ]
 }

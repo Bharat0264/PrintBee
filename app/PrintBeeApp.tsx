@@ -32,7 +32,7 @@ const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 
 type Viewer = { email: string; isAdmin: boolean } | null;
 type LocationOption = { id: string; name: string; delivery_fee_paise?: number; platform_fee_paise?: number };
-type PrintService = { id: string; name: string; description: string; active: number; is_binding: number };
+type PrintService = { id: string; name: string; description: string; active: number; is_binding: number; price_paise: number };
 type SupabaseConfig = { url: string; anonKey: string } | null;
 
 function printSummary(items: any[] = []) {
@@ -59,6 +59,7 @@ type CartItem = {
   total: number;
   serviceId: string;
   serviceName: string;
+  servicePrice: number;
   printInstructions?: string;
   whatsappNumber?: string;
 };
@@ -117,7 +118,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   const [serviceId, setServiceId] = useState("document-printing");
   const [printInstructions, setPrintInstructions] = useState("");
   const [whatsappNumber, setWhatsappNumber] = useState("");
-  const [newService, setNewService] = useState({ name: "", description: "", isBinding: false });
+  const [newService, setNewService] = useState({ name: "", description: "", isBinding: false, price: 0 });
 
   useEffect(() => {
     const stored = window.localStorage.getItem("printbee-a4-prices");
@@ -212,7 +213,9 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   }, [viewer, loginMode, notificationPermission]);
 
   const selected = options.find((item) => item.id === mode)!;
-  const total = useMemo(() => pages * copies * prices[mode], [pages, copies, prices, mode]);
+  const selectedService = printServices.find((service) => service.id === serviceId);
+  const servicePrice = (selectedService?.price_paise ?? 0) / 100;
+  const total = useMemo(() => pages * copies * prices[mode] + servicePrice, [pages, copies, prices, mode, servicePrice]);
 
   const handleFile = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -287,6 +290,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
         total,
         serviceId,
         serviceName: service?.name ?? "Document printing",
+        servicePrice: (service?.price_paise ?? 0) / 100,
         printInstructions: printInstructions.trim(),
         whatsappNumber: whatsappNumber.replace(/\D/g, ""),
       },
@@ -583,7 +587,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
     const data = await response.json();
     setAdminMessage(response.ok ? `${data.name} added to the customer print menu.` : data.error);
     if (response.ok) {
-      setNewService({ name: "", description: "", isBinding: false });
+      setNewService({ name: "", description: "", isBinding: false, price: 0 });
       const servicesResponse = await fetch("/api/print-services");
       if (servicesResponse.ok) setPrintServices(await servicesResponse.json());
     }
@@ -825,7 +829,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
           <div className="field-label"><span className="step">2</span> Choose service</div>
           <label className="service-picker">Print service
             <select value={serviceId} onChange={(e) => setServiceId(e.target.value)}>
-              {printServices.map((service) => <option key={service.id} value={service.id}>{service.name}</option>)}
+              {printServices.map((service) => <option key={service.id} value={service.id}>{service.name}{service.price_paise ? ` (+${inr.format(service.price_paise / 100)})` : ""}</option>)}
             </select>
           </label>
           {Boolean(printServices.find((service) => service.id === serviceId)?.is_binding) && (
@@ -862,7 +866,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
             <div><small>Estimated print total</small><strong>{inr.format(total)}</strong></div>
             <button disabled={!fileName || countingPages || (Boolean(printServices.find((service) => service.id === serviceId)?.is_binding) && whatsappNumber.length !== 10)} onClick={addToCart}>Add to cart <span>→</span></button>
           </div>
-          <p className="estimate-note">{pages} pages × {copies} {copies === 1 ? "copy" : "copies"} × {inr.format(prices[mode])} · {selected.title}</p>
+          <p className="estimate-note">{pages} pages × {copies} {copies === 1 ? "copy" : "copies"} × {inr.format(prices[mode])} · {selected.title}{servicePrice > 0 ? ` + ${inr.format(servicePrice)} ${selectedService?.name} charge` : ""}</p>
           <div className="payment-instruction" role="note">
             <strong>No prepaid payment</strong>
             <span>Pay online using your order’s scanner or scan and pay when the delivery partner arrives.</span>
@@ -885,7 +889,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                 return (
                   <article className="cart-item" key={item.id}>
                     <div className="file-badge">{item.fileType === "PDF" ? "PDF" : "IMG"}</div>
-                    <div className="cart-file"><h3>{item.fileName}</h3><p>{item.serviceName} · {item.pages} {item.pages === 1 ? "page" : "pages"} · A4 · {itemOption.title} · {item.copies} {item.copies === 1 ? "copy" : "copies"}</p>{item.printInstructions && <p>{item.printInstructions} · WhatsApp {item.whatsappNumber}</p>}<small>{item.pages} × {item.copies} × {inr.format(item.unitPrice)}</small></div>
+                    <div className="cart-file"><h3>{item.fileName}</h3><p>{item.serviceName} · {item.pages} {item.pages === 1 ? "page" : "pages"} · A4 · {itemOption.title} · {item.copies} {item.copies === 1 ? "copy" : "copies"}</p>{item.printInstructions && <p>{item.printInstructions} · WhatsApp {item.whatsappNumber}</p>}<small>{item.pages} × {item.copies} × {inr.format(item.unitPrice)}{item.servicePrice > 0 ? ` + ${inr.format(item.servicePrice)} service charge` : ""}</small></div>
                     <strong>{inr.format(item.total)}</strong>
                     <button className="remove-item" onClick={() => setCart((items) => items.filter((current) => current.id !== item.id))} aria-label={`Remove ${item.fileName}`}>×</button>
                   </article>
@@ -965,8 +969,8 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
             <button className="save-button" onClick={savePrices}>{saved ? "Prices saved ✓" : "Save new prices"}</button>
             <div className="service-admin">
               <h3>Add a print or finishing service</h3>
-              <div className="service-admin-form"><input value={newService.name} onChange={(e) => setNewService({ ...newService, name: e.target.value })} placeholder="Example: Soft binding" /><input maxLength={125} value={newService.description} onChange={(e) => setNewService({ ...newService, description: e.target.value })} placeholder="Description (125 characters)" /><label><input type="checkbox" checked={newService.isBinding} onChange={(e) => setNewService({ ...newService, isBinding: e.target.checked })} /> Request page instructions and WhatsApp</label><button onClick={addPrintService}>Add service</button></div>
-              <div className="service-chips">{printServices.map((service) => <span key={service.id}><b>{service.name}</b><small>{service.description}</small>{!["document-printing", "document-binding"].includes(service.id) && <button onClick={() => removePrintService(service.id)}>Remove</button>}</span>)}</div>
+              <div className="service-admin-form"><input value={newService.name} onChange={(e) => setNewService({ ...newService, name: e.target.value })} placeholder="Example: Soft binding" /><input maxLength={125} value={newService.description} onChange={(e) => setNewService({ ...newService, description: e.target.value })} placeholder="Description (125 characters)" /><label className="service-price-field">Price (₹)<input type="number" min="0" step=".01" value={newService.price} onChange={(e) => setNewService({ ...newService, price: Math.max(0, Number(e.target.value)) })} /></label><label><input type="checkbox" checked={newService.isBinding} onChange={(e) => setNewService({ ...newService, isBinding: e.target.checked })} /> Request page instructions and WhatsApp</label><button onClick={addPrintService}>Add service</button></div>
+              <div className="service-chips">{printServices.map((service) => <span key={service.id}><b>{service.name} · {inr.format(service.price_paise / 100)}</b><small>{service.description}</small>{!["document-printing", "document-binding"].includes(service.id) && <button onClick={() => removePrintService(service.id)}>Remove</button>}</span>)}</div>
             </div>
             <div className="admin-divider" />
             <h3 id="admin-locations">Delivery locations</h3>
