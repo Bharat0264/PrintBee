@@ -114,6 +114,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>("default");
   const [notificationMessage, setNotificationMessage] = useState("");
   const [notificationToast, setNotificationToast] = useState<{ title: string; body: string } | null>(null);
+  const [notificationPromptOpen, setNotificationPromptOpen] = useState(false);
   const [adminSection, setAdminSection] = useState<"dashboard" | "orders" | "locations" | "riders" | "services">("dashboard");
   const [dashboardRange, setDashboardRange] = useState<"today" | "week" | "month">("today");
   const [printServices, setPrintServices] = useState<PrintService[]>([]);
@@ -175,7 +176,10 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
         .then((registration) => registration.update())
         .catch(() => setNotificationMessage("Notification setup failed. Reload the page and try again."));
     }
-    if ("Notification" in window) setNotificationPermission(Notification.permission);
+    if ("Notification" in window) {
+      setNotificationPermission(Notification.permission);
+      if (Notification.permission === "default") setNotificationPromptOpen(true);
+    }
     fetch("/api/print-services").then((response) => response.ok ? response.json() : []).then(setPrintServices).catch(() => {});
   }, []);
 
@@ -432,10 +436,12 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
     const permission = await Notification.requestPermission();
     setNotificationPermission(permission);
     if (permission === "granted") {
+      setNotificationPromptOpen(false);
       window.localStorage.removeItem(`printbee-order-notifications-${viewer?.email ?? "user"}`);
       const sent = await sendOrderNotification("PrintBee notifications enabled", "This is a test. Order updates will appear like this while PrintBee is open.", `printbee-enabled-${Date.now()}`);
       setNotificationMessage(sent ? "Test notification sent. Check your notification tray." : "Permission was granted, but this browser blocked the test notification.");
     } else if (permission === "denied") {
+      setNotificationPromptOpen(false);
       setNotificationMessage("Notifications are blocked. Allow them in your browser’s site settings, then reload PrintBee.");
     }
   };
@@ -730,6 +736,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
     const data = await response.json();
     setDeliveryMessage(response.ok ? "Delivery verified. Order marked delivered ✓" : data.error);
     if (response.ok) {
+      await sendOrderNotification("Delivery completed", `${deliveryOrderNumber} was delivered. Its uploaded documents have been permanently deleted.`, `${deliveryOrderNumber}-delivered`);
       setDeliveryOrderNumber("");
       setDeliveryCode("");
       await loadRiderOrders();
@@ -738,7 +745,23 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
 
   const loadRiderOrders = async () => {
     const response = await fetch("/api/rider/orders");
-    if (response.ok) setRiderOrders(await response.json());
+    if (response.ok) {
+      const orders = await response.json() as any[];
+      setRiderOrders(orders);
+      if (!viewer?.isAdmin) {
+        const storageKey = `printbee-rider-notifications-${viewer?.email ?? "rider"}`;
+        const previous = JSON.parse(window.localStorage.getItem(storageKey) ?? "{}") as Record<string, any>;
+        for (const order of orders) {
+          const before = previous[order.id];
+          if (!before) await sendOrderNotification("Order assigned", `${order.order_number} is assigned to you for delivery.`, `${order.id}-rider-assigned`);
+          if (order.has_payment_qr && !before?.has_payment_qr) await sendOrderNotification("Payment QR ready", `${order.order_number}: the admin payment scanner is ready to show the customer.`, `${order.id}-rider-qr`);
+          if (order.payment_status === "PAID" && before?.payment_status !== "PAID") await sendOrderNotification("Payment verified", `${order.order_number} is paid. The scanner has been removed; collect only the delivery OTP.`, `${order.id}-rider-paid`);
+          if (before?.status && order.status !== before.status) await sendOrderNotification("Order updated", `${order.order_number} is now ${String(order.status).replaceAll("_", " ").toLowerCase()}.`, `${order.id}-${order.status}`);
+        }
+        const snapshot = Object.fromEntries(orders.map((order) => [order.id, { status: order.status, payment_status: order.payment_status, has_payment_qr: Boolean(order.has_payment_qr) }]));
+        window.localStorage.setItem(storageKey, JSON.stringify(snapshot));
+      }
+    }
     if (!viewer?.isAdmin) {
       const earningsResponse = await fetch("/api/rider/earnings");
       if (earningsResponse.ok) setRiderEarnings(await earningsResponse.json());
@@ -804,6 +827,17 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
 
   return (
     <main>
+      {notificationPromptOpen && (
+        <div className="modal-backdrop notification-permission-backdrop" role="presentation">
+          <section className="notification-permission-modal" role="dialog" aria-modal="true" aria-labelledby="notification-permission-title">
+            <img src="/printbee-logo.png" width={76} height={76} alt="PrintBee" />
+            <h2 id="notification-permission-title">Allow order notifications?</h2>
+            <p>Get alerts when an order is created, the admin uploads a payment QR, printing starts, a rider is assigned, payment is verified, and delivery is completed.</p>
+            <button className="save-button" onClick={enableNotifications}>Allow notifications</button>
+            <button className="notification-later" onClick={() => setNotificationPromptOpen(false)}>Not now</button>
+          </section>
+        </div>
+      )}
       {notificationToast && <div className="notification-toast" role="status" aria-live="assertive"><span>🔔</span><div><strong>{notificationToast.title}</strong><p>{notificationToast.body}</p></div><button onClick={() => setNotificationToast(null)} aria-label="Dismiss notification">×</button></div>}
       <header className="topbar">
         <a className="brand" href="#top" aria-label="PrintBee home">
