@@ -16,7 +16,7 @@ test("admin can edit service details and packaging behavior", () => {
   assert.match(apiSource, /ON CONFLICT\(id\) DO UPDATE/);
   assert.match(apiSource, /counts_for_packaging/);
   assert.match(appSource, /Edit service option/);
-  assert.match(appSource, /Count this service's pages for packaging charges/);
+  assert.match(appSource, /Count this service's pages for handling charges/);
 });
 
 test("server excludes non-printing service pages from packaging", () => {

@@ -84,6 +84,7 @@ type PrintService = { id: string; name: string; description: string; active: num
 type PackagingRule = { id: string; min_pages: number; max_pages: number; charge_paise: number };
 type SupabaseConfig = { url: string; anonKey: string } | null;
 type RazorpayResult = { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string };
+type ColourChoice = "" | "bw" | "colour" | "mixed";
 
 function printSummary(items: any[] = []) {
   const totals = { bwSingle: 0, bwDouble: 0, colourSingle: 0, colourDouble: 0 };
@@ -185,7 +186,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   const [serviceId, setServiceId] = useState("document-printing");
   const [printInstructions, setPrintInstructions] = useState("");
   const [colourPageNumbers, setColourPageNumbers] = useState("");
-  const [noColourPages, setNoColourPages] = useState(false);
+  const [colourChoice, setColourChoice] = useState<ColourChoice>("");
   const [whatsappNumber, setWhatsappNumber] = useState("");
   const [newService, setNewService] = useState({ id: "", name: "", description: "", isBinding: false, countsForPackaging: true, price: 0 });
 
@@ -300,12 +301,12 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   const servicePrice = (selectedService?.price_paise ?? 0) / 100;
   const usesMixedPagePricing = MIXED_PRINT_SERVICES.has(serviceId);
   const colourPageResult = useMemo(() => parsePageNumbers(colourPageNumbers, pages), [colourPageNumbers, pages]);
-  const colourPageCount = noColourPages ? 0 : colourPageResult.count;
+  const colourPageCount = colourChoice === "colour" ? pages : colourChoice === "mixed" ? colourPageResult.count : 0;
   const bwPageCount = pages - colourPageCount;
   const side = "single";
   const mixedPrintTotal = (bwPageCount * prices[`bw-${side}`] + colourPageCount * prices[`colour-${side}`]) * copies;
   const total = usesMixedPagePricing ? mixedPrintTotal + servicePrice : pages * copies * prices[mode] + servicePrice;
-  const colourPagesValid = noColourPages || (colourPageNumbers.trim().length > 0 && colourPageResult.invalid.length === 0);
+  const colourPagesValid = colourChoice === "bw" || colourChoice === "colour" || (colourChoice === "mixed" && colourPageNumbers.trim().length > 0 && colourPageResult.invalid.length === 0);
 
   const handleFile = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -319,6 +320,8 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
     }
     setFileName(file.name);
     setSelectedFile(file);
+    setColourChoice("");
+    setColourPageNumbers("");
     setUploadError("");
     setCountingPages(true);
     try {
@@ -383,7 +386,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
         fileType,
         pages,
         copies,
-        mode: usesMixedPagePricing ? (`bw-${side}` as PrintMode) : mode,
+        mode: usesMixedPagePricing ? (colourChoice === "colour" ? "colour-single" : "bw-single") : mode,
         unitPrice: usesMixedPagePricing ? (mixedPrintTotal / Math.max(1, pages * copies)) : prices[mode],
         total,
         serviceId,
@@ -392,7 +395,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
         countsForPackaging: Boolean(service?.counts_for_packaging ?? 1),
         printInstructions: printInstructions.trim(),
         colourPages: usesMixedPagePricing ? colourPageCount : undefined,
-        colourPageNumbers: usesMixedPagePricing ? (noColourPages ? "NA" : colourPageNumbers.trim()) : undefined,
+        colourPageNumbers: usesMixedPagePricing ? (colourChoice === "bw" ? "NA" : colourChoice === "colour" ? "All pages" : colourPageNumbers.trim()) : undefined,
         whatsappNumber: whatsappNumber.replace(/\D/g, ""),
       },
     ]);
@@ -402,7 +405,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
     setCopies(1);
     setPrintInstructions("");
     setColourPageNumbers("");
-    setNoColourPages(false);
+    setColourChoice("");
   };
 
   const cartTotal = cart.reduce((sum, item) => sum + item.total, 0);
@@ -803,7 +806,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   const savePackagingRule = async () => {
     const response = await fetch("/api/packaging-charges", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(packagingDraft) });
     const data = await response.json();
-    setAdminMessage(response.ok ? "Packaging charge saved." : data.error);
+    setAdminMessage(response.ok ? "Handling charge saved." : data.error);
     if (response.ok) {
       const rulesResponse = await fetch("/api/packaging-charges");
       if (rulesResponse.ok) setPackagingRules(await rulesResponse.json());
@@ -1075,9 +1078,10 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
           <p className="file-retention-note"><strong>Document privacy:</strong> Your uploaded files will be deleted once the order is delivered or cancelled. Maximum file size: 50 MB.</p>
           {uploadError && <p className="upload-error">{uploadError}</p>}
 
+          {fileName && <>
           <div className="field-label"><span className="step">2</span> Choose service</div>
           <div className="service-option-grid" role="radiogroup" aria-label="Print service">
-            {printServices.map((service) => <button type="button" role="radio" aria-checked={serviceId === service.id} className={serviceId === service.id ? "selected" : ""} key={service.id} onClick={() => { setServiceId(service.id); setMode(mode.startsWith("colour") && !MIXED_PRINT_SERVICES.has(service.id) ? "colour-single" : "bw-single"); }}><span><strong>{service.name}</strong><small>{service.description}</small></span><b>{service.price_paise ? `+${inr.format(service.price_paise / 100)}` : "Included"}</b>{!service.counts_for_packaging && <em>Excluded from packaging page count</em>}</button>)}
+            {printServices.filter((service) => MIXED_PRINT_SERVICES.has(service.id)).map((service) => <button type="button" role="radio" aria-checked={serviceId === service.id} className={serviceId === service.id ? "selected" : ""} key={service.id} onClick={() => setServiceId(service.id)}><span><strong>{service.name}</strong><small>{service.description}</small></span><b>{service.price_paise ? `+${inr.format(service.price_paise / 100)}` : "Included"}</b></button>)}
           </div>
           {Boolean(printServices.find((service) => service.id === serviceId)?.is_binding) && (
             <div className="binding-fields">
@@ -1090,28 +1094,17 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
 
           {usesMixedPagePricing && (
             <div className="binding-fields">
-              <strong>Which pages should be printed in colour?</strong>
-              <p>Enter individual pages or ranges. Every page not listed will be printed and charged as B&amp;W.</p>
-              <label>Colour page numbers<input disabled={noColourPages} value={colourPageNumbers} onChange={(e) => { setColourPageNumbers(e.target.value); setUploadError(""); }} placeholder="Example: 1-4, 12, 18-20" /></label>
-              <label><input type="checkbox" checked={noColourPages} onChange={(e) => { setNoColourPages(e.target.checked); setColourPageNumbers(""); setUploadError(""); }} /> NA — there are no colour pages</label>
-              {!noColourPages && colourPageNumbers.trim() && colourPageResult.invalid.length > 0 && <small className="upload-error">Check: {colourPageResult.invalid.join(", ")}. Pages must be between 1 and {pages}.</small>}
+              <strong><span className="step">3</span> Choose colour pages</strong>
+              <p>Select B&amp;W for no colour pages, Colour for every page, or enter only the pages that need colour.</p>
+              <div className="service-option-grid" role="radiogroup" aria-label="Colour printing choice">
+                <button type="button" role="radio" aria-checked={colourChoice === "bw"} className={colourChoice === "bw" ? "selected" : ""} onClick={() => { setColourChoice("bw"); setColourPageNumbers(""); setMode("bw-single"); setUploadError(""); }}><span><strong>B&amp;W</strong><small>No colour pages</small></span><b>{inr.format(prices["bw-single"])} / page</b></button>
+                <button type="button" role="radio" aria-checked={colourChoice === "colour"} className={colourChoice === "colour" ? "selected" : ""} onClick={() => { setColourChoice("colour"); setColourPageNumbers(""); setMode("colour-single"); setUploadError(""); }}><span><strong>Colour</strong><small>Print every page in colour</small></span><b>{inr.format(prices["colour-single"])} / page</b></button>
+                <button type="button" role="radio" aria-checked={colourChoice === "mixed"} className={colourChoice === "mixed" ? "selected" : ""} onClick={() => { setColourChoice("mixed"); setMode("bw-single"); setUploadError(""); }}><span><strong>Select colour pages</strong><small>All remaining pages will be B&amp;W</small></span><b>Mixed pricing</b></button>
+              </div>
+              {colourChoice === "mixed" && <label>Colour page numbers<input value={colourPageNumbers} onChange={(e) => { setColourPageNumbers(e.target.value); setUploadError(""); }} placeholder="Example: 1-4, 12, 18-20" /></label>}
+              {colourChoice === "mixed" && colourPageNumbers.trim() && colourPageResult.invalid.length > 0 && <small className="upload-error">Check: {colourPageResult.invalid.join(", ")}. Pages must be between 1 and {pages}.</small>}
             </div>
           )}
-
-          <div className="field-label"><span className="step">3</span> {usesMixedPagePricing ? "Print format" : "Choose print type"}</div>
-          <div className="option-grid">
-            {(usesMixedPagePricing ? singleSideOptions.filter((item) => item.id === "bw-single") : singleSideOptions).map((item) => (
-              <button
-                key={item.id}
-                className={mode === item.id ? "print-option selected" : "print-option"}
-                onClick={() => setMode(item.id)}
-                aria-pressed={mode === item.id}
-              >
-                <span className={`mode-icon ${item.id.startsWith("colour") ? "colour" : ""}`}>{item.icon}</span>
-                <span><strong>{usesMixedPagePricing ? "Single sided only" : item.title}</strong><small>{usesMixedPagePricing ? `B&W ${inr.format(prices["bw-single"])} · Colour ${inr.format(prices["colour-single"])} / page` : `${inr.format(prices[item.id])} / page`}</small></span>
-              </button>
-            ))}
-          </div>
 
           <div className="quantities">
             <label>Pages<input type="number" min="1" value={pages} onChange={(e) => setPages(Math.max(1, Number(e.target.value)))} /></label>
@@ -1128,6 +1121,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
             <strong>Secure Razorpay payment</strong>
             <span>Create your order, then pay online through Razorpay before printing begins.</span>
           </div>
+          </>}
         </section>
       </section>
 
@@ -1207,7 +1201,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
           <section className="admin-modal admin-portal" role="dialog" aria-modal="true" aria-labelledby="admin-title" onMouseDown={(e) => e.stopPropagation()}>
             <aside className="admin-sidebar">
               <div className="admin-sidebar-brand"><img src="/printbee-logo.png" alt="" /><strong>PrintBee Admin</strong></div>
-              {([["dashboard", "Dashboard", "⌂"], ["orders", "Orders", "▤"], ["locations", "Locations", "⌖"], ["riders", "Rider approvals", "♙"], ["services", "Print services", "＋"], ["packaging", "Packaging charges", "₹"]] as const).map(([id, label, icon]) => <button key={id} className={adminSection === id ? "active" : ""} onClick={() => { setAdminSection(id); window.setTimeout(() => document.getElementById(`admin-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" }), 0); }}><span>{icon}</span>{label}{id === "orders" && <b>{dashboard?.orders?.length ?? 0}</b>}</button>)}
+              {([["dashboard", "Dashboard", "⌂"], ["orders", "Orders", "▤"], ["locations", "Locations", "⌖"], ["riders", "Rider approvals", "♙"], ["services", "Print services", "＋"], ["packaging", "Handling charges", "₹"]] as const).map(([id, label, icon]) => <button key={id} className={adminSection === id ? "active" : ""} onClick={() => { setAdminSection(id); window.setTimeout(() => document.getElementById(`admin-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" }), 0); }}><span>{icon}</span>{label}{id === "orders" && <b>{dashboard?.orders?.length ?? 0}</b>}</button>)}
               {notificationPermission !== "granted" && <button onClick={enableNotifications}><span>♬</span>Enable order alerts</button>}
               {notificationPermission === "granted" && <button onClick={testNotifications}><span>♬</span>Test sound + banner</button>}
               <button className="admin-sidebar-exit" onClick={() => setAdminOpen(false)}>← Back to website</button>
@@ -1230,18 +1224,18 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
             <div className="service-admin">
               <h3>{newService.id ? "Edit service option" : "Add a print, documentation, or finishing service"}</h3>
               <div className="service-admin-form"><input value={newService.name} onChange={(e) => setNewService({ ...newService, name: e.target.value })} placeholder="Example: Soft binding" /><input maxLength={125} value={newService.description} onChange={(e) => setNewService({ ...newService, description: e.target.value })} placeholder="Description (125 characters)" /><label className="service-price-field">Price (₹)<input type="number" min="0" step=".01" value={newService.price} onChange={(e) => setNewService({ ...newService, price: Math.max(0, Number(e.target.value)) })} /></label><label><input type="checkbox" checked={newService.isBinding} onChange={(e) => setNewService({ ...newService, isBinding: e.target.checked })} /> Request page instructions and WhatsApp</label><button onClick={addPrintService}>{newService.id ? "Save changes" : "Add service"}</button>{newService.id && <button className="secondary-button" onClick={() => setNewService({ id: "", name: "", description: "", isBinding: false, countsForPackaging: true, price: 0 })}>Cancel</button>}</div>
-              <label className="packaging-count-toggle"><input type="checkbox" checked={newService.countsForPackaging} onChange={(e) => setNewService({ ...newService, countsForPackaging: e.target.checked })} /> Count this service's pages for packaging charges</label>
-              <div className="service-chips">{printServices.map((service) => <span key={service.id}><b>{service.name} · {inr.format(service.price_paise / 100)}</b><small>{service.description}</small><small>{service.counts_for_packaging ? "Printed pages count toward packaging" : "Pages excluded from packaging"}</small><button onClick={() => setNewService({ id: service.id, name: service.name, description: service.description, isBinding: Boolean(service.is_binding), countsForPackaging: Boolean(service.counts_for_packaging), price: service.price_paise / 100 })}>Edit</button>{!["document-printing", "document-binding"].includes(service.id) && <button onClick={() => removePrintService(service.id)}>Remove</button>}</span>)}</div>
+              <label className="packaging-count-toggle"><input type="checkbox" checked={newService.countsForPackaging} onChange={(e) => setNewService({ ...newService, countsForPackaging: e.target.checked })} /> Count this service's pages for handling charges</label>
+              <div className="service-chips">{printServices.map((service) => <span key={service.id}><b>{service.name} · {inr.format(service.price_paise / 100)}</b><small>{service.description}</small><small>{service.counts_for_packaging ? "Printed pages count toward handling charges" : "Pages excluded from handling charges"}</small><button onClick={() => setNewService({ id: service.id, name: service.name, description: service.description, isBinding: Boolean(service.is_binding), countsForPackaging: Boolean(service.counts_for_packaging), price: service.price_paise / 100 })}>Edit</button>{!["document-printing", "document-binding"].includes(service.id) && <button onClick={() => removePrintService(service.id)}>Remove</button>}</span>)}</div>
             </div>
             <div className="service-admin packaging-admin" id="admin-packaging">
-              <h2>Packaging charges</h2>
+              <h2>Handling charges</h2>
               <p>Add or edit non-overlapping page ranges. For example, “Below 30” means pages 1–29, followed by 30–50. The matching charge is calculated automatically at checkout.</p>
-              <div className="dashboard-range" aria-label="Quick packaging page ranges">
+              <div className="dashboard-range" aria-label="Quick handling charge page ranges">
                 <button type="button" onClick={() => setPackagingDraft({ id: "", minPages: 1, maxPages: 29, charge: 0 })}>Below 30</button>
                 <button type="button" onClick={() => setPackagingDraft({ id: "", minPages: 30, maxPages: 50, charge: 0 })}>30–50</button>
                 <button type="button" onClick={() => setPackagingDraft({ id: "", minPages: 51, maxPages: 9999, charge: 0 })}>Above 50</button>
               </div>
-              <div className="service-admin-form"><label>From pages<input type="number" min="1" value={packagingDraft.minPages} onChange={(e) => setPackagingDraft({ ...packagingDraft, minPages: Number(e.target.value) })} /></label><label>To pages<input type="number" min="1" value={packagingDraft.maxPages} onChange={(e) => setPackagingDraft({ ...packagingDraft, maxPages: Number(e.target.value) })} /></label><label>Packaging charge (₹)<input type="number" min="0" step=".01" value={packagingDraft.charge} onChange={(e) => setPackagingDraft({ ...packagingDraft, charge: Number(e.target.value) })} /></label><button onClick={savePackagingRule}>{packagingDraft.id ? "Save edited charge" : "Add charge"}</button></div>
+              <div className="service-admin-form"><label>From pages<input type="number" min="1" value={packagingDraft.minPages} onChange={(e) => setPackagingDraft({ ...packagingDraft, minPages: Number(e.target.value) })} /></label><label>To pages<input type="number" min="1" value={packagingDraft.maxPages} onChange={(e) => setPackagingDraft({ ...packagingDraft, maxPages: Number(e.target.value) })} /></label><label>Handling charge (₹)<input type="number" min="0" step=".01" value={packagingDraft.charge} onChange={(e) => setPackagingDraft({ ...packagingDraft, charge: Number(e.target.value) })} /></label><button onClick={savePackagingRule}>{packagingDraft.id ? "Save edited charge" : "Add charge"}</button></div>
               {packagingDraft.id && <button className="secondary-button" onClick={() => setPackagingDraft({ id: "", minPages: 1, maxPages: 29, charge: 0 })}>Cancel editing</button>}
               <div className="service-chips">{packagingRules.map((rule) => <span key={rule.id}><b>{rule.min_pages === 1 && rule.max_pages === 29 ? "Below 30" : rule.min_pages === 30 && rule.max_pages === 50 ? "30–50" : rule.min_pages === 51 && rule.max_pages === 9999 ? "Above 50" : `${rule.min_pages}–${rule.max_pages}`} pages · {inr.format(rule.charge_paise / 100)}</b><button onClick={() => { setPackagingDraft({ id: rule.id, minPages: rule.min_pages, maxPages: rule.max_pages, charge: rule.charge_paise / 100 }); document.getElementById("admin-packaging")?.scrollIntoView({ behavior: "smooth" }); }}>Edit</button><button onClick={() => deletePackagingRule(rule.id)}>Remove</button></span>)}</div>
             </div>
@@ -1406,7 +1400,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                 <label className="checkout-field">Mobile number<input value={mobileNumber} onChange={(e) => setMobileNumber(e.target.value.replace(/\D/g, "").slice(0, 10))} placeholder="10-digit mobile number" inputMode="numeric" /></label>
                 <label className="checkout-field">Delivery location<select value={locationId} onChange={(e) => setLocationId(e.target.value)}><option value="">Select a location</option>{locations.map((location) => <option value={location.id} key={location.id}>{location.name}</option>)}</select></label>
                 {!locations.length && <p className="panel-message">No delivery locations are available yet. The admin must add one first.</p>}
-                <div className="fee-breakdown"><div><span>Printing subtotal</span><strong>{inr.format(cartPrintingTotal)}</strong></div>{cartServiceCharges > 0 && <div className="binding-charge-row"><span>Binding charges</span><strong>{inr.format(cartServiceCharges)}</strong></div>}<div><span>Delivery fee</span><strong>{inr.format(checkoutDeliveryFee)}</strong></div><div><span>Platform fee</span><strong>{inr.format(checkoutPlatformFee)}</strong></div><div><span>Packaging charge ({cartPrintedPages} pages)</span><strong>{inr.format(packagingFee)}</strong></div></div>
+                <div className="fee-breakdown"><div><span>Printing subtotal</span><strong>{inr.format(cartPrintingTotal)}</strong></div>{cartServiceCharges > 0 && <div className="binding-charge-row"><span>Binding charges</span><strong>{inr.format(cartServiceCharges)}</strong></div>}<div><span>Delivery fee</span><strong>{inr.format(checkoutDeliveryFee)}</strong></div><div><span>Platform fee</span><strong>{inr.format(checkoutPlatformFee)}</strong></div><div><span>Handling charge ({cartPrintedPages} pages)</span><strong>{inr.format(packagingFee)}</strong></div></div>
                 <div className="checkout-total"><span>To pay</span><strong>{inr.format(cartTotal + checkoutDeliveryFee + checkoutPlatformFee + packagingFee)}</strong></div>
                 <div className="pay-on-delivery-note"><strong>Secure online payment:</strong> After creating the order, complete payment through Razorpay. Printing begins only after verified payment.</div>
                 {orderError && <p className="form-error">{orderError}</p>}

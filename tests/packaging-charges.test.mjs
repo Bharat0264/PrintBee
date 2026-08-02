@@ -18,5 +18,5 @@ test("server calculates and saves packaging fees from uploaded page counts", () 
   assert.match(orderSource, /upload\.page_count \* Math\.max/);
   assert.match(orderSource, /packagingFeePaise/);
   assert.match(orderSource, /packaging_fee_paise/);
-  assert.match(appSource, /Packaging charge \(\{cartPrintedPages\} pages\)/);
+  assert.match(appSource, /Handling charge \(\{cartPrintedPages\} pages\)/);
 });
