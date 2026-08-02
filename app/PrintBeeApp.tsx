@@ -150,6 +150,28 @@ function printSummary(items: any[] = []) {
   return totals;
 }
 
+function revenueSummary(orders: any[] = [], fallbackPrices: Prices) {
+  const totals = { colourPrints: 0, colourPages: 0, colourAmount: 0, bwPrints: 0, bwPages: 0, bwAmount: 0, delivery: 0, handling: 0, platform: 0 };
+  for (const order of orders) {
+    totals.delivery += Number(order.delivery_fee_paise) || 0;
+    totals.handling += Number(order.packaging_fee_paise) || 0;
+    totals.platform += Number(order.platform_fee_paise) || 0;
+    for (const item of order.items ?? []) {
+      const documentPages = Math.max(1, Number(item.pages) || 1);
+      const copies = Math.max(1, Number(item.copies) || 1);
+      const colourPerCopy = item.colourPageNumbers !== undefined ? Math.max(0, Math.min(documentPages, Number(item.colourPages) || 0)) : item.mode?.startsWith("colour") ? documentPages : 0;
+      const bwPerCopy = documentPages - colourPerCopy;
+      if (colourPerCopy > 0) totals.colourPrints += copies;
+      if (bwPerCopy > 0) totals.bwPrints += copies;
+      totals.colourPages += colourPerCopy * copies;
+      totals.bwPages += bwPerCopy * copies;
+      totals.colourAmount += colourPerCopy * copies * Number(item.colourUnitPrice ?? (item.mode?.startsWith("colour") ? item.unitPrice : fallbackPrices["colour-single"]));
+      totals.bwAmount += bwPerCopy * copies * Number(item.bwUnitPrice ?? (item.mode?.startsWith("bw") && item.colourPageNumbers === undefined ? item.unitPrice : fallbackPrices["bw-single"]));
+    }
+  }
+  return totals;
+}
+
 type CartItem = {
   id: string;
   uploadId: string;
@@ -159,6 +181,8 @@ type CartItem = {
   copies: number;
   mode: PrintMode;
   unitPrice: number;
+  bwUnitPrice?: number;
+  colourUnitPrice?: number;
   total: number;
   serviceId: string;
   serviceName: string;
@@ -225,7 +249,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   const [notificationMessage, setNotificationMessage] = useState("");
   const [notificationToast, setNotificationToast] = useState<{ title: string; body: string } | null>(null);
   const [notificationPromptOpen, setNotificationPromptOpen] = useState(false);
-  const [adminSection, setAdminSection] = useState<"dashboard" | "orders" | "locations" | "riders" | "services" | "packaging">("dashboard");
+  const [adminSection, setAdminSection] = useState<"dashboard" | "revenue" | "orders" | "locations" | "riders" | "services" | "packaging">("dashboard");
   const [dashboardRange, setDashboardRange] = useState<"today" | "week" | "month">("today");
   const [printServices, setPrintServices] = useState<PrintService[]>([]);
   const [packagingRules, setPackagingRules] = useState<PackagingRule[]>([]);
@@ -432,6 +456,8 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
         copies,
         mode: usesMixedPagePricing ? (colourChoice === "colour" ? "colour-single" : "bw-single") : mode,
         unitPrice: usesMixedPagePricing ? (mixedPrintTotal / Math.max(1, pages * copies)) : prices[mode],
+        bwUnitPrice: prices["bw-single"],
+        colourUnitPrice: prices["colour-single"],
         total,
         serviceId,
         serviceName: service?.name ?? "Document printing",
@@ -993,6 +1019,9 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   const checkoutLocation = locations.find((location) => location.id === locationId);
   const checkoutDeliveryFee = (checkoutLocation?.delivery_fee_paise ?? 1500) / 100;
   const checkoutPlatformFee = (checkoutLocation?.platform_fee_paise ?? 350) / 100;
+  const revenueNow = new Date();
+  const revenueStart = dashboardRange === "today" ? new Date(revenueNow.getFullYear(), revenueNow.getMonth(), revenueNow.getDate()) : dashboardRange === "week" ? new Date(revenueNow.getFullYear(), revenueNow.getMonth(), revenueNow.getDate() - 6) : new Date(revenueNow.getFullYear(), revenueNow.getMonth(), 1);
+  const revenueTotals = revenueSummary((dashboard?.orders ?? []).filter((order: any) => new Date(order.created_at) >= revenueStart), prices);
 
   if (viewer && !viewer.isAdmin && loginMode === "PARTNER") {
     const partnerApproved = role === "AGENT" && approvalStatus === "APPROVED";
@@ -1247,7 +1276,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
           <section className="admin-modal admin-portal" role="dialog" aria-modal="true" aria-labelledby="admin-title" onMouseDown={(e) => e.stopPropagation()}>
             <aside className="admin-sidebar">
               <div className="admin-sidebar-brand"><img src="/printbee-logo.png" alt="" /><strong>PrintBee Admin</strong></div>
-              {([["dashboard", "Dashboard", "⌂"], ["orders", "Orders", "▤"], ["locations", "Locations", "⌖"], ["riders", "Rider approvals", "♙"], ["services", "Print services", "＋"], ["packaging", "Handling charges", "₹"]] as const).map(([id, label, icon]) => <button key={id} className={adminSection === id ? "active" : ""} onClick={() => { setAdminSection(id); window.setTimeout(() => document.getElementById(`admin-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" }), 0); }}><span>{icon}</span>{label}{id === "orders" && <b>{dashboard?.orders?.length ?? 0}</b>}</button>)}
+              {([["dashboard", "Dashboard", "⌂"], ["revenue", "Revenue", "₹"], ["orders", "Orders", "▤"], ["locations", "Locations", "⌖"], ["riders", "Rider approvals", "♙"], ["services", "Print services", "＋"], ["packaging", "Handling charges", "₹"]] as const).map(([id, label, icon]) => <button key={id} className={adminSection === id ? "active" : ""} onClick={() => { setAdminSection(id); window.setTimeout(() => document.getElementById(`admin-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" }), 0); }}><span>{icon}</span>{label}{id === "orders" && <b>{dashboard?.orders?.length ?? 0}</b>}</button>)}
               {notificationPermission !== "granted" && <button onClick={enableNotifications}><span>♬</span>Enable order alerts</button>}
               {notificationPermission === "granted" && <button onClick={testNotifications}><span>♬</span>Test sound + banner</button>}
               <button className="admin-sidebar-exit" onClick={() => setAdminOpen(false)}>← Back to website</button>
@@ -1307,6 +1336,20 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                   <div><small>Paid revenue</small><strong>{inr.format((dashboard.summary?.revenue_paise ?? 0) / 100)}</strong></div>
                   {(() => { const now = new Date(); const start = dashboardRange === "today" ? new Date(now.getFullYear(), now.getMonth(), now.getDate()) : dashboardRange === "week" ? new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6) : new Date(now.getFullYear(), now.getMonth(), 1); const totals = printSummary(dashboard.orders.filter((order: any) => new Date(order.created_at) >= start).flatMap((order: any) => order.items || [])); return <><div><small>B&amp;W pages</small><strong>{totals.bwSingle + totals.bwDouble}</strong></div><div><small>Colour pages</small><strong>{totals.colourSingle + totals.colourDouble}</strong></div></>; })()}
                 </div>
+                <div className="admin-divider" />
+                <h2 id="admin-revenue">Revenue</h2>
+                <p>Paid printing and fee revenue for the selected period.</p>
+                <div className="metric-grid revenue-summary-grid">
+                  <div><small>Colour prints</small><strong>{revenueTotals.colourPrints}</strong></div>
+                  <div><small>Colour pages</small><strong>{revenueTotals.colourPages}</strong></div>
+                  <div><small>Colour amount received</small><strong>{inr.format(revenueTotals.colourAmount)}</strong></div>
+                  <div><small>B&amp;W prints</small><strong>{revenueTotals.bwPrints}</strong></div>
+                  <div><small>B&amp;W pages</small><strong>{revenueTotals.bwPages}</strong></div>
+                  <div><small>B&amp;W amount received</small><strong>{inr.format(revenueTotals.bwAmount)}</strong></div>
+                  <div><small>Delivery charges revenue</small><strong>{inr.format(revenueTotals.delivery / 100)}</strong></div>
+                  <div><small>Handling fee revenue</small><strong>{inr.format(revenueTotals.handling / 100)}</strong></div>
+                  <div><small>Platform fee revenue</small><strong>{inr.format(revenueTotals.platform / 100)}</strong></div>
+                </div>
                 <h3>Location performance</h3>
                 <p>Orders and paid revenue across every delivery location.</p>
                 <div className="location-table">
@@ -1327,11 +1370,11 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                 <div className="active-users">
                   {dashboard.activeUsers?.length ? dashboard.activeUsers.map((user: any) => <article key={user.email}><span className="user-avatar">{(user.name || user.email).slice(0, 1).toUpperCase()}</span><span><strong>{user.name}</strong><small>{user.email} · {user.mobile_number}</small><small>Last order {new Date(user.last_order_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}</small></span><span><strong>{user.order_count}</strong><small>Orders</small></span><span><strong>{inr.format((user.paid_spend_paise ?? 0) / 100)}</strong><small>Paid spend</small></span></article>) : <p>No active users yet.</p>}
                 </div>
-                <h3>Revenue</h3>
+                <h3>Revenue by order</h3>
                 <p>Paid order revenue, rider earnings, and PrintBee revenue per order.</p>
                 <div className="revenue-table">
                   <div className="revenue-head"><span>Order</span><span>Revenue</span><span>Delivery partner</span><span>Rider fee</span><span>Admin revenue</span></div>
-                  {dashboard.revenueOrders?.length ? dashboard.revenueOrders.map((entry: any) => <article key={entry.order_number}><span><strong>{entry.order_number}</strong><small>{new Date(entry.created_at).toLocaleDateString("en-IN")}</small></span><strong>{inr.format(entry.revenue_paise / 100)}</strong><span><strong>{entry.rider_name}</strong><small>{entry.rider_email || "Awaiting assignment"}</small></span><strong>{inr.format(entry.rider_fee_paise / 100)}</strong><span><strong>{inr.format(entry.admin_revenue_paise / 100)}</strong><small>Print {inr.format(entry.printing_subtotal_paise / 100)} + platform {inr.format(entry.platform_fee_paise / 100)} + 20% delivery</small></span></article>) : <p>No paid-order revenue yet.</p>}
+                  {dashboard.revenueOrders?.length ? dashboard.revenueOrders.map((entry: any) => <article key={entry.order_number}><span><strong>{entry.order_number}</strong><small>{new Date(entry.created_at).toLocaleDateString("en-IN")}</small></span><strong>{inr.format(entry.revenue_paise / 100)}</strong><span><strong>{entry.rider_name}</strong><small>{entry.rider_email || "Awaiting assignment"}</small></span><strong>{inr.format(entry.rider_fee_paise / 100)}</strong><span><strong>{inr.format(entry.admin_revenue_paise / 100)}</strong><small>Print {inr.format(entry.printing_subtotal_paise / 100)} + handling {inr.format((entry.packaging_fee_paise ?? 0) / 100)} + platform {inr.format(entry.platform_fee_paise / 100)} + 20% delivery</small></span></article>) : <p>No paid-order revenue yet.</p>}
                 </div>
                 <div className="order-export-panel">
                   <div><h3>Export orders</h3><p>Download a PDF containing visible orders only. Hidden orders are excluded.</p></div>
