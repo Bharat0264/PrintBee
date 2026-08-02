@@ -22,10 +22,12 @@ export async function POST(request: Request) {
   const uploadIds = body.items.map((item: any) => item.uploadId).filter(Boolean);
   if (uploadIds.length !== body.items.length) return NextResponse.json({ error: "Every cart item must finish uploading" }, { status: 400 });
   let totalPrintedPages = 0;
-  for (const item of body.items as Array<{ uploadId?: string; copies?: number }>) {
+  for (const item of body.items as Array<{ uploadId?: string; copies?: number; serviceId?: string }>) {
     const upload = await database().prepare("SELECT id, page_count FROM uploads WHERE id=? AND customer_email=? AND order_id IS NULL").bind(item.uploadId, viewer.email).first<{ id: string; page_count: number }>();
     if (!upload) return NextResponse.json({ error: "One or more uploaded files are unavailable" }, { status: 400 });
-    totalPrintedPages += upload.page_count * Math.max(1, Math.min(100, Math.round(Number(item.copies) || 1)));
+    const service = await database().prepare("SELECT counts_for_packaging FROM print_services WHERE id=? AND active=1").bind(item.serviceId || "document-printing").first<{ counts_for_packaging: number }>();
+    if (!service) return NextResponse.json({ error: "One or more selected services are unavailable" }, { status: 400 });
+    if (service.counts_for_packaging) totalPrintedPages += upload.page_count * Math.max(1, Math.min(100, Math.round(Number(item.copies) || 1)));
   }
   const packagingRule = await database().prepare("SELECT charge_paise FROM packaging_charge_rules WHERE min_pages<=? AND max_pages>=? ORDER BY min_pages DESC LIMIT 1").bind(totalPrintedPages, totalPrintedPages).first<{ charge_paise: number }>();
   const packagingFeePaise = packagingRule?.charge_paise ?? 0;

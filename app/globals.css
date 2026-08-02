@@ -47,6 +47,15 @@ button { cursor: pointer; }
 .policy-footer a { color: #575b62; }
 .footer-policy-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px 18px; }
 .footer-policy-links a { color: inherit; font-size: 12px; }
+.service-option-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; margin: 10px 0 18px; }
+.service-option-grid > button { display: grid; gap: 8px; padding: 15px; border: 1px solid #d9d9d3; border-radius: 14px; background: #fff; color: #222; text-align: left; }
+.service-option-grid > button.selected { border-color: #d5a900; background: #fff9d9; box-shadow: 0 0 0 2px rgba(224,173,0,.16); }
+.service-option-grid span { display: grid; gap: 4px; }
+.service-option-grid small { color: #686d75; }
+.service-option-grid b { color: #8b6a00; }
+.service-option-grid em { font-size: 10px; color: #757575; font-style: normal; }
+.packaging-count-toggle { display: flex; align-items: center; gap: 8px; margin: 10px 0 16px; }
+@media (max-width: 600px) { .service-option-grid { grid-template-columns: 1fr; } }
 @keyframes notification-in { from { opacity: 0; transform: translateY(-12px); } }
 
 .topbar {

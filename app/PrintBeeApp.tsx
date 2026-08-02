@@ -62,7 +62,7 @@ async function optimizeImageForUpload(file: File) {
 
 type Viewer = { email: string; isAdmin: boolean } | null;
 type LocationOption = { id: string; name: string; delivery_fee_paise?: number; platform_fee_paise?: number };
-type PrintService = { id: string; name: string; description: string; active: number; is_binding: number; price_paise: number };
+type PrintService = { id: string; name: string; description: string; active: number; is_binding: number; price_paise: number; counts_for_packaging: number };
 type PackagingRule = { id: string; min_pages: number; max_pages: number; charge_paise: number };
 type SupabaseConfig = { url: string; anonKey: string } | null;
 type RazorpayResult = { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string };
@@ -92,6 +92,7 @@ type CartItem = {
   serviceId: string;
   serviceName: string;
   servicePrice: number;
+  countsForPackaging: boolean;
   printInstructions?: string;
   whatsappNumber?: string;
 };
@@ -158,7 +159,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   const [serviceId, setServiceId] = useState("document-printing");
   const [printInstructions, setPrintInstructions] = useState("");
   const [whatsappNumber, setWhatsappNumber] = useState("");
-  const [newService, setNewService] = useState({ name: "", description: "", isBinding: false, price: 0 });
+  const [newService, setNewService] = useState({ id: "", name: "", description: "", isBinding: false, countsForPackaging: true, price: 0 });
 
   useEffect(() => {
     const stored = window.localStorage.getItem("printbee-a4-prices");
@@ -352,6 +353,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
         serviceId,
         serviceName: service?.name ?? "Document printing",
         servicePrice: (service?.price_paise ?? 0) / 100,
+        countsForPackaging: Boolean(service?.counts_for_packaging ?? 1),
         printInstructions: printInstructions.trim(),
         whatsappNumber: whatsappNumber.replace(/\D/g, ""),
       },
@@ -366,7 +368,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   const cartTotal = cart.reduce((sum, item) => sum + item.total, 0);
   const cartServiceCharges = cart.reduce((sum, item) => sum + (item.servicePrice || 0), 0);
   const cartPrintingTotal = cartTotal - cartServiceCharges;
-  const cartPrintedPages = cart.reduce((sum, item) => sum + item.pages * item.copies, 0);
+  const cartPrintedPages = cart.reduce((sum, item) => sum + (item.countsForPackaging ? item.pages * item.copies : 0), 0);
   const packagingFee = (packagingRules.find((rule) => cartPrintedPages >= rule.min_pages && cartPrintedPages <= rule.max_pages)?.charge_paise ?? 0) / 100;
 
   const savePrices = () => {
@@ -745,9 +747,9 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   const addPrintService = async () => {
     const response = await fetch("/api/print-services", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(newService) });
     const data = await response.json();
-    setAdminMessage(response.ok ? `${data.name} added to the customer print menu.` : data.error);
+    setAdminMessage(response.ok ? `${data.name} saved in the customer service options.` : data.error);
     if (response.ok) {
-      setNewService({ name: "", description: "", isBinding: false, price: 0 });
+      setNewService({ id: "", name: "", description: "", isBinding: false, countsForPackaging: true, price: 0 });
       const servicesResponse = await fetch("/api/print-services");
       if (servicesResponse.ok) setPrintServices(await servicesResponse.json());
     }
@@ -1034,11 +1036,9 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
           {uploadError && <p className="upload-error">{uploadError}</p>}
 
           <div className="field-label"><span className="step">2</span> Choose service</div>
-          <label className="service-picker">Print service
-            <select value={serviceId} onChange={(e) => setServiceId(e.target.value)}>
-              {printServices.map((service) => <option key={service.id} value={service.id}>{service.name}{service.price_paise ? ` (+${inr.format(service.price_paise / 100)})` : ""}</option>)}
-            </select>
-          </label>
+          <div className="service-option-grid" role="radiogroup" aria-label="Print service">
+            {printServices.map((service) => <button type="button" role="radio" aria-checked={serviceId === service.id} className={serviceId === service.id ? "selected" : ""} key={service.id} onClick={() => setServiceId(service.id)}><span><strong>{service.name}</strong><small>{service.description}</small></span><b>{service.price_paise ? `+${inr.format(service.price_paise / 100)}` : "Included"}</b>{!service.counts_for_packaging && <em>Excluded from packaging page count</em>}</button>)}
+          </div>
           {Boolean(printServices.find((service) => service.id === serviceId)?.is_binding) && (
             <div className="binding-fields">
               <strong>Binding instructions</strong>
@@ -1178,9 +1178,10 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
             </div>
             <button className="save-button" onClick={savePrices}>{saved ? "Prices saved ✓" : "Save new prices"}</button>
             <div className="service-admin">
-              <h3>Add a print or finishing service</h3>
+              <h3>{newService.id ? "Edit service option" : "Add a print, documentation, or finishing service"}</h3>
               <div className="service-admin-form"><input value={newService.name} onChange={(e) => setNewService({ ...newService, name: e.target.value })} placeholder="Example: Soft binding" /><input maxLength={125} value={newService.description} onChange={(e) => setNewService({ ...newService, description: e.target.value })} placeholder="Description (125 characters)" /><label className="service-price-field">Price (₹)<input type="number" min="0" step=".01" value={newService.price} onChange={(e) => setNewService({ ...newService, price: Math.max(0, Number(e.target.value)) })} /></label><label><input type="checkbox" checked={newService.isBinding} onChange={(e) => setNewService({ ...newService, isBinding: e.target.checked })} /> Request page instructions and WhatsApp</label><button onClick={addPrintService}>Add service</button></div>
-              <div className="service-chips">{printServices.map((service) => <span key={service.id}><b>{service.name} · {inr.format(service.price_paise / 100)}</b><small>{service.description}</small>{!["document-printing", "document-binding"].includes(service.id) && <button onClick={() => removePrintService(service.id)}>Remove</button>}</span>)}</div>
+              <label className="packaging-count-toggle"><input type="checkbox" checked={newService.countsForPackaging} onChange={(e) => setNewService({ ...newService, countsForPackaging: e.target.checked })} /> Count this service's pages for packaging charges</label>
+              <div className="service-chips">{printServices.map((service) => <span key={service.id}><b>{service.name} · {inr.format(service.price_paise / 100)}</b><small>{service.description}</small><small>{service.counts_for_packaging ? "Printed pages count toward packaging" : "Pages excluded from packaging"}</small><button onClick={() => setNewService({ id: service.id, name: service.name, description: service.description, isBinding: Boolean(service.is_binding), countsForPackaging: Boolean(service.counts_for_packaging), price: service.price_paise / 100 })}>Edit</button>{!["document-printing", "document-binding"].includes(service.id) && <button onClick={() => removePrintService(service.id)}>Remove</button>}</span>)}</div>
             </div>
             <div className="service-admin packaging-admin">
               <h3>Packaging charges by printed pages</h3>
