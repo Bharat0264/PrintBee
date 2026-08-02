@@ -7,7 +7,7 @@ const appSource = await readFile(new URL("../app/PrintBeeApp.tsx", import.meta.u
 
 test("admin receives order contact, payment, and document details", () => {
   assert.match(dashboardApi, /customer_email, customer_name, mobile_number/);
-  assert.match(dashboardApi, /payment_status!='PAID'/);
+  assert.match(dashboardApi, /payment_status='PAID'/);
   assert.match(dashboardApi, /JSON\.parse\(order\.items_json\)/);
   assert.match(appSource, /order\.mobile_number/);
   assert.match(appSource, /order\.items\?\.length/);
