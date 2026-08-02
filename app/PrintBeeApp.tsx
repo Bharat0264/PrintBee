@@ -28,7 +28,8 @@ const inr = new Intl.NumberFormat("en-IN", {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
 });
-const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
+const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
+const IMAGE_EXTENSIONS = /\.(avif|bmp|gif|heic|heif|jpe?g|png|tiff?|webp)$/i;
 
 type Viewer = { email: string; isAdmin: boolean } | null;
 type LocationOption = { id: string; name: string; delivery_fee_paise?: number; platform_fee_paise?: number };
@@ -244,7 +245,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
       event.target.value = "";
       setFileName("");
       setSelectedFile(null);
-      setUploadError(`"${file.name}" is too large. Please upload a PDF or image smaller than 25 MB.`);
+      setUploadError(`"${file.name}" is too large. Please upload a PDF or image smaller than 50 MB.`);
       return;
     }
     setFileName(file.name);
@@ -256,11 +257,11 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
         const pdf = await PDFDocument.load(await file.arrayBuffer(), { ignoreEncryption: true });
         setPages(pdf.getPageCount());
         setFileType("PDF");
-      } else if (file.type.startsWith("image/")) {
+      } else if (file.type.startsWith("image/") || IMAGE_EXTENSIONS.test(file.name)) {
         setPages(1);
         setFileType("IMAGE");
       } else {
-        throw new Error("Please choose a PDF, JPG, PNG or WEBP file.");
+        throw new Error("Please choose a PDF or image file.");
       }
     } catch (error) {
       setFileName("");
@@ -274,7 +275,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   const addToCart = async () => {
     if (!viewer) return setLoginOpen(true);
     if (!fileName || !selectedFile || countingPages) return;
-    if (selectedFile.size > MAX_UPLOAD_BYTES) return setUploadError("This file is larger than the 25 MB upload limit.");
+    if (selectedFile.size > MAX_UPLOAD_BYTES) return setUploadError("This file is larger than the 50 MB upload limit.");
     setCountingPages(true);
     setUploadError("");
     const form = new FormData();
@@ -287,7 +288,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
       try {
         uploaded = responseText ? JSON.parse(responseText) : {};
       } catch {
-        uploaded = { error: uploadResponse.status === 413 || responseText.toLowerCase().includes("payload too large") ? "This document is too large to upload. Please compress it below 25 MB and try again." : "The upload service returned an unexpected response. Please try again." };
+        uploaded = { error: uploadResponse.status === 413 || responseText.toLowerCase().includes("payload too large") ? "This document is too large to upload. Please compress it below 50 MB and try again." : "The upload service returned an unexpected response. Please try again." };
       }
       if (!uploadResponse.ok || !uploaded.uploadId) return setUploadError(uploaded.error ?? "Document upload failed. Please try again.");
     } catch {
@@ -964,7 +965,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
           </div>
 
           <label className={`upload-zone ${fileName ? "has-file" : ""}`}>
-            <input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" onChange={handleFile} />
+            <input type="file" accept="application/pdf,image/*,.heic,.heif,.tif,.tiff,.avif,.bmp" onChange={handleFile} />
             <span className="upload-icon">{countingPages ? "…" : fileName ? "✓" : "↑"}</span>
             <strong>{fileName || "Choose a document"}</strong>
             <small>{countingPages ? "Counting pages…" : fileName ? `${pages} ${pages === 1 ? "page" : "pages"} detected` : "or drag and drop it here"}</small>
