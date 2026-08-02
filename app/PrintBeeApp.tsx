@@ -17,11 +17,13 @@ const defaultPrices: Prices = {
 
 const options: Array<{ id: PrintMode; title: string; note: string; icon: string }> = [
   { id: "bw-single", title: "B&W · Single side", note: "One printed side per A4 sheet", icon: "◐" },
-  { id: "bw-double", title: "B&W · Double side", note: "Print on both sides of A4", icon: "◑" },
   { id: "colour-single", title: "Colour · Single side", note: "Full colour on one side", icon: "●" },
-  { id: "colour-double", title: "Colour · Double side", note: "Full colour on both sides", icon: "◒" },
 ];
 const singleSideOptions = options.filter((item) => item.id.endsWith("single"));
+
+function printModeLabel(mode?: string) {
+  return mode?.startsWith("colour") ? "Colour · Single side" : "B&W · Single side";
+}
 
 const inr = new Intl.NumberFormat("en-IN", {
   style: "currency",
@@ -1140,11 +1142,11 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
           <>
             <div className="cart-items">
               {cart.map((item) => {
-                const itemOption = options.find((option) => option.id === item.mode)!;
+                const itemOption = options.find((option) => option.id === item.mode);
                 return (
                   <article className="cart-item" key={item.id}>
                     <div className="file-badge">{item.fileType === "PDF" ? "PDF" : "IMG"}</div>
-                    <div className="cart-file"><h3>{item.fileName}</h3><p>{item.serviceName} · {item.pages} {item.pages === 1 ? "page" : "pages"} · A4 · {itemOption.title} · {item.copies} {item.copies === 1 ? "copy" : "copies"}</p>{item.colourPageNumbers !== undefined && <p>Colour pages: {item.colourPageNumbers} · Remaining {item.pages - (item.colourPages ?? 0)} pages B&amp;W</p>}{item.printInstructions && <p>{item.printInstructions}{item.whatsappNumber ? ` · WhatsApp ${item.whatsappNumber}` : ""}</p>}<small>{item.colourPageNumbers !== undefined ? `${item.pages - (item.colourPages ?? 0)} B&W + ${item.colourPages ?? 0} colour × ${item.copies}` : `${item.pages} × ${item.copies} × ${inr.format(item.unitPrice)}`}{item.servicePrice > 0 ? ` + ${inr.format(item.servicePrice)} service charge` : ""}</small></div>
+                    <div className="cart-file"><h3>{item.fileName}</h3><p>{item.serviceName} · {item.pages} {item.pages === 1 ? "page" : "pages"} · A4 · {itemOption?.title ?? printModeLabel(item.mode)} · {item.copies} {item.copies === 1 ? "copy" : "copies"}</p>{item.colourPageNumbers !== undefined && <p>Colour pages: {item.colourPageNumbers} · Remaining {item.pages - (item.colourPages ?? 0)} pages B&amp;W</p>}{item.printInstructions && <p>{item.printInstructions}{item.whatsappNumber ? ` · WhatsApp ${item.whatsappNumber}` : ""}</p>}<small>{item.colourPageNumbers !== undefined ? `${item.pages - (item.colourPages ?? 0)} B&W + ${item.colourPages ?? 0} colour × ${item.copies}` : `${item.pages} × ${item.copies} × ${inr.format(item.unitPrice)}`}{item.servicePrice > 0 ? ` + ${inr.format(item.servicePrice)} service charge` : ""}</small></div>
                     <strong>{inr.format(item.total)}</strong>
                     <button className="remove-item" onClick={() => setCart((items) => items.filter((current) => current.id !== item.id))} aria-label={`Remove ${item.fileName}`}>×</button>
                   </article>
@@ -1340,11 +1342,11 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                     {order.status === "CANCELLED" && <div className="cancelled-note"><strong>Cancelled</strong><small>{order.cancellation_reason}</small></div>}
                     <div className="document-details">
                       <strong>Documents</strong>
-                      {(() => { const total = printSummary(order.items); return <div className="print-summary"><span>B&amp;W single: {total.bwSingle} pages</span><span>B&amp;W double: {total.bwDouble} pages</span><span>Colour single: {total.colourSingle} pages</span><span>Colour double: {total.colourDouble} pages</span></div>; })()}
+                      {(() => { const total = printSummary(order.items); return <div className="print-summary"><span>B&amp;W: {total.bwSingle + total.bwDouble} pages</span><span>Colour: {total.colourSingle + total.colourDouble} pages</span></div>; })()}
                       {order.items?.length ? order.items.map((item: any, index: number) => (
                         <div key={`${item.uploadId ?? item.fileName}-${index}`}>
                           <span>{item.fileName ?? `Document ${index + 1}`}</span>
-                          <small>Doc {index + 1}: {item.pages ?? 1} pages · {item.copies ?? 1} copies · {options.find((option) => option.id === item.mode)?.title ?? item.mode ?? "A4 print"}{item.serviceName ? ` · ${item.serviceName}` : ""}</small>
+                          <small>Doc {index + 1}: {item.pages ?? 1} pages · {item.copies ?? 1} copies · {printModeLabel(item.mode)}{item.serviceName ? ` · ${item.serviceName}` : ""}</small>
                           {item.colourPageNumbers !== undefined && <small><b>Colour pages:</b> {item.colourPageNumbers} · all remaining pages B&amp;W</small>}
                           {item.printInstructions && <small><b>Instructions:</b> {item.printInstructions} · WhatsApp {item.whatsappNumber}</small>}
                         </div>
