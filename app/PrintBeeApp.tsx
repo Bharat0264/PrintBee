@@ -29,7 +29,36 @@ const inr = new Intl.NumberFormat("en-IN", {
   maximumFractionDigits: 2,
 });
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
+const HOSTED_IMAGE_TARGET_BYTES = 700 * 1024;
 const IMAGE_EXTENSIONS = /\.(avif|bmp|gif|heic|heif|jpe?g|png|tiff?|webp)$/i;
+
+async function optimizeImageForUpload(file: File) {
+  if (!(file.type.startsWith("image/") || IMAGE_EXTENSIONS.test(file.name)) || file.size <= HOSTED_IMAGE_TARGET_BYTES) return file;
+  const bitmap = await createImageBitmap(file);
+  try {
+    const maxSide = 5000;
+    const initialScale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
+    let width = Math.max(1, Math.round(bitmap.width * initialScale));
+    let height = Math.max(1, Math.round(bitmap.height * initialScale));
+    let blob: Blob | null = null;
+    for (const quality of [0.92, 0.84, 0.76, 0.68]) {
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const context = canvas.getContext("2d");
+      if (!context) throw new Error("This image could not be prepared for upload.");
+      context.drawImage(bitmap, 0, 0, width, height);
+      blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/webp", quality));
+      if (blob && blob.size <= HOSTED_IMAGE_TARGET_BYTES) break;
+      width = Math.max(1, Math.round(width * 0.82));
+      height = Math.max(1, Math.round(height * 0.82));
+    }
+    if (!blob) throw new Error("This image could not be prepared for upload.");
+    return new File([blob], file.name.replace(/\.[^.]+$/, "") + ".webp", { type: "image/webp", lastModified: file.lastModified });
+  } finally {
+    bitmap.close();
+  }
+}
 
 type Viewer = { email: string; isAdmin: boolean } | null;
 type LocationOption = { id: string; name: string; delivery_fee_paise?: number; platform_fee_paise?: number };
@@ -278,8 +307,15 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
     if (selectedFile.size > MAX_UPLOAD_BYTES) return setUploadError("This file is larger than the 50 MB upload limit.");
     setCountingPages(true);
     setUploadError("");
+    let uploadFile = selectedFile;
+    try {
+      uploadFile = await optimizeImageForUpload(selectedFile);
+    } catch {
+      setCountingPages(false);
+      return setUploadError("This image could not be optimized for upload. Please save it as JPG or WebP and try again.");
+    }
     const form = new FormData();
-    form.append("file", selectedFile);
+    form.append("file", uploadFile);
     form.append("pageCount", String(pages));
     let uploaded: any;
     try {

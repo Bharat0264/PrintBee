@@ -16,3 +16,10 @@ test("accepts PDFs and browser-recognized images up to 50 MB", () => {
 test("continues to reject non-printable file types", () => {
   assert.match(uploadSource, /file\.type === "application\/pdf" \|\| file\.type\.startsWith\("image\/"\)/);
 });
+
+test("optimizes hosted image uploads below the request-layer threshold", () => {
+  assert.match(appSource, /HOSTED_IMAGE_TARGET_BYTES = 700 \* 1024/);
+  assert.match(appSource, /optimizeImageForUpload/);
+  assert.match(appSource, /canvas\.toBlob\(resolve, "image\/webp"/);
+  assert.match(appSource, /form\.append\("file", uploadFile\)/);
+});
