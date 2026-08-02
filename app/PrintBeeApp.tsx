@@ -79,6 +79,8 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   const [adminOpen, setAdminOpen] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
   const [authMessage, setAuthMessage] = useState("");
+  const [reviewerEmail, setReviewerEmail] = useState("");
+  const [reviewerPassword, setReviewerPassword] = useState("");
   const [role, setRole] = useState<string | null>(viewer?.isAdmin ? "ADMIN" : null);
   const [approvalStatus, setApprovalStatus] = useState<string | null>(null);
   const [loginMode, setLoginMode] = useState<"CUSTOMER" | "PARTNER">("CUSTOMER");
@@ -344,6 +346,16 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
       provider: "google",
       options: { redirectTo: `${window.location.origin}/auth/callback` },
     });
+  };
+
+  const signInWithPassword = async () => {
+    setAuthMessage("");
+    if (!supabase) return setAuthMessage("Authentication is awaiting configuration.");
+    if (!reviewerEmail.trim() || !reviewerPassword) return setAuthMessage("Enter the reviewer email and password.");
+    window.localStorage.setItem("printbee-login-mode", "CUSTOMER");
+    const { error } = await supabase.auth.signInWithPassword({ email: reviewerEmail.trim(), password: reviewerPassword });
+    if (error) return setAuthMessage("The email or password is incorrect.");
+    window.location.reload();
   };
 
   const signOut = async () => {
@@ -1028,6 +1040,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
 
       <footer>
         <div className="footer-brand"><img src="/printbee-logo.png" width={86} height={86} alt="" /><div><strong>Print<span>Bee</span></strong><p>Upload. Print. Delivered.</p></div></div>
+        <nav className="footer-policy-links" aria-label="Policies"><a href="/terms">Terms</a><a href="/privacy-policy">Privacy</a><a href="/shipping-policy">Shipping</a><a href="/cancellation-refunds">Cancellation &amp; Refunds</a><a href="/contact">Contact</a></nav>
         <p>© 2026 PrintBee · Local A4 printing made easy.</p>
       </footer>
 
@@ -1286,9 +1299,13 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
             <p>Choose how you want to use PrintBee. The same Google email can be used in both modes.</p>
             <button className="google-button" onClick={() => signInWithGoogle("CUSTOMER")}><span>G</span> Login with Google as user</button>
             <button className="partner-button" onClick={() => signInWithGoogle("PARTNER")}><span>G</span> Login with Google as delivery partner</button>
+            <div className="reviewer-login-divider"><span>Website reviewer access</span></div>
+            <label className="checkout-field">Email<input type="email" autoComplete="username" value={reviewerEmail} onChange={(e) => setReviewerEmail(e.target.value)} /></label>
+            <label className="checkout-field">Password<input type="password" autoComplete="current-password" value={reviewerPassword} onChange={(e) => setReviewerPassword(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") signInWithPassword(); }} /></label>
+            <button className="save-button" onClick={signInWithPassword}>Sign in with email</button>
             {approvalStatus === "PENDING" && <p className="auth-message">Your delivery partner application is awaiting admin verification.</p>}
             {authMessage && <p className="auth-message">{authMessage}</p>}
-            <small>By continuing, you agree to PrintBee’s terms and privacy policy.</small>
+            <small>By continuing, you agree to PrintBee's <a href="/terms">terms</a> and <a href="/privacy-policy">privacy policy</a>.</small>
           </section>
         </div>
       )}
