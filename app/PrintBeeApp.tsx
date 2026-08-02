@@ -47,7 +47,22 @@ function parsePageNumbers(value: string, totalPages: number) {
     if (start < 1 || end < start || end > totalPages) { invalid.push(part); continue; }
     for (let page = start; page <= end; page += 1) pageNumbers.add(page);
   }
-  return { count: pageNumbers.size, invalid };
+  return { count: pageNumbers.size, invalid, pages: [...pageNumbers].sort((a, b) => a - b) };
+}
+
+function formatPageRanges(pageNumbers: number[]) {
+  if (!pageNumbers.length) return "NA";
+  const ranges: string[] = [];
+  let start = pageNumbers[0];
+  let end = start;
+  for (const page of pageNumbers.slice(1)) {
+    if (page === end + 1) { end = page; continue; }
+    ranges.push(start === end ? String(start) : `${start}-${end}`);
+    start = page;
+    end = page;
+  }
+  ranges.push(start === end ? String(start) : `${start}-${end}`);
+  return ranges.join(", ");
 }
 
 async function optimizeImageForUpload(file: File) {
@@ -121,6 +136,7 @@ type CartItem = {
   printInstructions?: string;
   colourPages?: number;
   colourPageNumbers?: string;
+  bwPageNumbers?: string;
   whatsappNumber?: string;
 };
 
@@ -303,6 +319,13 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   const colourPageResult = useMemo(() => parsePageNumbers(colourPageNumbers, pages), [colourPageNumbers, pages]);
   const colourPageCount = colourChoice === "colour" ? pages : colourChoice === "mixed" ? colourPageResult.count : 0;
   const bwPageCount = pages - colourPageCount;
+  const bwPageNumbers = useMemo(() => {
+    if (colourChoice === "bw") return formatPageRanges(Array.from({ length: pages }, (_, index) => index + 1));
+    if (colourChoice === "colour") return "NA";
+    if (colourChoice !== "mixed" || colourPageResult.invalid.length) return "";
+    const colourSet = new Set(colourPageResult.pages);
+    return formatPageRanges(Array.from({ length: pages }, (_, index) => index + 1).filter((page) => !colourSet.has(page)));
+  }, [colourChoice, colourPageResult, pages]);
   const side = "single";
   const mixedPrintTotal = (bwPageCount * prices[`bw-${side}`] + colourPageCount * prices[`colour-${side}`]) * copies;
   const total = usesMixedPagePricing ? mixedPrintTotal + servicePrice : pages * copies * prices[mode] + servicePrice;
@@ -396,6 +419,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
         printInstructions: printInstructions.trim(),
         colourPages: usesMixedPagePricing ? colourPageCount : undefined,
         colourPageNumbers: usesMixedPagePricing ? (colourChoice === "bw" ? "NA" : colourChoice === "colour" ? "All pages" : colourPageNumbers.trim()) : undefined,
+        bwPageNumbers: usesMixedPagePricing ? bwPageNumbers : undefined,
         whatsappNumber: whatsappNumber.replace(/\D/g, ""),
       },
     ]);
@@ -1103,6 +1127,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
               </div>
               {colourChoice === "mixed" && <label>Colour page numbers<input value={colourPageNumbers} onChange={(e) => { setColourPageNumbers(e.target.value); setUploadError(""); }} placeholder="Example: 1-4, 12, 18-20" /></label>}
               {colourChoice === "mixed" && colourPageNumbers.trim() && colourPageResult.invalid.length > 0 && <small className="upload-error">Check: {colourPageResult.invalid.join(", ")}. Pages must be between 1 and {pages}.</small>}
+              {colourChoice === "mixed" && colourPagesValid && <div className="payment-instruction" role="status"><strong>Automatic page assignment</strong><span>Colour: {formatPageRanges(colourPageResult.pages)}</span><span>B&amp;W: {bwPageNumbers}</span><span>The remaining pages are automatically priced as B&amp;W.</span></div>}
             </div>
           )}
 
@@ -1140,7 +1165,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                 return (
                   <article className="cart-item" key={item.id}>
                     <div className="file-badge">{item.fileType === "PDF" ? "PDF" : "IMG"}</div>
-                    <div className="cart-file"><h3>{item.fileName}</h3><p>{item.serviceName} · {item.pages} {item.pages === 1 ? "page" : "pages"} · A4 · {itemOption?.title ?? printModeLabel(item.mode)} · {item.copies} {item.copies === 1 ? "copy" : "copies"}</p>{item.colourPageNumbers !== undefined && <p>Colour pages: {item.colourPageNumbers} · Remaining {item.pages - (item.colourPages ?? 0)} pages B&amp;W</p>}{item.printInstructions && <p>{item.printInstructions}{item.whatsappNumber ? ` · WhatsApp ${item.whatsappNumber}` : ""}</p>}<small>{item.colourPageNumbers !== undefined ? `${item.pages - (item.colourPages ?? 0)} B&W + ${item.colourPages ?? 0} colour × ${item.copies}` : `${item.pages} × ${item.copies} × ${inr.format(item.unitPrice)}`}{item.servicePrice > 0 ? ` + ${inr.format(item.servicePrice)} service charge` : ""}</small></div>
+                    <div className="cart-file"><h3>{item.fileName}</h3><p>{item.serviceName} · {item.pages} {item.pages === 1 ? "page" : "pages"} · A4 · {itemOption?.title ?? printModeLabel(item.mode)} · {item.copies} {item.copies === 1 ? "copy" : "copies"}</p>{item.colourPageNumbers !== undefined && <p>Colour pages: {item.colourPageNumbers} · B&amp;W pages: {item.bwPageNumbers ?? `remaining ${item.pages - (item.colourPages ?? 0)} pages`}</p>}{item.printInstructions && <p>{item.printInstructions}{item.whatsappNumber ? ` · WhatsApp ${item.whatsappNumber}` : ""}</p>}<small>{item.colourPageNumbers !== undefined ? `${item.pages - (item.colourPages ?? 0)} B&W + ${item.colourPages ?? 0} colour × ${item.copies}` : `${item.pages} × ${item.copies} × ${inr.format(item.unitPrice)}`}{item.servicePrice > 0 ? ` + ${inr.format(item.servicePrice)} service charge` : ""}</small></div>
                     <strong>{inr.format(item.total)}</strong>
                     <button className="remove-item" onClick={() => setCart((items) => items.filter((current) => current.id !== item.id))} aria-label={`Remove ${item.fileName}`}>×</button>
                   </article>
@@ -1342,6 +1367,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                           <span>{item.fileName ?? `Document ${index + 1}`}</span>
                           <small>Doc {index + 1}: {item.pages ?? 1} pages · {item.copies ?? 1} copies · {printModeLabel(item.mode)}{item.serviceName ? ` · ${item.serviceName}` : ""}</small>
                           {item.colourPageNumbers !== undefined && <small><b>Colour pages:</b> {item.colourPageNumbers} · all remaining pages B&amp;W</small>}
+                          {item.bwPageNumbers && <small><b>B&amp;W pages:</b> {item.bwPageNumbers}</small>}
                           {item.printInstructions && <small><b>Instructions:</b> {item.printInstructions} · WhatsApp {item.whatsappNumber}</small>}
                         </div>
                       )) : <small>No document details saved for this legacy order.</small>}
