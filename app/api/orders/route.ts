@@ -32,8 +32,8 @@ export async function POST(request: Request) {
   const sequence = await db.prepare("UPDATE order_sequences SET next_value=next_value+1 WHERE id='orders' RETURNING next_value-1 number").first<{ number: number }>();
   if (!sequence) return NextResponse.json({ error: "Order numbering is temporarily unavailable" }, { status: 503 });
   const orderNumber = `PB${String(sequence.number).padStart(3, "0")}`;
-  await db.prepare(`INSERT INTO orders (id, order_number, customer_email, customer_name, mobile_number, location_id, location_name, items_json, printing_subtotal_paise, delivery_fee_paise, platform_fee_paise, total_paise, delivery_code_hash, delivery_code_encrypted, status, payment_status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'CONFIRMED', 'PAY_ON_DELIVERY', ?)`)
+  await db.prepare(`INSERT INTO orders (id, order_number, customer_email, customer_name, mobile_number, location_id, location_name, items_json, printing_subtotal_paise, delivery_fee_paise, platform_fee_paise, total_paise, delivery_code_hash, delivery_code_encrypted, status, payment_status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PAYMENT_PENDING', 'PENDING', ?)`)
     .bind(id, orderNumber, viewer.email, name, mobile, location.id, location.name, JSON.stringify(body.items), printingSubtotalPaise, deliveryFeePaise, platformFeePaise, totalPaise, hash, encryptedCode, new Date().toISOString()).run();
   await db.batch(uploadIds.map((uploadId) => db.prepare("UPDATE uploads SET order_id=? WHERE id=?").bind(id, uploadId)));
-  return NextResponse.json({ id, orderNumber, deliveryCode, locationName: location.name, totalPaise, paymentMode: "PAY_ON_DELIVERY" });
+  return NextResponse.json({ id, orderNumber, deliveryCode, locationName: location.name, totalPaise, paymentMode: "RAZORPAY" });
 }

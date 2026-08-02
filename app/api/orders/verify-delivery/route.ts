@@ -15,6 +15,7 @@ export async function POST(request: Request) {
   if (!order) return NextResponse.json({ error: "Order not found" }, { status: 404 });
   if (order.status === "DELIVERED") return NextResponse.json({ error: "Order is already delivered" }, { status: 409 });
   if (order.status !== "RIDER_ASSIGNED") return NextResponse.json({ error: "Order must be assigned to a rider before delivery" }, { status: 400 });
+  if (order.payment_status !== "PAID") return NextResponse.json({ error: "Payment must be verified before delivery" }, { status: 400 });
   if (!viewer.isAdmin && order.rider_email !== viewer.email) return NextResponse.json({ error: "This order is assigned to another rider" }, { status: 403 });
   const candidate = await hashDeliveryCode(order.id, code?.trim() ?? "");
   if (candidate !== order.delivery_code_hash) return NextResponse.json({ error: "Delivery code does not match" }, { status: 400 });

@@ -34,6 +34,7 @@ type Viewer = { email: string; isAdmin: boolean } | null;
 type LocationOption = { id: string; name: string; delivery_fee_paise?: number; platform_fee_paise?: number };
 type PrintService = { id: string; name: string; description: string; active: number; is_binding: number; price_paise: number };
 type SupabaseConfig = { url: string; anonKey: string } | null;
+type RazorpayResult = { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string };
 
 function printSummary(items: any[] = []) {
   const totals = { bwSingle: 0, bwDouble: 0, colourSingle: 0, colourDouble: 0 };
@@ -91,6 +92,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   const [locationId, setLocationId] = useState("");
   const [orderError, setOrderError] = useState("");
   const [orderResult, setOrderResult] = useState<{ id: string; orderNumber: string; deliveryCode: string; locationName: string; totalPaise: number; paid: boolean; paymentMode?: string } | null>(null);
+  const [paymentProcessing, setPaymentProcessing] = useState(false);
   const [newLocation, setNewLocation] = useState("");
   const [agentEmail, setAgentEmail] = useState("");
   const [adminMessage, setAdminMessage] = useState("");
@@ -396,6 +398,51 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
     const pendingResult = { ...data, paid: false };
     setOrderResult(pendingResult);
     window.setTimeout(checkCustomerNotifications, 500);
+  };
+
+  const startRazorpayPayment = async (order: { id: string; orderNumber?: string; totalPaise?: number }) => {
+    setOrderError("");
+    setPaymentProcessing(true);
+    try {
+      if (!document.querySelector('script[src="https://checkout.razorpay.com/v1/checkout.js"]')) {
+        await new Promise<void>((resolve, reject) => {
+          const script = document.createElement("script");
+          script.src = "https://checkout.razorpay.com/v1/checkout.js";
+          script.onload = () => resolve();
+          script.onerror = () => reject(new Error("Checkout failed to load"));
+          document.head.appendChild(script);
+        });
+      }
+      const createResponse = await fetch("/api/payments/razorpay/create", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ orderId: order.id }) });
+      const paymentOrder = await createResponse.json();
+      if (!createResponse.ok) throw new Error(paymentOrder.error ?? "Payment could not be started");
+      const RazorpayCheckout = (window as unknown as { Razorpay?: new (options: Record<string, unknown>) => { open(): void } }).Razorpay;
+      if (!RazorpayCheckout) throw new Error("Razorpay Checkout is unavailable");
+      const checkout = new RazorpayCheckout({
+        key: paymentOrder.keyId,
+        amount: paymentOrder.amount,
+        currency: paymentOrder.currency,
+        name: "PrintBee",
+        description: `Payment for ${paymentOrder.orderNumber}`,
+        order_id: paymentOrder.razorpayOrderId,
+        prefill: { name: customerName, email: viewer?.email, contact: mobileNumber },
+        theme: { color: "#e0ad00" },
+        handler: async (result: RazorpayResult) => {
+          const verifyResponse = await fetch("/api/payments/razorpay/verify", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ orderId: order.id, ...result }) });
+          const verified = await verifyResponse.json();
+          if (!verifyResponse.ok) return setOrderError(verified.error ?? "Payment verification failed");
+          setOrderResult((current) => current?.id === order.id ? { ...current, paid: true } : current);
+          await sendOrderNotification("Payment successful", `${paymentOrder.orderNumber} was paid and verified.`, `${order.id}-paid`);
+          await checkCustomerNotifications();
+        },
+        modal: { ondismiss: () => setPaymentProcessing(false) },
+      });
+      checkout.open();
+    } catch (error) {
+      setOrderError(error instanceof Error ? error.message : "Payment could not be started");
+    } finally {
+      setPaymentProcessing(false);
+    }
   };
 
   const openMyOrders = async () => {
@@ -967,8 +1014,8 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
           </div>
           <p className="estimate-note">{pages} pages × {copies} {copies === 1 ? "copy" : "copies"} × {inr.format(prices[mode])} · {selected.title}{servicePrice > 0 ? ` + ${inr.format(servicePrice)} ${selectedService?.name} charge` : ""}</p>
           <div className="payment-instruction" role="note">
-            <strong>No prepaid payment</strong>
-            <span>Pay online using your order’s scanner or scan and pay when the delivery partner arrives.</span>
+            <strong>Secure Razorpay payment</strong>
+            <span>Create your order, then pay online through Razorpay before printing begins.</span>
           </div>
         </section>
       </section>
@@ -1164,7 +1211,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                     <strong>{inr.format(order.total_paise / 100)}</strong>
                     <div className="payment-review-details"><span><small>Payment method</small><strong>{order.payment_status === "PAY_ON_DELIVERY" ? "Pay on delivery" : order.payment_reference || order.payment_status}</strong></span><span><small>Amount to collect</small><strong>{inr.format(order.total_paise / 100)}</strong></span></div>
                     {order.payment_status === "PAID" && order.payment_verified_at && <div className="payment-cleared-note"><strong>Payment received and verified</strong><small>Verified {new Date(order.payment_verified_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })} by {order.payment_verified_by}. Scanner deleted from admin, customer and delivery-partner views.</small></div>}
-                    {!["DELIVERED", "CANCELLED"].includes(order.status) && <div className="admin-payment-qr"><label>{order.has_payment_qr ? "Replace order payment scanner" : "Add order payment scanner"}<input type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => uploadPaymentQr(order.id, e.target.files?.[0])} /></label>{Boolean(order.has_payment_qr) && <img src={`/api/orders/${order.id}/payment-qr`} alt={`Payment scanner for ${order.order_number}`} />}</div>}
+                    {Boolean(order.has_payment_qr) && <div className="admin-payment-qr"><strong>Legacy payment scanner</strong><img src={`/api/orders/${order.id}/payment-qr`} alt={`Payment scanner for ${order.order_number}`} /></div>}
                     {order.payment_status === "PAY_ON_DELIVERY" && order.status !== "CANCELLED" && <div className="payment-review-actions"><button className="mini-action" onClick={() => reviewPayment(order.id, "APPROVE")}>Payment received & verified</button></div>}
                     {order.payment_status === "PENDING" && order.status !== "CANCELLED" && <div className="payment-review-actions"><button className="mini-action" disabled={!order.payment_reference} onClick={() => reviewPayment(order.id, "APPROVE")}>Payment verified</button><button onClick={() => reviewPayment(order.id, "REJECT", "REFERENCE")}>Wrong payment ID</button><button onClick={() => reviewPayment(order.id, "REJECT", "AMOUNT")}>Wrong amount</button><button onClick={() => reviewPayment(order.id, "REJECT", "BOTH")}>Both mismatch</button></div>}
                     {order.payment_rejection_reason && <div className="cancelled-note"><strong>Payment rejected</strong><small>{order.payment_rejection_reason}</small></div>}
@@ -1218,9 +1265,10 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
               <div className="order-success">
                 <span>✓</span><h2>Order placed</h2>
                 <p>Order <strong>{orderResult.orderNumber}</strong> · {orderResult.locationName}</p>
-                <div className="payment-pending"><small>Payment method</small><strong>{orderResult.paymentMode === "PAY_ON_DELIVERY" ? "PAY ON DELIVERY" : orderResult.paid ? "PAID" : "PENDING"}</strong></div>
+                <div className="payment-pending"><small>Payment status</small><strong>{orderResult.paid ? "PAID" : "PAYMENT REQUIRED"}</strong></div>
                 <div><small>Your delivery code</small><strong>{orderResult.deliveryCode}</strong></div>
-                <p>{orderResult.paymentMode === "PAY_ON_DELIVERY" ? `No prepaid payment is required. Pay exactly ${inr.format(orderResult.totalPaise / 100)} using the order scanner shown in My orders or by your delivery partner, then share the OTP only after receiving your prints.` : orderResult.paid ? "Give this code to the delivery agent only after receiving your prints." : `Pay exactly ${inr.format(orderResult.totalPaise / 100)} using the PrintBee payment link. Use ${orderResult.orderNumber} as the payment note.`}</p>
+                <p>{orderResult.paid ? "Payment verified. Give this code to the delivery agent only after receiving your prints." : `Pay ${inr.format(orderResult.totalPaise / 100)} securely through Razorpay so printing can begin.`}</p>
+                {!orderResult.paid && <button className="save-button" disabled={paymentProcessing} onClick={() => startRazorpayPayment(orderResult)}>{paymentProcessing ? "Starting payment..." : `Pay ${inr.format(orderResult.totalPaise / 100)} now`}</button>}
                 {orderError && <p className="panel-message">{orderError}</p>}
                 <button className="save-button" onClick={() => { setCheckoutOpen(false); setOrderResult(null); }}>Done</button>
               </div>
@@ -1235,9 +1283,9 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                 {!locations.length && <p className="panel-message">No delivery locations are available yet. The admin must add one first.</p>}
                 <div className="fee-breakdown"><div><span>Printing subtotal</span><strong>{inr.format(cartPrintingTotal)}</strong></div>{cartServiceCharges > 0 && <div className="binding-charge-row"><span>Binding charges</span><strong>{inr.format(cartServiceCharges)}</strong></div>}<div><span>Delivery fee</span><strong>{inr.format(checkoutDeliveryFee)}</strong></div><div><span>Platform fee</span><strong>{inr.format(checkoutPlatformFee)}</strong></div></div>
                 <div className="checkout-total"><span>To pay</span><strong>{inr.format(cartTotal + checkoutDeliveryFee + checkoutPlatformFee)}</strong></div>
-                <div className="pay-on-delivery-note"><strong>Pay on delivery:</strong> No prepaid payment is required. Your order scanner will appear in My orders after the admin adds it, and your delivery partner can also show it at your doorstep.</div>
+                <div className="pay-on-delivery-note"><strong>Secure online payment:</strong> After creating the order, complete payment through Razorpay. Printing begins only after verified payment.</div>
                 {orderError && <p className="form-error">{orderError}</p>}
-                <button className="save-button" disabled={!locations.length} onClick={placeOrder}>Place pay-on-delivery order</button>
+                <button className="save-button" disabled={!locations.length} onClick={placeOrder}>Create order &amp; continue to payment</button>
               </>
             )}
           </section>
@@ -1277,6 +1325,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
           <section className="orders-modal" role="dialog" aria-modal="true" onMouseDown={(e) => e.stopPropagation()}>
             <button className="close" onClick={() => setMyOrdersOpen(false)} aria-label="Close">×</button>
             <div className="admin-badge">CUSTOMER</div><h2>My orders</h2>
+            {myOrders.some((order) => order.payment_status === "PENDING" && order.status !== "CANCELLED") && <div className="customer-error"><strong>Payment required</strong><p>Complete payment before PrintBee starts printing.</p>{myOrders.filter((order) => order.payment_status === "PENDING" && order.status !== "CANCELLED").map((order) => <button className="save-button" key={order.id} disabled={paymentProcessing} onClick={() => startRazorpayPayment(order)}>Pay {inr.format(order.total_paise / 100)} for {order.order_number}</button>)}</div>}
             {myOrders.length ? myOrders.map((order) => <article key={order.id}><div><strong>{order.order_number}</strong><small>{order.location_name} · {new Date(order.created_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}</small>{order.cancellation_reason && <small>Cancelled: {order.cancellation_reason}</small>}</div><span className="status-chip">{order.payment_status === "PAY_ON_DELIVERY" ? "PAY ON DELIVERY" : order.payment_status} · {order.status}</span><strong>{inr.format(order.total_paise / 100)}</strong><div className="order-progress"><span className="done">Order confirmed</span><span className={["PRINTING", "READY_FOR_PICKUP", "RIDER_ASSIGNED", "DELIVERED"].includes(order.status) ? "done" : ""}>Printing</span><span className={["READY_FOR_PICKUP", "RIDER_ASSIGNED", "DELIVERED"].includes(order.status) ? "done" : ""}>Ready</span><span className={["RIDER_ASSIGNED", "DELIVERED"].includes(order.status) ? "done" : ""}>Rider assigned</span><span className={order.payment_status === "PAID" ? "done" : "current"}>{order.payment_status === "PAID" ? "Payment received" : "Pay on delivery"}</span><span className={order.status === "DELIVERED" ? "done" : ""}>Delivered</span></div>{order.payment_rejection_reason && <div className="customer-error">{order.payment_rejection_reason}</div>}{Boolean(order.has_payment_qr) && order.status !== "DELIVERED" && <div className="customer-payment-qr"><div><strong>Pay {inr.format(order.total_paise / 100)}</strong><small>Use this scanner now or pay when your delivery partner arrives. Tap the scanner to enlarge.</small></div><button className="scanner-expand-button" onClick={() => setExpandedScanner({ src: `/api/orders/${order.id}/payment-qr`, alt: `Payment scanner for ${order.order_number}` })}><img src={`/api/orders/${order.id}/payment-qr`} alt={`Payment scanner for ${order.order_number}`} /></button></div>}{order.rider_name && <div className="assigned-rider"><span><small>Delivery partner assigned</small><strong>{order.rider_name}</strong>{order.rider_mobile_number && <b>{order.rider_mobile_number}</b>}</span>{order.rider_mobile_number && <a href={`tel:${order.rider_mobile_number}`}>Call delivery partner</a>}</div>}{order.status !== "CANCELLED" && ["RIDER_ASSIGNED", "DELIVERED"].includes(order.status) && <div className="customer-code"><span><small>Order ID</small><b>{order.order_number}</b></span><span><small>Delivery OTP · share only after receiving prints</small><strong>{order.deliveryCode}</strong></span></div>}</article>) : <p>No orders yet.</p>}
           </section>
         </div>
