@@ -21,9 +21,10 @@ test("continues to reject non-printable file types", () => {
   assert.match(uploadSource, /Upload only PDF, JPEG, PNG, or HEIC files/);
 });
 
-test("optimizes hosted image uploads below the request-layer threshold", () => {
+test("optimizes images and splits larger files below the request-layer threshold", () => {
   assert.match(appSource, /HOSTED_IMAGE_TARGET_BYTES = 700 \* 1024/);
   assert.match(appSource, /optimizeImageForUpload/);
   assert.match(appSource, /canvas\.toBlob\(resolve, "image\/webp"/);
-  assert.match(appSource, /form\.append\("file", uploadFile\)/);
+  assert.match(appSource, /CHUNKED_UPLOAD_THRESHOLD_BYTES = 700 \* 1024/);
+  assert.match(appSource, /api\/uploads\/chunked\?action=part/);
 });

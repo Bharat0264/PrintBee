@@ -33,6 +33,7 @@ const inr = new Intl.NumberFormat("en-IN", {
 });
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 const HOSTED_IMAGE_TARGET_BYTES = 700 * 1024;
+const CHUNKED_UPLOAD_THRESHOLD_BYTES = 700 * 1024;
 const IMAGE_EXTENSIONS = /\.(heic|jpe?g|png)$/i;
 const MIXED_PRINT_SERVICES = new Set(["document-printing", "document-binding"]);
 
@@ -91,6 +92,36 @@ async function optimizeImageForUpload(file: File) {
   } finally {
     bitmap.close();
   }
+}
+
+async function uploadPrintableFile(file: File, pageCount: number) {
+  if (file.size <= CHUNKED_UPLOAD_THRESHOLD_BYTES) {
+    const form = new FormData();
+    form.append("file", file);
+    form.append("pageCount", String(pageCount));
+    const response = await fetch("/api/uploads", { method: "POST", body: form });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.uploadId) throw new Error(data.error ?? "Document upload failed. Please try again.");
+    return data;
+  }
+
+  const details = { fileName: file.name, fileSize: file.size, pageCount, contentType: file.type };
+  const initResponse = await fetch("/api/uploads/chunked?action=init", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(details) });
+  const init = await initResponse.json().catch(() => ({}));
+  if (!initResponse.ok || !init.sessionId || !init.chunkSize) throw new Error(init.error ?? "Document upload could not start. Please try again.");
+  const chunkCount = Math.ceil(file.size / init.chunkSize);
+  for (let index = 0; index < chunkCount; index += 1) {
+    const chunk = file.slice(index * init.chunkSize, Math.min(file.size, (index + 1) * init.chunkSize));
+    const partResponse = await fetch(`/api/uploads/chunked?action=part&sessionId=${encodeURIComponent(init.sessionId)}&index=${index}`, { method: "POST", headers: { "Content-Type": "application/octet-stream" }, body: chunk });
+    if (!partResponse.ok) {
+      const part = await partResponse.json().catch(() => ({}));
+      throw new Error(part.error ?? `Upload stopped at part ${index + 1}. Please try again.`);
+    }
+  }
+  const completeResponse = await fetch("/api/uploads/chunked?action=complete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...details, sessionId: init.sessionId, chunkCount }) });
+  const completed = await completeResponse.json().catch(() => ({}));
+  if (!completeResponse.ok || !completed.uploadId) throw new Error(completed.error ?? "Document upload could not be completed. Please try again.");
+  return completed;
 }
 
 type Viewer = { email: string; isAdmin: boolean } | null;
@@ -381,21 +412,11 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
       setCountingPages(false);
       return setUploadError("This image could not be optimized for upload. Please save it as JPG or WebP and try again.");
     }
-    const form = new FormData();
-    form.append("file", uploadFile);
-    form.append("pageCount", String(pages));
     let uploaded: any;
     try {
-      const uploadResponse = await fetch("/api/uploads", { method: "POST", body: form });
-      const responseText = await uploadResponse.text();
-      try {
-        uploaded = responseText ? JSON.parse(responseText) : {};
-      } catch {
-        uploaded = { error: uploadResponse.status === 413 || responseText.toLowerCase().includes("payload too large") ? "This document is too large to upload. Please compress it below 50 MB and try again." : "The upload service returned an unexpected response. Please try again." };
-      }
-      if (!uploadResponse.ok || !uploaded.uploadId) return setUploadError(uploaded.error ?? "Document upload failed. Please try again.");
-    } catch {
-      return setUploadError("The document could not be uploaded. Check your connection and try again.");
+      uploaded = await uploadPrintableFile(uploadFile, pages);
+    } catch (error) {
+      return setUploadError(error instanceof Error ? error.message : "The document could not be uploaded. Check your connection and try again.");
     } finally {
       setCountingPages(false);
     }
