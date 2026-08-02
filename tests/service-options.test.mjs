@@ -23,3 +23,8 @@ test("server excludes non-printing service pages from packaging", () => {
   assert.match(orderSource, /SELECT counts_for_packaging FROM print_services/);
   assert.match(orderSource, /if \(service\.counts_for_packaging\) totalPrintedPages/);
 });
+
+test("existing non-printing services default to excluded packaging pages", async () => {
+  const migration = await readFile(new URL("../drizzle/0015_service_packaging_flag.sql", import.meta.url), "utf8");
+  assert.match(migration, /WHERE `id` <> 'document-printing'/);
+});
