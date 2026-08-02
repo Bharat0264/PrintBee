@@ -63,6 +63,7 @@ async function optimizeImageForUpload(file: File) {
 type Viewer = { email: string; isAdmin: boolean } | null;
 type LocationOption = { id: string; name: string; delivery_fee_paise?: number; platform_fee_paise?: number };
 type PrintService = { id: string; name: string; description: string; active: number; is_binding: number; price_paise: number };
+type PackagingRule = { id: string; min_pages: number; max_pages: number; charge_paise: number };
 type SupabaseConfig = { url: string; anonKey: string } | null;
 type RazorpayResult = { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string };
 
@@ -152,6 +153,8 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   const [adminSection, setAdminSection] = useState<"dashboard" | "orders" | "locations" | "riders" | "services">("dashboard");
   const [dashboardRange, setDashboardRange] = useState<"today" | "week" | "month">("today");
   const [printServices, setPrintServices] = useState<PrintService[]>([]);
+  const [packagingRules, setPackagingRules] = useState<PackagingRule[]>([]);
+  const [packagingDraft, setPackagingDraft] = useState({ id: "", minPages: 1, maxPages: 25, charge: 0 });
   const [serviceId, setServiceId] = useState("document-printing");
   const [printInstructions, setPrintInstructions] = useState("");
   const [whatsappNumber, setWhatsappNumber] = useState("");
@@ -215,6 +218,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
       if (Notification.permission === "default") setNotificationPromptOpen(true);
     }
     fetch("/api/print-services").then((response) => response.ok ? response.json() : []).then(setPrintServices).catch(() => {});
+    fetch("/api/packaging-charges").then((response) => response.ok ? response.json() : []).then(setPackagingRules).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -362,6 +366,8 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   const cartTotal = cart.reduce((sum, item) => sum + item.total, 0);
   const cartServiceCharges = cart.reduce((sum, item) => sum + (item.servicePrice || 0), 0);
   const cartPrintingTotal = cartTotal - cartServiceCharges;
+  const cartPrintedPages = cart.reduce((sum, item) => sum + item.pages * item.copies, 0);
+  const packagingFee = (packagingRules.find((rule) => cartPrintedPages >= rule.min_pages && cartPrintedPages <= rule.max_pages)?.charge_paise ?? 0) / 100;
 
   const savePrices = () => {
     setPrices(draftPrices);
@@ -750,6 +756,23 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   const removePrintService = async (id: string) => {
     const response = await fetch("/api/print-services", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
     if (response.ok) setPrintServices((items) => items.filter((item) => item.id !== id));
+  };
+
+  const savePackagingRule = async () => {
+    const response = await fetch("/api/packaging-charges", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(packagingDraft) });
+    const data = await response.json();
+    setAdminMessage(response.ok ? "Packaging charge saved." : data.error);
+    if (response.ok) {
+      const rulesResponse = await fetch("/api/packaging-charges");
+      if (rulesResponse.ok) setPackagingRules(await rulesResponse.json());
+      setPackagingDraft({ id: "", minPages: 1, maxPages: 25, charge: 0 });
+    }
+  };
+
+  const deletePackagingRule = async (id: string) => {
+    await fetch("/api/packaging-charges", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
+    const response = await fetch("/api/packaging-charges");
+    if (response.ok) setPackagingRules(await response.json());
   };
 
   const recordRiderPayment = async () => {
@@ -1159,6 +1182,12 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
               <div className="service-admin-form"><input value={newService.name} onChange={(e) => setNewService({ ...newService, name: e.target.value })} placeholder="Example: Soft binding" /><input maxLength={125} value={newService.description} onChange={(e) => setNewService({ ...newService, description: e.target.value })} placeholder="Description (125 characters)" /><label className="service-price-field">Price (₹)<input type="number" min="0" step=".01" value={newService.price} onChange={(e) => setNewService({ ...newService, price: Math.max(0, Number(e.target.value)) })} /></label><label><input type="checkbox" checked={newService.isBinding} onChange={(e) => setNewService({ ...newService, isBinding: e.target.checked })} /> Request page instructions and WhatsApp</label><button onClick={addPrintService}>Add service</button></div>
               <div className="service-chips">{printServices.map((service) => <span key={service.id}><b>{service.name} · {inr.format(service.price_paise / 100)}</b><small>{service.description}</small>{!["document-printing", "document-binding"].includes(service.id) && <button onClick={() => removePrintService(service.id)}>Remove</button>}</span>)}</div>
             </div>
+            <div className="service-admin packaging-admin">
+              <h3>Packaging charges by printed pages</h3>
+              <p>Add non-overlapping page ranges. The matching charge is calculated automatically at checkout.</p>
+              <div className="service-admin-form"><label>From pages<input type="number" min="1" value={packagingDraft.minPages} onChange={(e) => setPackagingDraft({ ...packagingDraft, minPages: Number(e.target.value) })} /></label><label>To pages<input type="number" min="1" value={packagingDraft.maxPages} onChange={(e) => setPackagingDraft({ ...packagingDraft, maxPages: Number(e.target.value) })} /></label><label>Packaging charge (₹)<input type="number" min="0" step=".01" value={packagingDraft.charge} onChange={(e) => setPackagingDraft({ ...packagingDraft, charge: Number(e.target.value) })} /></label><button onClick={savePackagingRule}>{packagingDraft.id ? "Save edited charge" : "Add charge"}</button></div>
+              <div className="service-chips">{packagingRules.map((rule) => <span key={rule.id}><b>{rule.min_pages}–{rule.max_pages} pages · {inr.format(rule.charge_paise / 100)}</b><button onClick={() => setPackagingDraft({ id: rule.id, minPages: rule.min_pages, maxPages: rule.max_pages, charge: rule.charge_paise / 100 })}>Edit</button><button onClick={() => deletePackagingRule(rule.id)}>Remove</button></span>)}</div>
+            </div>
             <div className="admin-divider" />
             <h3 id="admin-locations">Delivery locations</h3>
             <p>Customers can select only locations added here.</p>
@@ -1319,8 +1348,8 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                 <label className="checkout-field">Mobile number<input value={mobileNumber} onChange={(e) => setMobileNumber(e.target.value.replace(/\D/g, "").slice(0, 10))} placeholder="10-digit mobile number" inputMode="numeric" /></label>
                 <label className="checkout-field">Delivery location<select value={locationId} onChange={(e) => setLocationId(e.target.value)}><option value="">Select a location</option>{locations.map((location) => <option value={location.id} key={location.id}>{location.name}</option>)}</select></label>
                 {!locations.length && <p className="panel-message">No delivery locations are available yet. The admin must add one first.</p>}
-                <div className="fee-breakdown"><div><span>Printing subtotal</span><strong>{inr.format(cartPrintingTotal)}</strong></div>{cartServiceCharges > 0 && <div className="binding-charge-row"><span>Binding charges</span><strong>{inr.format(cartServiceCharges)}</strong></div>}<div><span>Delivery fee</span><strong>{inr.format(checkoutDeliveryFee)}</strong></div><div><span>Platform fee</span><strong>{inr.format(checkoutPlatformFee)}</strong></div></div>
-                <div className="checkout-total"><span>To pay</span><strong>{inr.format(cartTotal + checkoutDeliveryFee + checkoutPlatformFee)}</strong></div>
+                <div className="fee-breakdown"><div><span>Printing subtotal</span><strong>{inr.format(cartPrintingTotal)}</strong></div>{cartServiceCharges > 0 && <div className="binding-charge-row"><span>Binding charges</span><strong>{inr.format(cartServiceCharges)}</strong></div>}<div><span>Delivery fee</span><strong>{inr.format(checkoutDeliveryFee)}</strong></div><div><span>Platform fee</span><strong>{inr.format(checkoutPlatformFee)}</strong></div><div><span>Packaging charge ({cartPrintedPages} pages)</span><strong>{inr.format(packagingFee)}</strong></div></div>
+                <div className="checkout-total"><span>To pay</span><strong>{inr.format(cartTotal + checkoutDeliveryFee + checkoutPlatformFee + packagingFee)}</strong></div>
                 <div className="pay-on-delivery-note"><strong>Secure online payment:</strong> After creating the order, complete payment through Razorpay. Printing begins only after verified payment.</div>
                 {orderError && <p className="form-error">{orderError}</p>}
                 <button className="save-button" disabled={!locations.length || paymentProcessing} onClick={placeOrder}>{paymentProcessing ? "Starting Razorpay..." : "Pay now"}</button>

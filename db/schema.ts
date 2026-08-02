@@ -43,6 +43,7 @@ export const orders = sqliteTable("orders", {
   printingSubtotalPaise: integer("printing_subtotal_paise").notNull().default(0),
   deliveryFeePaise: integer("delivery_fee_paise").notNull().default(1500),
   platformFeePaise: integer("platform_fee_paise").notNull().default(350),
+  packagingFeePaise: integer("packaging_fee_paise").notNull().default(0),
   totalPaise: integer("total_paise").notNull(),
   deliveryCodeHash: text("delivery_code_hash").notNull(),
   deliveryCodeEncrypted: text("delivery_code_encrypted"),
@@ -102,4 +103,13 @@ export const printServices = sqliteTable("print_services", {
   isBinding: integer("is_binding", { mode: "boolean" }).notNull().default(false),
   pricePaise: integer("price_paise").notNull().default(0),
   createdAt: text("created_at").notNull(),
+});
+
+export const packagingChargeRules = sqliteTable("packaging_charge_rules", {
+  id: text("id").primaryKey(),
+  minPages: integer("min_pages").notNull(),
+  maxPages: integer("max_pages").notNull(),
+  chargePaise: integer("charge_paise").notNull(),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
 });
