@@ -216,6 +216,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   const [approvalStatus, setApprovalStatus] = useState<string | null>(null);
   const [loginMode, setLoginMode] = useState<"CUSTOMER" | "PARTNER">("CUSTOMER");
   const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const [acceptingOrders, setAcceptingOrders] = useState(true);
   const [locations, setLocations] = useState<LocationOption[]>([]);
   const [customerName, setCustomerName] = useState("");
   const [mobileNumber, setMobileNumber] = useState("");
@@ -275,6 +276,16 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
     const refreshOnFocus = () => loadPrices().catch(() => {});
     window.addEventListener("focus", refreshOnFocus);
     return () => { window.clearInterval(refresh); window.removeEventListener("focus", refreshOnFocus); };
+  }, []);
+
+  useEffect(() => {
+    const loadAvailability = async () => {
+      const response = await fetch("/api/order-availability", { cache: "no-store" });
+      if (response.ok) setAcceptingOrders(Boolean((await response.json()).acceptingOrders));
+    };
+    loadAvailability().catch(() => {});
+    const refresh = window.setInterval(() => loadAvailability().catch(() => {}), 15000);
+    return () => window.clearInterval(refresh);
   }, []);
 
   useEffect(() => {
@@ -497,6 +508,15 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
     setNotificationMessage("");
     setSaved(true);
     window.setTimeout(() => setSaved(false), 1800);
+  };
+
+  const toggleOrderAvailability = async () => {
+    const next = !acceptingOrders;
+    const response = await fetch("/api/order-availability", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ acceptingOrders: next }) });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) { setNotificationMessage(data.error ?? "Order availability could not be updated."); return; }
+    setAcceptingOrders(Boolean(data.acceptingOrders));
+    setNotificationMessage(data.acceptingOrders ? "Orders are ON. Customers can place orders now." : "Orders are OFF. Customers will see that service will be live soon.");
   };
 
   const supabase = supabaseConfig
@@ -1145,6 +1165,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
         </div>
 
         <section className="order-card" aria-label="Create print order">
+          {acceptingOrders ? <>
           <div className="card-heading">
             <span className="step">1</span>
             <div><h2>Start your print</h2><p>PDF, JPEG, PNG or HEIC · A4 only</p></div>
@@ -1204,6 +1225,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
             <span>Create your order, then pay online through Razorpay before printing begins.</span>
           </div>
           </>}
+          </> : <div className="service-unavailable" role="status"><span>Coming soon</span><h2>Service will be live soon</h2><p>We are not accepting print orders right now. Please check back shortly.</p></div>}
         </section>
       </section>
 
@@ -1294,6 +1316,10 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
             {notificationMessage && <p className="panel-message">{notificationMessage}</p>}
             <h2 id="admin-services">Print service controls</h2>
             <p>Update the customer price per printed page. Changes appear everywhere immediately.</p>
+            <div className={`order-toggle-panel ${acceptingOrders ? "on" : "off"}`}>
+              <span><strong>Accept customer orders</strong><small>{acceptingOrders ? "ON — customers can place orders" : "OFF — customers see ‘Service will be live soon’"}</small></span>
+              <button type="button" role="switch" aria-checked={acceptingOrders} onClick={toggleOrderAvailability}><i />{acceptingOrders ? "ON" : "OFF"}</button>
+            </div>
             <div className="admin-prices">
               {singleSideOptions.map((item) => (
                 <label key={item.id}>

@@ -112,6 +112,13 @@ export const printPrices = sqliteTable("print_prices", {
   updatedAt: text("updated_at").notNull(),
 });
 
+export const orderAvailability = sqliteTable("order_availability", {
+  id: text("id").primaryKey(),
+  acceptingOrders: integer("accepting_orders", { mode: "boolean" }).notNull().default(true),
+  updatedAt: text("updated_at").notNull(),
+  updatedBy: text("updated_by"),
+});
+
 export const packagingChargeRules = sqliteTable("packaging_charge_rules", {
   id: text("id").primaryKey(),
   minPages: integer("min_pages").notNull(),
