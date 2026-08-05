@@ -36,6 +36,14 @@ const HOSTED_IMAGE_TARGET_BYTES = 700 * 1024;
 const CHUNKED_UPLOAD_THRESHOLD_BYTES = 700 * 1024;
 const IMAGE_EXTENSIONS = /\.(heic|jpe?g|png)$/i;
 const MIXED_PRINT_SERVICES = new Set(["document-printing", "document-binding"]);
+const GEN_Z_MEMES = [
+  "POV: You skipped the Xerox queue and chose peace. 😌",
+  "Your assignment is printing itself. Main-character logistics. ✨",
+  "Queue for printouts? Bestie, we have delivery now. 🛵",
+  "Scan. Relax. Let PrintBee carry the academic comeback. 🐝",
+  "No cash hunt, no queue arc — just upload and vibe. 📄",
+  "Deadline approaching? Stay calm; the bee is on the way. 🚀",
+];
 
 function parsePageNumbers(value: string, totalPages: number) {
   const pageNumbers = new Set<number>();
@@ -216,6 +224,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   const [approvalStatus, setApprovalStatus] = useState<string | null>(null);
   const [loginMode, setLoginMode] = useState<"CUSTOMER" | "PARTNER">("CUSTOMER");
   const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const [memeQuote, setMemeQuote] = useState(GEN_Z_MEMES[0]);
   const [acceptingOrders, setAcceptingOrders] = useState(true);
   const [launchAt, setLaunchAt] = useState("2026-08-10T03:30:00.000Z");
   const [launchInput, setLaunchInput] = useState("2026-08-10T09:00");
@@ -269,6 +278,12 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   const [colourChoice, setColourChoice] = useState<ColourChoice>("");
   const [whatsappNumber, setWhatsappNumber] = useState("");
   const [newService, setNewService] = useState({ id: "", name: "", description: "", isBinding: false, countsForPackaging: true, price: 0 });
+
+  useEffect(() => {
+    const randomValues = new Uint32Array(1);
+    crypto.getRandomValues(randomValues);
+    setMemeQuote(GEN_Z_MEMES[randomValues[0] % GEN_Z_MEMES.length]);
+  }, [viewer?.email]);
 
   useEffect(() => {
     const loadPrices = async (syncAdminDraft = false) => {
@@ -1188,8 +1203,9 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
             <span>✓ Secure files</span><span>✓ Clear pricing</span><span>✓ Doorstep delivery</span>
           </div>
           <div className="payment-home-note">
-            <strong>Scan the payment scanner from My Orders and pay while we deliver.</strong>
-            <span>Displaying the scanner may take some time after the admin uploads it.</span>
+            <strong>Fed up begging for cash and long queues in DTPs and Xerox centers?</strong>
+            <span>Scan and relax — we deliver your documents safely.</span>
+            <blockquote className="gen-z-meme">“{memeQuote}”</blockquote>
             {viewer && !viewer.isAdmin && notificationPermission !== "granted" && <button onClick={enableNotifications}>Enable mobile order notifications</button>}
             {notificationPermission === "granted" && <button onClick={testNotifications}>Test alerts: sound + banner</button>}
             {notificationMessage && <small className="notification-message">{notificationMessage}</small>}
