@@ -8,6 +8,7 @@ const apiSource = await readFile(new URL("../app/api/print-prices/route.ts", imp
 test("A4 prices are shared through the database instead of browser storage", () => {
   assert.doesNotMatch(appSource, /printbee-a4-prices/);
   assert.match(appSource, /fetch\("\/api\/print-prices", \{ cache: "no-store" \}\)/);
+  assert.match(appSource, /if \(syncAdminDraft\) setDraftPrices\(sharedPrices\)/);
   assert.match(apiSource, /viewer\?\.isAdmin/);
   assert.match(apiSource, /INSERT INTO print_prices/);
   assert.match(apiSource, /Cache-Control.*no-store/);

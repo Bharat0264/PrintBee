@@ -262,18 +262,19 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   const [newService, setNewService] = useState({ id: "", name: "", description: "", isBinding: false, countsForPackaging: true, price: 0 });
 
   useEffect(() => {
-    const loadPrices = async () => {
+    const loadPrices = async (syncAdminDraft = false) => {
       const response = await fetch("/api/print-prices", { cache: "no-store" });
       if (!response.ok) return;
       const pricePaise = await response.json() as Record<PrintMode, number>;
       const sharedPrices = Object.fromEntries(Object.entries(pricePaise).map(([id, value]) => [id, value / 100])) as Prices;
       setPrices(sharedPrices);
-      setDraftPrices(sharedPrices);
+      if (syncAdminDraft) setDraftPrices(sharedPrices);
     };
-    loadPrices().catch(() => {});
+    loadPrices(true).catch(() => {});
     const refresh = window.setInterval(() => loadPrices().catch(() => {}), 15000);
-    window.addEventListener("focus", loadPrices);
-    return () => { window.clearInterval(refresh); window.removeEventListener("focus", loadPrices); };
+    const refreshOnFocus = () => loadPrices().catch(() => {});
+    window.addEventListener("focus", refreshOnFocus);
+    return () => { window.clearInterval(refresh); window.removeEventListener("focus", refreshOnFocus); };
   }, []);
 
   useEffect(() => {
@@ -493,6 +494,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
     const data = await response.json().catch(() => ({}));
     if (!response.ok) { setNotificationMessage(data.error ?? "Prices could not be saved."); return; }
     setPrices(Object.fromEntries(Object.entries(data).map(([id, value]) => [id, Number(value) / 100])) as Prices);
+    setNotificationMessage("");
     setSaved(true);
     window.setTimeout(() => setSaved(false), 1800);
   };
