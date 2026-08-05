@@ -5,7 +5,7 @@ import { getViewer } from "../../supabase/server";
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 
 function isPrintableFile(file: File) {
-  return /\.(pdf|heic|jpe?g|png)$/i.test(file.name);
+  return /\.(pdf|heic|jpe?g|png|webp)$/i.test(file.name);
 }
 
 export async function POST(request: Request) {
