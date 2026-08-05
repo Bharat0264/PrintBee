@@ -262,15 +262,18 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   const [newService, setNewService] = useState({ id: "", name: "", description: "", isBinding: false, countsForPackaging: true, price: 0 });
 
   useEffect(() => {
-    const stored = window.localStorage.getItem("printbee-a4-prices");
-    if (!stored) return;
-    try {
-      const parsed = JSON.parse(stored) as Prices;
-      setPrices(parsed);
-      setDraftPrices(parsed);
-    } catch {
-      window.localStorage.removeItem("printbee-a4-prices");
-    }
+    const loadPrices = async () => {
+      const response = await fetch("/api/print-prices", { cache: "no-store" });
+      if (!response.ok) return;
+      const pricePaise = await response.json() as Record<PrintMode, number>;
+      const sharedPrices = Object.fromEntries(Object.entries(pricePaise).map(([id, value]) => [id, value / 100])) as Prices;
+      setPrices(sharedPrices);
+      setDraftPrices(sharedPrices);
+    };
+    loadPrices().catch(() => {});
+    const refresh = window.setInterval(() => loadPrices().catch(() => {}), 15000);
+    window.addEventListener("focus", loadPrices);
+    return () => { window.clearInterval(refresh); window.removeEventListener("focus", loadPrices); };
   }, []);
 
   useEffect(() => {
@@ -318,7 +321,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
       setNotificationPermission(Notification.permission);
       if (Notification.permission === "default") setNotificationPromptOpen(true);
     }
-    fetch("/api/print-services").then((response) => response.ok ? response.json() : []).then(setPrintServices).catch(() => {});
+    fetch("/api/print-services", { cache: "no-store" }).then((response) => response.ok ? response.json() : []).then(setPrintServices).catch(() => {});
     fetch("/api/packaging-charges").then((response) => response.ok ? response.json() : []).then(setPackagingRules).catch(() => {});
   }, []);
 
@@ -485,9 +488,11 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   const cartPrintedPages = cart.reduce((sum, item) => sum + (item.countsForPackaging !== false ? item.pages * item.copies : 0), 0);
   const packagingFee = (packagingRules.find((rule) => cartPrintedPages >= rule.min_pages && cartPrintedPages <= rule.max_pages)?.charge_paise ?? 0) / 100;
 
-  const savePrices = () => {
-    setPrices(draftPrices);
-    window.localStorage.setItem("printbee-a4-prices", JSON.stringify(draftPrices));
+  const savePrices = async () => {
+    const response = await fetch("/api/print-prices", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(draftPrices) });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) { setNotificationMessage(data.error ?? "Prices could not be saved."); return; }
+    setPrices(Object.fromEntries(Object.entries(data).map(([id, value]) => [id, Number(value) / 100])) as Prices);
     setSaved(true);
     window.setTimeout(() => setSaved(false), 1800);
   };
@@ -1460,7 +1465,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                 )) : <p>No hidden orders.</p>}</div>
               </div>
             )}
-            <small className="admin-note">Print services are shared with all customers. A4 prices are saved on this device.</small>
+            <small className="admin-note">Print services and A4 prices are shared with all customers.</small>
             </div>
           </section>
         </div>

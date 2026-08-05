@@ -4,7 +4,7 @@ import { getViewer } from "../../supabase/server";
 
 export async function GET() {
   const rows = await database().prepare("SELECT id, name, description, active, is_binding, counts_for_packaging, price_paise FROM print_services WHERE active=1 ORDER BY created_at, name").all();
-  return NextResponse.json(rows.results);
+  return NextResponse.json(rows.results, { headers: { "Cache-Control": "no-store, no-cache, must-revalidate" } });
 }
 
 export async function POST(request: Request) {

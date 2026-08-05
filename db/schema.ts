@@ -106,6 +106,12 @@ export const printServices = sqliteTable("print_services", {
   createdAt: text("created_at").notNull(),
 });
 
+export const printPrices = sqliteTable("print_prices", {
+  id: text("id").primaryKey(),
+  pricePaise: integer("price_paise").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
 export const packagingChargeRules = sqliteTable("packaging_charge_rules", {
   id: text("id").primaryKey(),
   minPages: integer("min_pages").notNull(),
