@@ -33,15 +33,19 @@ export async function POST(request: Request) {
   }
   const packagingRule = await database().prepare("SELECT charge_paise FROM packaging_charge_rules WHERE min_pages<=? AND max_pages>=? ORDER BY min_pages DESC LIMIT 1").bind(totalPrintedPages, totalPrintedPages).first<{ charge_paise: number }>();
   const packagingFeePaise = packagingRule?.charge_paise ?? 0;
-  const totalPaise = printingSubtotalPaise + deliveryFeePaise + platformFeePaise + packagingFeePaise;
+  const feeSettings = await database().prepare("SELECT gateway_enabled,surge_enabled,surge_type,surge_value FROM checkout_fee_settings WHERE id='main'").first<any>();
+  const feeBasePaise = printingSubtotalPaise + deliveryFeePaise + platformFeePaise;
+  const surgeFeePaise = feeSettings?.surge_enabled ? feeSettings.surge_type === "FIXED" ? Math.round(Number(feeSettings.surge_value) * 100) : Math.round(feeBasePaise * Number(feeSettings.surge_value) / 100) : 0;
+  const paymentGatewayFeePaise = feeSettings?.gateway_enabled ? Math.round(feeBasePaise * 0.01) : 0;
+  const totalPaise = feeBasePaise + packagingFeePaise + surgeFeePaise + paymentGatewayFeePaise;
   const hash = await hashDeliveryCode(id, deliveryCode);
   const encryptedCode = await encryptDeliveryCode(deliveryCode);
   const db = database();
   const sequence = await db.prepare("UPDATE order_sequences SET next_value=next_value+1 WHERE id='orders' RETURNING next_value-1 number").first<{ number: number }>();
   if (!sequence) return NextResponse.json({ error: "Order numbering is temporarily unavailable" }, { status: 503 });
   const orderNumber = `PB${String(sequence.number).padStart(3, "0")}`;
-  await db.prepare(`INSERT INTO orders (id, order_number, customer_email, customer_name, mobile_number, location_id, location_name, items_json, printing_subtotal_paise, delivery_fee_paise, platform_fee_paise, packaging_fee_paise, total_paise, delivery_code_hash, delivery_code_encrypted, status, payment_status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PAYMENT_PENDING', 'PENDING', ?)`)
-    .bind(id, orderNumber, viewer.email, name, mobile, location.id, location.name, JSON.stringify(body.items), printingSubtotalPaise, deliveryFeePaise, platformFeePaise, packagingFeePaise, totalPaise, hash, encryptedCode, new Date().toISOString()).run();
+  await db.prepare(`INSERT INTO orders (id, order_number, customer_email, customer_name, mobile_number, location_id, location_name, items_json, printing_subtotal_paise, delivery_fee_paise, platform_fee_paise, packaging_fee_paise, payment_gateway_fee_paise, surge_fee_paise, total_paise, delivery_code_hash, delivery_code_encrypted, status, payment_status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PAYMENT_PENDING', 'PENDING', ?)`)
+    .bind(id, orderNumber, viewer.email, name, mobile, location.id, location.name, JSON.stringify(body.items), printingSubtotalPaise, deliveryFeePaise, platformFeePaise, packagingFeePaise, paymentGatewayFeePaise, surgeFeePaise, totalPaise, hash, encryptedCode, new Date().toISOString()).run();
   await db.batch(uploadIds.map((uploadId) => db.prepare("UPDATE uploads SET order_id=? WHERE id=?").bind(id, uploadId)));
   return NextResponse.json({ id, orderNumber, locationName: location.name, totalPaise, paymentMode: "RAZORPAY" });
 }

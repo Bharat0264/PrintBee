@@ -221,6 +221,10 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   const [launchInput, setLaunchInput] = useState("2026-08-10T09:00");
   const [launchMessage, setLaunchMessage] = useState("Site will be live from Aug 10 2026, 9 A.M. IST");
   const [countdownNow, setCountdownNow] = useState(Date.now());
+  const [gatewayEnabled, setGatewayEnabled] = useState(true);
+  const [surgeEnabled, setSurgeEnabled] = useState(false);
+  const [surgeType, setSurgeType] = useState<"PERCENT" | "FIXED">("PERCENT");
+  const [surgeValue, setSurgeValue] = useState(0);
   const [locations, setLocations] = useState<LocationOption[]>([]);
   const [customerName, setCustomerName] = useState("");
   const [mobileNumber, setMobileNumber] = useState("");
@@ -281,6 +285,8 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
     window.addEventListener("focus", refreshOnFocus);
     return () => { window.clearInterval(refresh); window.removeEventListener("focus", refreshOnFocus); };
   }, []);
+
+  useEffect(() => { fetch("/api/fee-settings", { cache: "no-store" }).then((r) => r.ok ? r.json() : {}).then((data) => { if (typeof data.gatewayEnabled === "boolean") setGatewayEnabled(data.gatewayEnabled); setSurgeEnabled(Boolean(data.surgeEnabled)); setSurgeType(data.surgeType === "FIXED" ? "FIXED" : "PERCENT"); setSurgeValue(Number(data.surgeValue) || 0); }).catch(() => {}); }, []);
 
   useEffect(() => {
     const loadAvailability = async () => {
@@ -555,6 +561,14 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
     hours: Math.floor((countdownMs % 86400000) / 3600000),
     minutes: Math.floor((countdownMs % 3600000) / 60000),
     seconds: Math.floor((countdownMs % 60000) / 1000),
+  };
+
+  const saveFeeSettings = async (updates: Partial<{ gatewayEnabled: boolean; surgeEnabled: boolean; surgeType: "PERCENT" | "FIXED"; surgeValue: number }> = {}) => {
+    const settings = { gatewayEnabled, surgeEnabled, surgeType, surgeValue, ...updates };
+    const response = await fetch("/api/fee-settings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(settings) });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) { setNotificationMessage(data.error ?? "Fee settings could not be saved."); return; }
+    setGatewayEnabled(data.gatewayEnabled); setSurgeEnabled(data.surgeEnabled); setSurgeType(data.surgeType); setSurgeValue(data.surgeValue); setNotificationMessage("Checkout fee settings saved.");
   };
 
   const supabase = supabaseConfig
@@ -1084,6 +1098,8 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   const checkoutLocation = locations.find((location) => location.id === locationId);
   const checkoutDeliveryFee = (checkoutLocation?.delivery_fee_paise ?? 1500) / 100;
   const checkoutPlatformFee = (checkoutLocation?.platform_fee_paise ?? 350) / 100;
+  const surgeBase = cartTotal + checkoutDeliveryFee + checkoutPlatformFee;
+  const checkoutSurgeFee = surgeEnabled ? surgeType === "FIXED" ? surgeValue : surgeBase * surgeValue / 100 : 0;
   const revenueNow = new Date();
   const revenueStart = dashboardRange === "today" ? new Date(revenueNow.getFullYear(), revenueNow.getMonth(), revenueNow.getDate()) : dashboardRange === "week" ? new Date(revenueNow.getFullYear(), revenueNow.getMonth(), revenueNow.getDate() - 6) : new Date(revenueNow.getFullYear(), revenueNow.getMonth(), 1);
   const revenueTotals = revenueSummary((dashboard?.orders ?? []).filter((order: any) => new Date(order.created_at) >= revenueStart), prices);
@@ -1365,6 +1381,12 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
               <label>Launch note<input maxLength={160} value={launchMessage} onChange={(e) => setLaunchMessage(e.target.value)} /></label>
               <button type="button" onClick={saveLaunchSchedule}>Save launch timer</button>
             </div>
+            <div className="service-admin fee-controls">
+              <h3>Checkout fee controls</h3>
+              <div className={`order-toggle-panel ${gatewayEnabled ? "on" : "off"}`}><span><strong>Payment gateway fee (1%)</strong><small>Calculated on printing + delivery + platform; handling excluded. Hidden from customer breakdown.</small></span><button role="switch" aria-checked={gatewayEnabled} onClick={() => saveFeeSettings({ gatewayEnabled: !gatewayEnabled })}><i />{gatewayEnabled ? "ON" : "OFF"}</button></div>
+              <div className={`order-toggle-panel ${surgeEnabled ? "on" : "off"}`}><span><strong>Surge charge</strong><small>Shown to customers as a high-demand charge.</small></span><button role="switch" aria-checked={surgeEnabled} onClick={() => saveFeeSettings({ surgeEnabled: !surgeEnabled })}><i />{surgeEnabled ? "ON" : "OFF"}</button></div>
+              <div className="service-admin-form"><select value={surgeType} onChange={(e) => setSurgeType(e.target.value as "PERCENT" | "FIXED")}><option value="PERCENT">Percentage (%)</option><option value="FIXED">Fixed amount (₹)</option></select><input type="number" min="0" step="0.01" value={surgeValue} onChange={(e) => setSurgeValue(Math.max(0, Number(e.target.value)))} /><button onClick={() => saveFeeSettings()}>Save surge charge</button></div>
+            </div>
             <div className="admin-prices">
               {singleSideOptions.map((item) => (
                 <label key={item.id}>
@@ -1494,7 +1516,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                     </div>
                     <span className="status-chip">{order.payment_status} · {order.status}</span>
                     <strong>{inr.format(order.total_paise / 100)}</strong>
-                    <div className="payment-review-details"><span><small>Payment method</small><strong>{order.payment_status === "PAY_ON_DELIVERY" ? "Pay on delivery" : order.payment_reference || order.payment_status}</strong></span><span><small>Amount to collect</small><strong>{inr.format(order.total_paise / 100)}</strong></span></div>
+                    <div className="payment-review-details"><span><small>Payment method</small><strong>{order.payment_status === "PAY_ON_DELIVERY" ? "Pay on delivery" : order.payment_reference || order.payment_status}</strong></span><span><small>Amount to collect</small><strong>{inr.format(order.total_paise / 100)}</strong></span><span><small>Payment gateway fee</small><strong>{inr.format((order.payment_gateway_fee_paise ?? 0) / 100)}</strong></span><span><small>Surge charge</small><strong>{inr.format((order.surge_fee_paise ?? 0) / 100)}</strong></span></div>
                     {order.payment_status === "PAID" && order.payment_verified_at && <div className="payment-cleared-note"><strong>Payment received and verified</strong><small>Verified {new Date(order.payment_verified_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })} by {order.payment_verified_by}. Scanner deleted from admin, customer and delivery-partner views.</small></div>}
                     {Boolean(order.has_payment_qr) && <div className="admin-payment-qr"><strong>Legacy payment scanner</strong><img src={`/api/orders/${order.id}/payment-qr`} alt={`Payment scanner for ${order.order_number}`} /></div>}
                     {order.payment_status === "PAY_ON_DELIVERY" && order.status !== "CANCELLED" && <div className="payment-review-actions"><button className="mini-action" onClick={() => reviewPayment(order.id, "APPROVE")}>Payment received & verified</button></div>}
@@ -1568,8 +1590,8 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                 <label className="checkout-field">Mobile number<input value={mobileNumber} onChange={(e) => setMobileNumber(e.target.value.replace(/\D/g, "").slice(0, 10))} placeholder="10-digit mobile number" inputMode="numeric" /></label>
                 <label className="checkout-field">Delivery location<select value={locationId} onChange={(e) => setLocationId(e.target.value)}><option value="">Select a location</option>{locations.map((location) => <option value={location.id} key={location.id}>{location.name}</option>)}</select></label>
                 {!locations.length && <p className="panel-message">No delivery locations are available yet. The admin must add one first.</p>}
-                <div className="fee-breakdown"><div><span>Printing subtotal</span><strong>{inr.format(cartPrintingTotal)}</strong></div>{cartServiceCharges > 0 && <div className="binding-charge-row"><span>Binding charges</span><strong>{inr.format(cartServiceCharges)}</strong></div>}<div><span>Delivery fee</span><strong>{inr.format(checkoutDeliveryFee)}</strong></div><div><span>Platform fee</span><strong>{inr.format(checkoutPlatformFee)}</strong></div><div><span>Handling charge ({cartPrintedPages} pages)</span><strong>{inr.format(packagingFee)}</strong></div></div>
-                <div className="checkout-total"><span>To pay</span><strong>{inr.format(cartTotal + checkoutDeliveryFee + checkoutPlatformFee + packagingFee)}</strong></div>
+                <div className="fee-breakdown"><div><span>Printing subtotal</span><strong>{inr.format(cartPrintingTotal)}</strong></div>{cartServiceCharges > 0 && <div className="binding-charge-row"><span>Binding charges</span><strong>{inr.format(cartServiceCharges)}</strong></div>}<div><span>Delivery fee</span><strong>{inr.format(checkoutDeliveryFee)}</strong></div><div><span>Platform fee</span><strong>{inr.format(checkoutPlatformFee)}</strong></div><div><span>Handling charge ({cartPrintedPages} pages)</span><strong>{inr.format(packagingFee)}</strong></div>{surgeEnabled && <div className="surge-charge-row"><span>High-demand surge charge</span><strong>{inr.format(checkoutSurgeFee)}</strong></div>}</div>
+                <div className="checkout-total"><span>Estimated total</span><strong>{inr.format(cartTotal + checkoutDeliveryFee + checkoutPlatformFee + packagingFee + checkoutSurgeFee)}</strong></div>
                 <div className="pay-on-delivery-note"><strong>Secure online payment:</strong> After creating the order, complete payment through Razorpay. Printing begins only after verified payment.</div>
                 {orderError && <p className="form-error">{orderError}</p>}
                 <button className="save-button" disabled={!locations.length || paymentProcessing} onClick={placeOrder}>{paymentProcessing ? "Starting Razorpay..." : "Pay now"}</button>

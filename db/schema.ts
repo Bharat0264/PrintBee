@@ -1,4 +1,4 @@
-import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { integer, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 export const locations = sqliteTable("locations", {
   id: text("id").primaryKey(),
@@ -45,6 +45,8 @@ export const orders = sqliteTable("orders", {
   platformFeePaise: integer("platform_fee_paise").notNull().default(350),
   packagingFeePaise: integer("packaging_fee_paise").notNull().default(0),
   totalPaise: integer("total_paise").notNull(),
+  paymentGatewayFeePaise: integer("payment_gateway_fee_paise").notNull().default(0),
+  surgeFeePaise: integer("surge_fee_paise").notNull().default(0),
   deliveryCodeHash: text("delivery_code_hash").notNull(),
   deliveryCodeEncrypted: text("delivery_code_encrypted"),
   status: text("status").notNull().default("PAYMENT_PENDING"),
@@ -119,6 +121,10 @@ export const orderAvailability = sqliteTable("order_availability", {
   updatedBy: text("updated_by"),
   launchAt: text("launch_at").notNull().default("2026-08-10T03:30:00.000Z"),
   launchMessage: text("launch_message").notNull().default("Site will be live from Aug 10 2026, 9 A.M. IST"),
+});
+
+export const checkoutFeeSettings = sqliteTable("checkout_fee_settings", {
+  id: text("id").primaryKey(), gatewayEnabled: integer("gateway_enabled", { mode: "boolean" }).notNull().default(true), surgeEnabled: integer("surge_enabled", { mode: "boolean" }).notNull().default(false), surgeType: text("surge_type").notNull().default("PERCENT"), surgeValue: real("surge_value").notNull().default(0), updatedAt: text("updated_at").notNull(), updatedBy: text("updated_by"),
 });
 
 export const packagingChargeRules = sqliteTable("packaging_charge_rules", {

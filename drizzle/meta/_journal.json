@@ -134,6 +134,13 @@
       "when": 1785927600000,
       "tag": "0018_launch_countdown",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1785931200000,
+      "tag": "0019_checkout_fees",
+      "breakpoints": true
     }
   ]
 }
