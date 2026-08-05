@@ -117,6 +117,8 @@ export const orderAvailability = sqliteTable("order_availability", {
   acceptingOrders: integer("accepting_orders", { mode: "boolean" }).notNull().default(true),
   updatedAt: text("updated_at").notNull(),
   updatedBy: text("updated_by"),
+  launchAt: text("launch_at").notNull().default("2026-08-10T03:30:00.000Z"),
+  launchMessage: text("launch_message").notNull().default("Site will be live from Aug 10 2026, 9 A.M. IST"),
 });
 
 export const packagingChargeRules = sqliteTable("packaging_charge_rules", {

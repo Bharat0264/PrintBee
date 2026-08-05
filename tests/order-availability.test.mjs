@@ -11,5 +11,8 @@ test("admin controls whether customers can place orders", () => {
   assert.match(api, /accepting_orders/);
   assert.match(app, /role="switch"/);
   assert.match(app, /Service will be live soon/);
+  assert.match(app, /launch-countdown/);
+  assert.match(app, /Launch date and time \(IST\)/);
+  assert.match(api, /launch_at/);
   assert.match(orders, /availability\?\.accepting_orders === 0/);
 });

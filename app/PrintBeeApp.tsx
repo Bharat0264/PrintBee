@@ -217,6 +217,10 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   const [loginMode, setLoginMode] = useState<"CUSTOMER" | "PARTNER">("CUSTOMER");
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [acceptingOrders, setAcceptingOrders] = useState(true);
+  const [launchAt, setLaunchAt] = useState("2026-08-10T03:30:00.000Z");
+  const [launchInput, setLaunchInput] = useState("2026-08-10T09:00");
+  const [launchMessage, setLaunchMessage] = useState("Site will be live from Aug 10 2026, 9 A.M. IST");
+  const [countdownNow, setCountdownNow] = useState(Date.now());
   const [locations, setLocations] = useState<LocationOption[]>([]);
   const [customerName, setCustomerName] = useState("");
   const [mobileNumber, setMobileNumber] = useState("");
@@ -281,12 +285,25 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   useEffect(() => {
     const loadAvailability = async () => {
       const response = await fetch("/api/order-availability", { cache: "no-store" });
-      if (response.ok) setAcceptingOrders(Boolean((await response.json()).acceptingOrders));
+      if (response.ok) {
+        const data = await response.json();
+        setAcceptingOrders(Boolean(data.acceptingOrders));
+        setLaunchAt(data.launchAt);
+        setLaunchMessage(data.launchMessage);
+        const ist = new Date(new Date(data.launchAt).getTime() + 330 * 60 * 1000).toISOString().slice(0, 16);
+        setLaunchInput(ist);
+      }
     };
     loadAvailability().catch(() => {});
     const refresh = window.setInterval(() => loadAvailability().catch(() => {}), 15000);
     return () => window.clearInterval(refresh);
   }, []);
+
+  useEffect(() => {
+    if (acceptingOrders) return;
+    const timer = window.setInterval(() => setCountdownNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [acceptingOrders]);
 
   useEffect(() => {
     if (!viewer) return;
@@ -512,11 +529,32 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
 
   const toggleOrderAvailability = async () => {
     const next = !acceptingOrders;
-    const response = await fetch("/api/order-availability", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ acceptingOrders: next }) });
+    const response = await fetch("/api/order-availability", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ acceptingOrders: next, launchAt, launchMessage }) });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) { setNotificationMessage(data.error ?? "Order availability could not be updated."); return; }
     setAcceptingOrders(Boolean(data.acceptingOrders));
     setNotificationMessage(data.acceptingOrders ? "Orders are ON. Customers can place orders now." : "Orders are OFF. Customers will see that service will be live soon.");
+  };
+
+  const saveLaunchSchedule = async () => {
+    const parsedSchedule = new Date(`${launchInput}:00+05:30`);
+    if (!launchInput || Number.isNaN(parsedSchedule.getTime()) || !launchMessage.trim()) { setNotificationMessage("Enter a valid IST launch time and message."); return; }
+    const scheduledAt = parsedSchedule.toISOString();
+    const response = await fetch("/api/order-availability", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ acceptingOrders, launchAt: scheduledAt, launchMessage }) });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) { setNotificationMessage(data.error ?? "Launch schedule could not be saved."); return; }
+    setLaunchAt(data.launchAt);
+    setLaunchMessage(data.launchMessage);
+    setCountdownNow(Date.now());
+    setNotificationMessage("Launch countdown and message saved.");
+  };
+
+  const countdownMs = Math.max(0, new Date(launchAt).getTime() - countdownNow);
+  const countdown = {
+    days: Math.floor(countdownMs / 86400000),
+    hours: Math.floor((countdownMs % 86400000) / 3600000),
+    minutes: Math.floor((countdownMs % 3600000) / 60000),
+    seconds: Math.floor((countdownMs % 60000) / 1000),
   };
 
   const supabase = supabaseConfig
@@ -1225,7 +1263,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
             <span>Create your order, then pay online through Razorpay before printing begins.</span>
           </div>
           </>}
-          </> : <div className="service-unavailable" role="status"><span>Coming soon</span><h2>Service will be live soon</h2><p>We are not accepting print orders right now. Please check back shortly.</p></div>}
+          </> : <div className="service-unavailable" role="status"><span>Coming soon</span><h2>Service will be live soon</h2><div className="launch-countdown" aria-label={`${countdown.days} days, ${countdown.hours} hours, ${countdown.minutes} minutes and ${countdown.seconds} seconds remaining`}><b>{countdown.days}<small>Days</small></b><b>{String(countdown.hours).padStart(2, "0")}<small>Hours</small></b><b>{String(countdown.minutes).padStart(2, "0")}<small>Minutes</small></b><b>{String(countdown.seconds).padStart(2, "0")}<small>Seconds</small></b></div><p className="launch-message">{launchMessage}</p></div>}
         </section>
       </section>
 
@@ -1319,6 +1357,13 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
             <div className={`order-toggle-panel ${acceptingOrders ? "on" : "off"}`}>
               <span><strong>Accept customer orders</strong><small>{acceptingOrders ? "ON — customers can place orders" : "OFF — customers see ‘Service will be live soon’"}</small></span>
               <button type="button" role="switch" aria-checked={acceptingOrders} onClick={toggleOrderAvailability}><i />{acceptingOrders ? "ON" : "OFF"}</button>
+            </div>
+            <div className="launch-schedule-panel">
+              <h3>Customer launch countdown</h3>
+              <p>Set the public launch time in Indian Standard Time and the note shown below the timer.</p>
+              <label>Launch date and time (IST)<input type="datetime-local" value={launchInput} onChange={(e) => setLaunchInput(e.target.value)} /></label>
+              <label>Launch note<input maxLength={160} value={launchMessage} onChange={(e) => setLaunchMessage(e.target.value)} /></label>
+              <button type="button" onClick={saveLaunchSchedule}>Save launch timer</button>
             </div>
             <div className="admin-prices">
               {singleSideOptions.map((item) => (
