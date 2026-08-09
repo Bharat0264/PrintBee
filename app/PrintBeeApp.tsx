@@ -1199,6 +1199,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
           <div className="eyebrow"><span>●</span> A4 printing, delivered locally</div>
           <h1>Your documents.<br /><em>Printed right.</em></h1>
           <p>Upload a PDF or image, choose your A4 print style, and get crisp prints delivered to your door.</p>
+          <p className="delivery-location-note"><strong>Select the nearest delivery location and share your exact delivery location after a delivery partner is assigned.</strong></p>
           <div className="trust-row">
             <span>✓ Secure files</span><span>✓ Clear pricing</span><span>✓ Doorstep delivery</span>
           </div>
@@ -1602,6 +1603,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                 <div className="admin-badge">CHECKOUT</div>
                 <h2 id="checkout-title">Delivery details</h2>
                 <p>Enter your details and select an admin-approved delivery location.</p>
+                <p className="delivery-location-note"><strong>Select the nearest delivery location and share your exact delivery location after a delivery partner is assigned.</strong></p>
                 <label className="checkout-field">Full name<input value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="Your full name" /></label>
                 <label className="checkout-field">Mobile number<input value={mobileNumber} onChange={(e) => setMobileNumber(e.target.value.replace(/\D/g, "").slice(0, 10))} placeholder="10-digit mobile number" inputMode="numeric" /></label>
                 <label className="checkout-field">Delivery location<select value={locationId} onChange={(e) => setLocationId(e.target.value)}><option value="">Select a location</option>{locations.map((location) => <option value={location.id} key={location.id}>{location.name}</option>)}</select></label>
