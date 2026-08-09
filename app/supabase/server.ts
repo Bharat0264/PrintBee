@@ -1,7 +1,10 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 
-const ADMIN_EMAIL = "bharathsaipulipati@gmail.com";
+const ADMIN_EMAILS = new Set([
+  "bharathsaipulipati@gmail.com",
+  "raniramyasana@gmail.com",
+]);
 
 export async function getViewer() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -19,7 +22,7 @@ export async function getViewer() {
   const email = data.user?.email?.toLowerCase();
   if (!email) return null;
 
-  return { email, isAdmin: email === ADMIN_EMAIL };
+  return { email, isAdmin: ADMIN_EMAILS.has(email) };
 }
 
 export async function requireAdmin() {
