@@ -1117,7 +1117,17 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   const checkoutSurgeFee = surgeEnabled ? surgeType === "FIXED" ? surgeValue : surgeBase * surgeValue / 100 : 0;
   const revenueNow = new Date();
   const revenueStart = dashboardRange === "today" ? new Date(revenueNow.getFullYear(), revenueNow.getMonth(), revenueNow.getDate()) : dashboardRange === "week" ? new Date(revenueNow.getFullYear(), revenueNow.getMonth(), revenueNow.getDate() - 6) : new Date(revenueNow.getFullYear(), revenueNow.getMonth(), 1);
-  const revenueTotals = revenueSummary((dashboard?.orders ?? []).filter((order: any) => new Date(order.created_at) >= revenueStart), prices);
+  const dashboardOrdersForRange = (dashboard?.orders ?? []).filter((order: any) => new Date(order.created_at) >= revenueStart);
+  const revenueTotals = revenueSummary(dashboardOrdersForRange, prices);
+  const dashboardSummaryForRange = {
+    total: dashboardOrdersForRange.length,
+    paid: dashboardOrdersForRange.filter((order: any) => order.payment_status === "PAID").length,
+    unpaid: dashboardOrdersForRange.filter((order: any) => order.payment_status !== "PAID").length,
+    delivered: dashboardOrdersForRange.filter((order: any) => order.status === "DELIVERED").length,
+    ready: dashboardOrdersForRange.filter((order: any) => order.status === "READY_FOR_PICKUP").length,
+    revenuePaise: dashboardOrdersForRange.reduce((sum: number, order: any) => sum + (Number(order.total_paise) || 0), 0),
+  };
+  const printTotalsForRange = printSummary(dashboardOrdersForRange.flatMap((order: any) => order.items || []));
 
   if (viewer && !viewer.isAdmin && loginMode === "PARTNER") {
     const partnerApproved = role === "AGENT" && approvalStatus === "APPROVED";
@@ -1445,13 +1455,13 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                 <h2 id="admin-dashboard">Operations dashboard</h2>
                 <div className="dashboard-range"><button className={dashboardRange === "today" ? "active" : ""} onClick={() => setDashboardRange("today")}>Today</button><button className={dashboardRange === "week" ? "active" : ""} onClick={() => setDashboardRange("week")}>This week</button><button className={dashboardRange === "month" ? "active" : ""} onClick={() => setDashboardRange("month")}>This month</button></div>
                 <div className="metric-grid">
-                  <div><small>Total orders</small><strong>{dashboard.summary?.total ?? 0}</strong></div>
-                  <div><small>Paid</small><strong>{dashboard.summary?.paid ?? 0}</strong></div>
-                  <div><small>Unpaid</small><strong>{dashboard.summary?.unpaid ?? 0}</strong></div>
-                  <div><small>Delivered</small><strong>{dashboard.summary?.delivered ?? 0}</strong></div>
-                  <div><small>Ready</small><strong>{dashboard.summary?.ready ?? 0}</strong></div>
-                  <div><small>Paid revenue</small><strong>{inr.format((dashboard.summary?.revenue_paise ?? 0) / 100)}</strong></div>
-                  {(() => { const now = new Date(); const start = dashboardRange === "today" ? new Date(now.getFullYear(), now.getMonth(), now.getDate()) : dashboardRange === "week" ? new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6) : new Date(now.getFullYear(), now.getMonth(), 1); const totals = printSummary(dashboard.orders.filter((order: any) => new Date(order.created_at) >= start).flatMap((order: any) => order.items || [])); return <><div><small>B&amp;W pages</small><strong>{totals.bwSingle + totals.bwDouble}</strong></div><div><small>Colour pages</small><strong>{totals.colourSingle + totals.colourDouble}</strong></div></>; })()}
+                  <div><small>Total orders</small><strong>{dashboardSummaryForRange.total}</strong></div>
+                  <div><small>Paid</small><strong>{dashboardSummaryForRange.paid}</strong></div>
+                  <div><small>Unpaid</small><strong>{dashboardSummaryForRange.unpaid}</strong></div>
+                  <div><small>Delivered</small><strong>{dashboardSummaryForRange.delivered}</strong></div>
+                  <div><small>Ready</small><strong>{dashboardSummaryForRange.ready}</strong></div>
+                  <div><small>Paid revenue</small><strong>{inr.format(dashboardSummaryForRange.revenuePaise / 100)}</strong></div>
+                  <div><small>B&amp;W pages</small><strong>{printTotalsForRange.bwSingle + printTotalsForRange.bwDouble}</strong></div><div><small>Colour pages</small><strong>{printTotalsForRange.colourSingle + printTotalsForRange.colourDouble}</strong></div>
                 </div>
                 <div className="admin-divider" />
                 <h2 id="admin-revenue">Revenue</h2>
