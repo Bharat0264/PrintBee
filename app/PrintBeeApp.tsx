@@ -234,12 +234,15 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   const [surgeEnabled, setSurgeEnabled] = useState(false);
   const [surgeType, setSurgeType] = useState<"PERCENT" | "FIXED">("PERCENT");
   const [surgeValue, setSurgeValue] = useState(0);
+  const [lateNightEnabled, setLateNightEnabled] = useState(false);
+  const [lateNightType, setLateNightType] = useState<"PERCENT" | "FIXED">("PERCENT");
+  const [lateNightValue, setLateNightValue] = useState(0);
   const [locations, setLocations] = useState<LocationOption[]>([]);
   const [customerName, setCustomerName] = useState("");
   const [mobileNumber, setMobileNumber] = useState("");
   const [locationId, setLocationId] = useState("");
   const [orderError, setOrderError] = useState("");
-  const [orderResult, setOrderResult] = useState<{ id: string; orderNumber: string; deliveryCode?: string | null; locationName: string; totalPaise: number; paid: boolean; paymentMode?: string } | null>(null);
+  const [orderResult, setOrderResult] = useState<{ id: string; orderNumber: string; deliveryCode?: string | null; locationName: string; totalPaise: number; lateNightFeePaise?: number; paid: boolean; paymentMode?: string } | null>(null);
   const [paymentProcessing, setPaymentProcessing] = useState(false);
   const [newLocation, setNewLocation] = useState("");
   const [agentEmail, setAgentEmail] = useState("");
@@ -301,7 +304,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
     return () => { window.clearInterval(refresh); window.removeEventListener("focus", refreshOnFocus); };
   }, []);
 
-  useEffect(() => { fetch("/api/fee-settings", { cache: "no-store" }).then((r) => r.ok ? r.json() : {}).then((data) => { if (typeof data.gatewayEnabled === "boolean") setGatewayEnabled(data.gatewayEnabled); setSurgeEnabled(Boolean(data.surgeEnabled)); setSurgeType(data.surgeType === "FIXED" ? "FIXED" : "PERCENT"); setSurgeValue(Number(data.surgeValue) || 0); }).catch(() => {}); }, []);
+  useEffect(() => { fetch("/api/fee-settings", { cache: "no-store" }).then((r) => r.ok ? r.json() : {}).then((data) => { if (typeof data.gatewayEnabled === "boolean") setGatewayEnabled(data.gatewayEnabled); setSurgeEnabled(Boolean(data.surgeEnabled)); setSurgeType(data.surgeType === "FIXED" ? "FIXED" : "PERCENT"); setSurgeValue(Number(data.surgeValue) || 0); setLateNightEnabled(Boolean(data.lateNightEnabled)); setLateNightType(data.lateNightType === "FIXED" ? "FIXED" : "PERCENT"); setLateNightValue(Number(data.lateNightValue) || 0); }).catch(() => {}); }, []);
 
   useEffect(() => {
     const loadAvailability = async () => {
@@ -578,12 +581,12 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
     seconds: Math.floor((countdownMs % 60000) / 1000),
   };
 
-  const saveFeeSettings = async (updates: Partial<{ gatewayEnabled: boolean; surgeEnabled: boolean; surgeType: "PERCENT" | "FIXED"; surgeValue: number }> = {}) => {
-    const settings = { gatewayEnabled, surgeEnabled, surgeType, surgeValue, ...updates };
+  const saveFeeSettings = async (updates: Partial<{ gatewayEnabled: boolean; surgeEnabled: boolean; surgeType: "PERCENT" | "FIXED"; surgeValue: number; lateNightEnabled: boolean; lateNightType: "PERCENT" | "FIXED"; lateNightValue: number }> = {}) => {
+    const settings = { gatewayEnabled, surgeEnabled, surgeType, surgeValue, lateNightEnabled, lateNightType, lateNightValue, ...updates };
     const response = await fetch("/api/fee-settings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(settings) });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) { setNotificationMessage(data.error ?? "Fee settings could not be saved."); return; }
-    setGatewayEnabled(data.gatewayEnabled); setSurgeEnabled(data.surgeEnabled); setSurgeType(data.surgeType); setSurgeValue(data.surgeValue); setNotificationMessage("Checkout fee settings saved.");
+    setGatewayEnabled(data.gatewayEnabled); setSurgeEnabled(data.surgeEnabled); setSurgeType(data.surgeType); setSurgeValue(data.surgeValue); setLateNightEnabled(data.lateNightEnabled); setLateNightType(data.lateNightType); setLateNightValue(data.lateNightValue); setNotificationMessage("Checkout fee settings saved.");
   };
 
   const supabase = supabaseConfig
@@ -1115,6 +1118,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   const checkoutPlatformFee = (checkoutLocation?.platform_fee_paise ?? 350) / 100;
   const surgeBase = cartTotal + checkoutDeliveryFee + checkoutPlatformFee;
   const checkoutSurgeFee = surgeEnabled ? surgeType === "FIXED" ? surgeValue : surgeBase * surgeValue / 100 : 0;
+  const checkoutLateNightFee = lateNightEnabled ? lateNightType === "FIXED" ? lateNightValue : surgeBase * lateNightValue / 100 : 0;
   const revenueNow = new Date();
   const revenueStart = dashboardRange === "today" ? new Date(revenueNow.getFullYear(), revenueNow.getMonth(), revenueNow.getDate()) : dashboardRange === "week" ? new Date(revenueNow.getFullYear(), revenueNow.getMonth(), revenueNow.getDate() - 6) : new Date(revenueNow.getFullYear(), revenueNow.getMonth(), 1);
   const dashboardOrdersForRange = (dashboard?.orders ?? []).filter((order: any) => new Date(order.created_at) >= revenueStart);
@@ -1413,6 +1417,8 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
               <div className={`order-toggle-panel ${gatewayEnabled ? "on" : "off"}`}><span><strong>Payment gateway fee (1%)</strong><small>Calculated on printing + delivery + platform; handling excluded. Hidden from customer breakdown.</small></span><button role="switch" aria-checked={gatewayEnabled} onClick={() => saveFeeSettings({ gatewayEnabled: !gatewayEnabled })}><i />{gatewayEnabled ? "ON" : "OFF"}</button></div>
               <div className={`order-toggle-panel ${surgeEnabled ? "on" : "off"}`}><span><strong>Surge charge</strong><small>Shown to customers as a high-demand charge.</small></span><button role="switch" aria-checked={surgeEnabled} onClick={() => saveFeeSettings({ surgeEnabled: !surgeEnabled })}><i />{surgeEnabled ? "ON" : "OFF"}</button></div>
               <div className="service-admin-form"><select value={surgeType} onChange={(e) => setSurgeType(e.target.value as "PERCENT" | "FIXED")}><option value="PERCENT">Percentage (%)</option><option value="FIXED">Fixed amount (₹)</option></select><input type="number" min="0" step="0.01" value={surgeValue} onChange={(e) => setSurgeValue(Math.max(0, Number(e.target.value)))} /><button onClick={() => saveFeeSettings()}>Save surge charge</button></div>
+              <div className={`order-toggle-panel ${lateNightEnabled ? "on" : "off"}`}><span><strong>Late-night delivery fee</strong><small>Shown separately in checkout and saved with each order.</small></span><button role="switch" aria-checked={lateNightEnabled} onClick={() => saveFeeSettings({ lateNightEnabled: !lateNightEnabled })}><i />{lateNightEnabled ? "ON" : "OFF"}</button></div>
+              <div className="service-admin-form"><select value={lateNightType} onChange={(e) => setLateNightType(e.target.value as "PERCENT" | "FIXED")}><option value="PERCENT">Percentage (%)</option><option value="FIXED">Fixed amount (₹)</option></select><input aria-label="Late-night delivery fee value" type="number" min="0" max={lateNightType === "PERCENT" ? 100 : undefined} step="0.01" value={lateNightValue} onChange={(e) => setLateNightValue(Math.max(0, Number(e.target.value)))} /><button onClick={() => saveFeeSettings()}>Save late-night fee</button></div>
             </div>
             <div className="admin-prices">
               {singleSideOptions.map((item) => (
@@ -1543,7 +1549,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                     </div>
                     <span className="status-chip">{order.payment_status} · {order.status}</span>
                     <strong>{inr.format(order.total_paise / 100)}</strong>
-                    <div className="payment-review-details"><span><small>Payment method</small><strong>{order.payment_status === "PAY_ON_DELIVERY" ? "Pay on delivery" : order.payment_reference || order.payment_status}</strong></span><span><small>Amount to collect</small><strong>{inr.format(order.total_paise / 100)}</strong></span><span><small>Payment gateway fee</small><strong>{inr.format((order.payment_gateway_fee_paise ?? 0) / 100)}</strong></span><span><small>Surge charge</small><strong>{inr.format((order.surge_fee_paise ?? 0) / 100)}</strong></span></div>
+                    <div className="payment-review-details"><span><small>Payment method</small><strong>{order.payment_status === "PAY_ON_DELIVERY" ? "Pay on delivery" : order.payment_reference || order.payment_status}</strong></span><span><small>Amount to collect</small><strong>{inr.format(order.total_paise / 100)}</strong></span><span><small>Payment gateway fee</small><strong>{inr.format((order.payment_gateway_fee_paise ?? 0) / 100)}</strong></span><span><small>Surge charge</small><strong>{inr.format((order.surge_fee_paise ?? 0) / 100)}</strong></span><span><small>Late-night delivery fee</small><strong>{inr.format((order.late_night_fee_paise ?? 0) / 100)}</strong></span></div>
                     {order.payment_status === "PAID" && order.payment_verified_at && <div className="payment-cleared-note"><strong>Payment received and verified</strong><small>Verified {new Date(order.payment_verified_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })} by {order.payment_verified_by}. Scanner deleted from admin, customer and delivery-partner views.</small></div>}
                     {Boolean(order.has_payment_qr) && <div className="admin-payment-qr"><strong>Legacy payment scanner</strong><img src={`/api/orders/${order.id}/payment-qr`} alt={`Payment scanner for ${order.order_number}`} /></div>}
                     {order.payment_status === "PAY_ON_DELIVERY" && order.status !== "CANCELLED" && <div className="payment-review-actions"><button className="mini-action" onClick={() => reviewPayment(order.id, "APPROVE")}>Payment received & verified</button></div>}
@@ -1602,6 +1608,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                 <span>{orderResult.paid ? "✓" : "₹"}</span><h2>{orderResult.paid ? "Order placed" : "Complete payment"}</h2>
                 <p>Order <strong>{orderResult.orderNumber}</strong> · {orderResult.locationName}</p>
                 <div className="payment-pending"><small>Payment status</small><strong>{orderResult.paid ? "PAID" : "PAYMENT REQUIRED"}</strong></div>
+                {(orderResult.lateNightFeePaise ?? 0) > 0 && <div className="payment-pending"><small>Late-night delivery fee</small><strong>{inr.format((orderResult.lateNightFeePaise ?? 0) / 100)}</strong></div>}
                 {orderResult.paid && orderResult.deliveryCode && <div><small>Your delivery code</small><strong>{orderResult.deliveryCode}</strong></div>}
                 <p>{orderResult.paid ? "Payment verified. Give this code to the delivery agent only after receiving your prints." : `Pay ${inr.format(orderResult.totalPaise / 100)} securely through Razorpay so printing can begin.`}</p>
                 {!orderResult.paid && <button className="save-button" disabled={paymentProcessing} onClick={() => startRazorpayPayment(orderResult)}>{paymentProcessing ? "Starting payment..." : `Pay ${inr.format(orderResult.totalPaise / 100)} now`}</button>}
@@ -1618,8 +1625,8 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                 <label className="checkout-field">Mobile number<input value={mobileNumber} onChange={(e) => setMobileNumber(e.target.value.replace(/\D/g, "").slice(0, 10))} placeholder="10-digit mobile number" inputMode="numeric" /></label>
                 <label className="checkout-field">Delivery location<select value={locationId} onChange={(e) => setLocationId(e.target.value)}><option value="">Select a location</option>{locations.map((location) => <option value={location.id} key={location.id}>{location.name}</option>)}</select></label>
                 {!locations.length && <p className="panel-message">No delivery locations are available yet. The admin must add one first.</p>}
-                <div className="fee-breakdown"><div><span>Printing subtotal</span><strong>{inr.format(cartPrintingTotal)}</strong></div>{cartServiceCharges > 0 && <div className="binding-charge-row"><span>Binding charges</span><strong>{inr.format(cartServiceCharges)}</strong></div>}<div><span>Delivery fee</span><strong>{inr.format(checkoutDeliveryFee)}</strong></div><div><span>Platform fee</span><strong>{inr.format(checkoutPlatformFee)}</strong></div><div><span>Handling charge ({cartPrintedPages} pages)</span><strong>{inr.format(packagingFee)}</strong></div>{surgeEnabled && <div className="surge-charge-row"><span>High-demand surge charge</span><strong>{inr.format(checkoutSurgeFee)}</strong></div>}</div>
-                <div className="checkout-total"><span>Estimated total</span><strong>{inr.format(cartTotal + checkoutDeliveryFee + checkoutPlatformFee + packagingFee + checkoutSurgeFee)}</strong></div>
+                <div className="fee-breakdown"><div><span>Printing subtotal</span><strong>{inr.format(cartPrintingTotal)}</strong></div>{cartServiceCharges > 0 && <div className="binding-charge-row"><span>Binding charges</span><strong>{inr.format(cartServiceCharges)}</strong></div>}<div><span>Delivery fee</span><strong>{inr.format(checkoutDeliveryFee)}</strong></div><div><span>Platform fee</span><strong>{inr.format(checkoutPlatformFee)}</strong></div><div><span>Handling charge ({cartPrintedPages} pages)</span><strong>{inr.format(packagingFee)}</strong></div>{surgeEnabled && <div className="surge-charge-row"><span>High-demand surge charge</span><strong>{inr.format(checkoutSurgeFee)}</strong></div>}{lateNightEnabled && <div className="surge-charge-row"><span>Late-night delivery fee</span><strong>{inr.format(checkoutLateNightFee)}</strong></div>}</div>
+                <div className="checkout-total"><span>Estimated total</span><strong>{inr.format(cartTotal + checkoutDeliveryFee + checkoutPlatformFee + packagingFee + checkoutSurgeFee + checkoutLateNightFee)}</strong></div>
                 <div className="pay-on-delivery-note"><strong>Secure online payment:</strong> After creating the order, complete payment through Razorpay. Printing begins only after verified payment.</div>
                 {orderError && <p className="form-error">{orderError}</p>}
                 <button className="save-button" disabled={!locations.length || paymentProcessing} onClick={placeOrder}>{paymentProcessing ? "Starting Razorpay..." : "Pay now"}</button>
@@ -1662,6 +1669,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
           <section className="orders-modal" role="dialog" aria-modal="true" onMouseDown={(e) => e.stopPropagation()}>
             <button className="close" onClick={() => setMyOrdersOpen(false)} aria-label="Close">×</button>
             <div className="admin-badge">CUSTOMER</div><h2>My orders</h2>
+            {myOrders.some((order) => (order.late_night_fee_paise ?? 0) > 0) && <div className="fee-breakdown">{myOrders.filter((order) => (order.late_night_fee_paise ?? 0) > 0).map((order) => <div key={`late-night-${order.id}`}><span>{order.order_number} · Late-night delivery fee</span><strong>{inr.format(order.late_night_fee_paise / 100)}</strong></div>)}</div>}
             {myOrders.some((order) => order.payment_status === "PENDING" && order.status !== "CANCELLED") && <div className="customer-error"><strong>Payment required</strong><p>Complete payment before PrintBee starts printing.</p>{myOrders.filter((order) => order.payment_status === "PENDING" && order.status !== "CANCELLED").map((order) => <button className="save-button" key={order.id} disabled={paymentProcessing} onClick={() => startRazorpayPayment(order)}>Pay {inr.format(order.total_paise / 100)} for {order.order_number}</button>)}</div>}
             {myOrders.length ? myOrders.map((order) => <article key={order.id}><div><strong>{order.order_number}</strong><small>{order.location_name} · {new Date(order.created_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}</small>{order.cancellation_reason && <small>Cancelled: {order.cancellation_reason}</small>}</div><span className="status-chip">{order.payment_status === "PAY_ON_DELIVERY" ? "PAY ON DELIVERY" : order.payment_status} · {order.status}</span><strong>{inr.format(order.total_paise / 100)}</strong><div className="order-progress"><span className="done">Order confirmed</span><span className={["PRINTING", "READY_FOR_PICKUP", "RIDER_ASSIGNED", "DELIVERED"].includes(order.status) ? "done" : ""}>Printing</span><span className={["READY_FOR_PICKUP", "RIDER_ASSIGNED", "DELIVERED"].includes(order.status) ? "done" : ""}>Ready</span><span className={["RIDER_ASSIGNED", "DELIVERED"].includes(order.status) ? "done" : ""}>Rider assigned</span><span className={order.payment_status === "PAID" ? "done" : "current"}>{order.payment_status === "PAID" ? "Payment received" : "Pay on delivery"}</span><span className={order.status === "DELIVERED" ? "done" : ""}>Delivered</span></div>{order.payment_rejection_reason && <div className="customer-error">{order.payment_rejection_reason}</div>}{Boolean(order.has_payment_qr) && order.status !== "DELIVERED" && <div className="customer-payment-qr"><div><strong>Pay {inr.format(order.total_paise / 100)}</strong><small>Use this scanner now or pay when your delivery partner arrives. Tap the scanner to enlarge.</small></div><button className="scanner-expand-button" onClick={() => setExpandedScanner({ src: `/api/orders/${order.id}/payment-qr`, alt: `Payment scanner for ${order.order_number}` })}><img src={`/api/orders/${order.id}/payment-qr`} alt={`Payment scanner for ${order.order_number}`} /></button></div>}{order.rider_name && <div className="assigned-rider"><span><small>Delivery partner assigned</small><strong>{order.rider_name}</strong>{order.rider_mobile_number && <b>{order.rider_mobile_number}</b>}</span>{order.rider_mobile_number && <a href={`tel:${order.rider_mobile_number}`}>Call delivery partner</a>}</div>}{order.status !== "CANCELLED" && ["RIDER_ASSIGNED", "DELIVERED"].includes(order.status) && <div className="customer-code"><span><small>Order ID</small><b>{order.order_number}</b></span><span><small>Delivery OTP · share only after receiving prints</small><strong>{order.deliveryCode}</strong></span></div>}</article>) : <p>No orders yet.</p>}
           </section>

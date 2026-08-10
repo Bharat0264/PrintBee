@@ -47,6 +47,7 @@ export const orders = sqliteTable("orders", {
   totalPaise: integer("total_paise").notNull(),
   paymentGatewayFeePaise: integer("payment_gateway_fee_paise").notNull().default(0),
   surgeFeePaise: integer("surge_fee_paise").notNull().default(0),
+  lateNightFeePaise: integer("late_night_fee_paise").notNull().default(0),
   deliveryCodeHash: text("delivery_code_hash").notNull(),
   deliveryCodeEncrypted: text("delivery_code_encrypted"),
   status: text("status").notNull().default("PAYMENT_PENDING"),
@@ -124,7 +125,7 @@ export const orderAvailability = sqliteTable("order_availability", {
 });
 
 export const checkoutFeeSettings = sqliteTable("checkout_fee_settings", {
-  id: text("id").primaryKey(), gatewayEnabled: integer("gateway_enabled", { mode: "boolean" }).notNull().default(true), surgeEnabled: integer("surge_enabled", { mode: "boolean" }).notNull().default(false), surgeType: text("surge_type").notNull().default("PERCENT"), surgeValue: real("surge_value").notNull().default(0), updatedAt: text("updated_at").notNull(), updatedBy: text("updated_by"),
+  id: text("id").primaryKey(), gatewayEnabled: integer("gateway_enabled", { mode: "boolean" }).notNull().default(true), surgeEnabled: integer("surge_enabled", { mode: "boolean" }).notNull().default(false), surgeType: text("surge_type").notNull().default("PERCENT"), surgeValue: real("surge_value").notNull().default(0), lateNightEnabled: integer("late_night_enabled", { mode: "boolean" }).notNull().default(false), lateNightType: text("late_night_type").notNull().default("PERCENT"), lateNightValue: real("late_night_value").notNull().default(0), updatedAt: text("updated_at").notNull(), updatedBy: text("updated_by"),
 });
 
 export const packagingChargeRules = sqliteTable("packaging_charge_rules", {
