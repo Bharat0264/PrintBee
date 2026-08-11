@@ -30,6 +30,13 @@ test("optimizes images and splits larger files below the request-layer threshold
   assert.match(appSource, /api\/uploads\/chunked\?action=part/);
 });
 
+test("large uploads report progress and cannot remain stuck as page counting", () => {
+  assert.match(appSource, /Uploading… \$\{uploadProgress\}%/);
+  assert.match(appSource, /AbortSignal\.timeout\(30_000\)/);
+  assert.match(appSource, /start \+= 4/);
+  assert.match(appSource, /onProgress\?\.\(Math\.round/);
+});
+
 test("accepts browser-optimized WebP payloads produced from allowed images", () => {
   assert.match(uploadSource, /jpe\?g\|png\|webp/);
   assert.match(chunkedSource, /jpe\?g\|png\|webp/);

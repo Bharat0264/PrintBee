@@ -102,31 +102,49 @@ async function optimizeImageForUpload(file: File) {
   }
 }
 
-async function uploadPrintableFile(file: File, pageCount: number) {
+async function fetchUpload(input: RequestInfo | URL, init: RequestInit, attempts = 2) {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      return await fetch(input, { ...init, signal: AbortSignal.timeout(30_000) });
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError;
+}
+
+async function uploadPrintableFile(file: File, pageCount: number, onProgress?: (percent: number) => void) {
   if (file.size <= CHUNKED_UPLOAD_THRESHOLD_BYTES) {
     const form = new FormData();
     form.append("file", file);
     form.append("pageCount", String(pageCount));
-    const response = await fetch("/api/uploads", { method: "POST", body: form });
+    const response = await fetchUpload("/api/uploads", { method: "POST", body: form });
     const data = await response.json().catch(() => ({}));
     if (!response.ok || !data.uploadId) throw new Error(data.error ?? "Document upload failed. Please try again.");
     return data;
   }
 
   const details = { fileName: file.name, fileSize: file.size, pageCount, contentType: file.type };
-  const initResponse = await fetch("/api/uploads/chunked?action=init", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(details) });
+  const initResponse = await fetchUpload("/api/uploads/chunked?action=init", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(details) });
   const init = await initResponse.json().catch(() => ({}));
   if (!initResponse.ok || !init.sessionId || !init.chunkSize) throw new Error(init.error ?? "Document upload could not start. Please try again.");
   const chunkCount = Math.ceil(file.size / init.chunkSize);
-  for (let index = 0; index < chunkCount; index += 1) {
+  let uploadedChunks = 0;
+  const uploadChunk = async (index: number) => {
     const chunk = file.slice(index * init.chunkSize, Math.min(file.size, (index + 1) * init.chunkSize));
-    const partResponse = await fetch(`/api/uploads/chunked?action=part&sessionId=${encodeURIComponent(init.sessionId)}&index=${index}`, { method: "POST", headers: { "Content-Type": "application/octet-stream" }, body: chunk });
+    const partResponse = await fetchUpload(`/api/uploads/chunked?action=part&sessionId=${encodeURIComponent(init.sessionId)}&index=${index}`, { method: "POST", headers: { "Content-Type": "application/octet-stream" }, body: chunk });
     if (!partResponse.ok) {
       const part = await partResponse.json().catch(() => ({}));
       throw new Error(part.error ?? `Upload stopped at part ${index + 1}. Please try again.`);
     }
+    uploadedChunks += 1;
+    onProgress?.(Math.round((uploadedChunks / chunkCount) * 100));
+  };
+  for (let start = 0; start < chunkCount; start += 4) {
+    await Promise.all(Array.from({ length: Math.min(4, chunkCount - start) }, (_, offset) => uploadChunk(start + offset)));
   }
-  const completeResponse = await fetch("/api/uploads/chunked?action=complete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...details, sessionId: init.sessionId, chunkCount }) });
+  const completeResponse = await fetchUpload("/api/uploads/chunked?action=complete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...details, sessionId: init.sessionId, chunkCount }) });
   const completed = await completeResponse.json().catch(() => ({}));
   if (!completeResponse.ok || !completed.uploadId) throw new Error(completed.error ?? "Document upload could not be completed. Please try again.");
   return completed;
@@ -213,6 +231,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [fileType, setFileType] = useState<"PDF" | "IMAGE">("PDF");
   const [countingPages, setCountingPages] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [uploadError, setUploadError] = useState("");
   const [cart, setCart] = useState<CartItem[]>([]);
   const [adminOpen, setAdminOpen] = useState(false);
@@ -484,6 +503,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
     if (usesMixedPagePricing && !colourPagesValid) return setUploadError("Enter valid colour page numbers, or select NA if there are no colour pages.");
     if (selectedFile.size > MAX_UPLOAD_BYTES) return setUploadError("This file is larger than the 50 MB upload limit.");
     setCountingPages(true);
+    setUploadProgress(0);
     setUploadError("");
     let uploadFile = selectedFile;
     try {
@@ -494,11 +514,12 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
     }
     let uploaded: any;
     try {
-      uploaded = await uploadPrintableFile(uploadFile, pages);
+      uploaded = await uploadPrintableFile(uploadFile, pages, setUploadProgress);
     } catch (error) {
       return setUploadError(error instanceof Error ? error.message : "The document could not be uploaded. Check your connection and try again.");
     } finally {
       setCountingPages(false);
+      setUploadProgress(null);
     }
     const service = printServices.find((item) => item.id === serviceId);
     setCart((items) => [
@@ -1260,7 +1281,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
             <input type="file" accept="application/pdf,.pdf,image/jpeg,.jpg,.jpeg,image/png,.png,image/heic,.heic" onChange={handleFile} />
             <span className="upload-icon">{countingPages ? "…" : fileName ? "✓" : "↑"}</span>
             <strong>{fileName || "Choose a document"}</strong>
-            <small>{countingPages ? "Counting pages…" : fileName ? `${pages} ${pages === 1 ? "page" : "pages"} detected` : "or drag and drop it here"}</small>
+            <small>{uploadProgress !== null ? `Uploading… ${uploadProgress}%` : countingPages ? "Counting pages…" : fileName ? `${pages} ${pages === 1 ? "page" : "pages"} detected` : "or drag and drop it here"}</small>
           </label>
           <p className="file-retention-note"><strong>Document privacy:</strong> Your uploaded files will be deleted once the order is delivered or cancelled. Maximum file size: 50 MB.</p>
           {uploadError && <p className="upload-error">{uploadError}</p>}
