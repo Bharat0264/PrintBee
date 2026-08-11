@@ -128,23 +128,26 @@ async function uploadPrintableFile(file: File, pageCount: number, onProgress?: (
   const details = { fileName: file.name, fileSize: file.size, pageCount, contentType: file.type };
   const initResponse = await fetchUpload("/api/uploads/chunked?action=init", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(details) });
   const init = await initResponse.json().catch(() => ({}));
-  if (!initResponse.ok || !init.sessionId || !init.chunkSize) throw new Error(init.error ?? "Document upload could not start. Please try again.");
+  if (!initResponse.ok || !init.sessionId || !init.uploadId || !init.chunkSize) throw new Error(init.error ?? "Document upload could not start. Please try again.");
   const chunkCount = Math.ceil(file.size / init.chunkSize);
   let uploadedChunks = 0;
+  const uploadedParts: Array<{ partNumber: number; etag: string }> = [];
   const uploadChunk = async (index: number) => {
     const chunk = file.slice(index * init.chunkSize, Math.min(file.size, (index + 1) * init.chunkSize));
-    const partResponse = await fetchUpload(`/api/uploads/chunked?action=part&sessionId=${encodeURIComponent(init.sessionId)}&index=${index}`, { method: "POST", headers: { "Content-Type": "application/octet-stream" }, body: chunk });
+    const partResponse = await fetchUpload(`/api/uploads/chunked?action=part&sessionId=${encodeURIComponent(init.sessionId)}&uploadId=${encodeURIComponent(init.uploadId)}&fileName=${encodeURIComponent(file.name)}&index=${index}`, { method: "POST", headers: { "Content-Type": "application/octet-stream" }, body: chunk });
+    const part = await partResponse.json().catch(() => ({}));
     if (!partResponse.ok) {
-      const part = await partResponse.json().catch(() => ({}));
       throw new Error(part.error ?? `Upload stopped at part ${index + 1}. Please try again.`);
     }
+    if (!part.partNumber || !part.etag) throw new Error(`Upload part ${index + 1} could not be verified. Please try again.`);
+    uploadedParts[index] = { partNumber: part.partNumber, etag: part.etag };
     uploadedChunks += 1;
     onProgress?.(Math.round((uploadedChunks / chunkCount) * 100));
   };
   for (let start = 0; start < chunkCount; start += 4) {
     await Promise.all(Array.from({ length: Math.min(4, chunkCount - start) }, (_, offset) => uploadChunk(start + offset)));
   }
-  const completeResponse = await fetchUpload("/api/uploads/chunked?action=complete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...details, sessionId: init.sessionId, chunkCount }) });
+  const completeResponse = await fetchUpload("/api/uploads/chunked?action=complete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...details, sessionId: init.sessionId, uploadId: init.uploadId, parts: uploadedParts }) });
   const completed = await completeResponse.json().catch(() => ({}));
   if (!completeResponse.ok || !completed.uploadId) throw new Error(completed.error ?? "Document upload could not be completed. Please try again.");
   return completed;

@@ -35,6 +35,10 @@ test("large uploads report progress and cannot remain stuck as page counting", (
   assert.match(appSource, /AbortSignal\.timeout\(30_000\)/);
   assert.match(appSource, /start \+= 4/);
   assert.match(appSource, /onProgress\?\.\(Math\.round/);
+  assert.match(chunkedSource, /createMultipartUpload/);
+  assert.match(chunkedSource, /resumeMultipartUpload/);
+  assert.match(chunkedSource, /multipart\.complete\(parts\)/);
+  assert.doesNotMatch(chunkedSource, /objects\.map\(\(object\) => object!\.arrayBuffer\(\)\)/);
 });
 
 test("accepts browser-optimized WebP payloads produced from allowed images", () => {
