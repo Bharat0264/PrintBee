@@ -5,23 +5,22 @@ import { getViewer } from "../../supabase/server";
 export async function GET() {
   const viewer = await getViewer();
   if (!viewer) return NextResponse.json({ role: null });
-  if (viewer.isAdmin) return NextResponse.json({ role: "ADMIN" });
   const db = database();
   const row = await db.prepare("SELECT role, approval_status, is_available FROM app_users WHERE email = ?").bind(viewer.email).first<{ role: string; approval_status: string; is_available: number }>();
   let profile = await db.prepare("SELECT referral_code, points_balance, referred_by_email FROM customer_profiles WHERE email=?").bind(viewer.email).first<any>();
   if (!profile) {
     for (let attempt = 0; attempt < 5 && !profile; attempt += 1) {
       const code = `PB${crypto.randomUUID().replace(/-/g, "").slice(0, 8).toUpperCase()}`;
-      await db.prepare("INSERT OR IGNORE INTO customer_profiles (email,referral_code,points_balance,created_at) VALUES (?,?,0,?)").bind(viewer.email, code, new Date().toISOString()).run();
+      await db.prepare("INSERT OR IGNORE INTO customer_profiles (email,referral_code,points_balance,created_at) VALUES (?,?,10,?)").bind(viewer.email, code, new Date().toISOString()).run();
       profile = await db.prepare("SELECT referral_code, points_balance, referred_by_email FROM customer_profiles WHERE email=?").bind(viewer.email).first<any>();
     }
   }
-  return NextResponse.json({ role: row?.role ?? "CUSTOMER", approvalStatus: row?.approval_status ?? null, isAvailable: Boolean(row?.is_available), referralCode: profile?.referral_code, pointsBalance: profile?.points_balance ?? 0, hasReferrer: Boolean(profile?.referred_by_email) });
+  return NextResponse.json({ role: viewer.isAdmin ? "ADMIN" : row?.role ?? "CUSTOMER", approvalStatus: row?.approval_status ?? null, isAvailable: Boolean(row?.is_available), referralCode: profile?.referral_code, pointsBalance: profile?.points_balance ?? 10, hasReferrer: Boolean(profile?.referred_by_email) });
 }
 
 export async function POST(request: Request) {
   const viewer = await getViewer();
-  if (!viewer || viewer.isAdmin) return NextResponse.json({ error: "Sign in required" }, { status: 401 });
+  if (!viewer) return NextResponse.json({ error: "Sign in required" }, { status: 401 });
   const code = String((await request.json() as any).referralCode ?? "").trim().toUpperCase();
   if (!code) return NextResponse.json({ skipped: true });
   const db = database();

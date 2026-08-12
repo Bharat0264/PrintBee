@@ -162,6 +162,13 @@
       "when": 1786550400000,
       "tag": "0022_feedback_referrals_rider_availability",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "6",
+      "when": 1786554000000,
+      "tag": "0023_account_welcome_bonus",
+      "breakpoints": true
     }
   ]
 }

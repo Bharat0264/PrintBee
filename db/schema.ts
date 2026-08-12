@@ -23,7 +23,7 @@ export const customerProfiles = sqliteTable("customer_profiles", {
   email: text("email").primaryKey(),
   referralCode: text("referral_code").notNull().unique(),
   referredByEmail: text("referred_by_email"),
-  pointsBalance: integer("points_balance").notNull().default(0),
+  pointsBalance: integer("points_balance").notNull().default(10),
   createdAt: text("created_at").notNull(),
 });
 
