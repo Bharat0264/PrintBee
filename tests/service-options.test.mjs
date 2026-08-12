@@ -9,6 +9,8 @@ const orderSource = await readFile(new URL("../app/api/orders/route.ts", import.
 test("customers choose visible service options instead of a dropdown", () => {
   assert.match(appSource, /className="service-option-grid"/);
   assert.match(appSource, /role="radiogroup"/);
+  assert.match(appSource, /\{printServices\.map\(\(service\) =>/);
+  assert.doesNotMatch(appSource, /printServices\.filter\(\(service\) => MIXED_PRINT_SERVICES\.has\(service\.id\)\)/);
   assert.doesNotMatch(appSource, /<select value=\{serviceId\}/);
 });
 

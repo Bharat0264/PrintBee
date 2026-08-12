@@ -1320,7 +1320,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
           {fileName && <>
           <div className="field-label"><span className="step">2</span> Choose service</div>
           <div className="service-option-grid" role="radiogroup" aria-label="Print service">
-            {printServices.filter((service) => MIXED_PRINT_SERVICES.has(service.id)).map((service) => <button type="button" role="radio" aria-checked={serviceId === service.id} className={serviceId === service.id ? "selected" : ""} key={service.id} onClick={() => setServiceId(service.id)}><span><strong>{service.name}</strong><small>{service.description}</small></span><b>{service.price_paise ? `+${inr.format(service.price_paise / 100)}` : "Included"}</b></button>)}
+            {printServices.map((service) => <button type="button" role="radio" aria-checked={serviceId === service.id} className={serviceId === service.id ? "selected" : ""} key={service.id} onClick={() => setServiceId(service.id)}><span><strong>{service.name}</strong><small>{service.description}</small></span><b>{service.price_paise ? `+${inr.format(service.price_paise / 100)}` : "Included"}</b></button>)}
           </div>
           {Boolean(printServices.find((service) => service.id === serviceId)?.is_binding) && (
             <div className="binding-fields">
