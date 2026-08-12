@@ -1,0 +1,40 @@
+import { NextResponse } from "next/server";
+import { database, fileBucket } from "../db";
+import { getViewer } from "../../supabase/server";
+
+export async function GET() {
+  const viewer = await getViewer();
+  if (!viewer) return NextResponse.json([]);
+  const rows = await database().prepare("SELECT c.item_json FROM cart_items c JOIN uploads u ON u.id=c.upload_id WHERE c.customer_email=? AND u.customer_email=? AND u.order_id IS NULL AND u.deleted_at IS NULL ORDER BY c.created_at")
+    .bind(viewer.email, viewer.email).all<{ item_json: string }>();
+  return NextResponse.json(rows.results.flatMap((row) => { try { return [JSON.parse(row.item_json)]; } catch { return []; } }));
+}
+
+export async function POST(request: Request) {
+  const viewer = await getViewer();
+  if (!viewer) return NextResponse.json({ error: "Sign in required" }, { status: 401 });
+  const item = await request.json() as { id?: string; uploadId?: string };
+  if (!item.id || !item.uploadId) return NextResponse.json({ error: "Invalid cart item" }, { status: 400 });
+  const itemJson = JSON.stringify(item);
+  if (itemJson.length > 20_000) return NextResponse.json({ error: "Invalid cart item" }, { status: 400 });
+  const upload = await database().prepare("SELECT id FROM uploads WHERE id=? AND customer_email=? AND order_id IS NULL AND deleted_at IS NULL").bind(item.uploadId, viewer.email).first();
+  if (!upload) return NextResponse.json({ error: "The uploaded file is unavailable" }, { status: 400 });
+  await database().prepare("INSERT INTO cart_items (id,customer_email,upload_id,item_json,created_at) VALUES (?,?,?,?,?) ON CONFLICT(upload_id) DO UPDATE SET item_json=excluded.item_json")
+    .bind(item.id, viewer.email, item.uploadId, itemJson, new Date().toISOString()).run();
+  return NextResponse.json({ saved: true });
+}
+
+export async function DELETE(request: Request) {
+  const viewer = await getViewer();
+  if (!viewer) return NextResponse.json({ error: "Sign in required" }, { status: 401 });
+  const uploadId = new URL(request.url).searchParams.get("uploadId") ?? "";
+  const upload = await database().prepare("SELECT storage_key FROM uploads WHERE id=? AND customer_email=? AND order_id IS NULL").bind(uploadId, viewer.email).first<{ storage_key: string }>();
+  if (!upload) return NextResponse.json({ removed: true });
+  await fileBucket().delete(upload.storage_key);
+  const db = database();
+  await db.batch([
+    db.prepare("DELETE FROM cart_items WHERE upload_id=? AND customer_email=?").bind(uploadId, viewer.email),
+    db.prepare("DELETE FROM uploads WHERE id=? AND customer_email=? AND order_id IS NULL").bind(uploadId, viewer.email),
+  ]);
+  return NextResponse.json({ removed: true });
+}

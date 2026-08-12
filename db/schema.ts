@@ -31,6 +31,14 @@ export const uploads = sqliteTable("uploads", {
   deletedAt: text("deleted_at"),
 });
 
+export const cartItems = sqliteTable("cart_items", {
+  id: text("id").primaryKey(),
+  customerEmail: text("customer_email").notNull(),
+  uploadId: text("upload_id").notNull().unique(),
+  itemJson: text("item_json").notNull(),
+  createdAt: text("created_at").notNull(),
+});
+
 export const orders = sqliteTable("orders", {
   id: text("id").primaryKey(),
   orderNumber: text("order_number").notNull().unique(),

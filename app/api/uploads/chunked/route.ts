@@ -7,7 +7,7 @@ const MAX_CHUNK_BYTES = 5 * 1024 * 1024;
 const MAX_CHUNKS = Math.ceil(MAX_UPLOAD_BYTES / MAX_CHUNK_BYTES);
 
 function validFileName(name: string) {
-  return /\.(pdf|heic|jpe?g|png|webp)$/i.test(name);
+  return /\.(pdf|heic|jpe?g|png|webp|gif|bmp|tiff?|docx?|pptx?|xlsx?|odt|ods|odp|rtf|txt|csv)$/i.test(name);
 }
 
 function safeName(name: string) {
@@ -29,7 +29,7 @@ export async function POST(request: Request) {
     const fileName = body.fileName?.trim() ?? "";
     const fileSize = Math.round(Number(body.fileSize));
     const pageCount = Math.round(Number(body.pageCount));
-    if (!validFileName(fileName)) return NextResponse.json({ error: "Upload only PDF, JPEG, PNG, or HEIC files." }, { status: 400 });
+    if (!validFileName(fileName)) return NextResponse.json({ error: "This file type cannot be printed. Upload a document, spreadsheet, presentation, text file, or image." }, { status: 400 });
     if (!Number.isInteger(fileSize) || fileSize < 1 || fileSize > MAX_UPLOAD_BYTES) return NextResponse.json({ error: "The maximum upload size is 50 MB." }, { status: 413 });
     if (!Number.isInteger(pageCount) || pageCount < 1) return NextResponse.json({ error: "The document page count could not be verified" }, { status: 400 });
     const uploadId = crypto.randomUUID();

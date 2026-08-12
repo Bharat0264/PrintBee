@@ -34,7 +34,9 @@ const inr = new Intl.NumberFormat("en-IN", {
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 const HOSTED_IMAGE_TARGET_BYTES = 700 * 1024;
 const CHUNKED_UPLOAD_THRESHOLD_BYTES = 700 * 1024;
-const IMAGE_EXTENSIONS = /\.(heic|jpe?g|png)$/i;
+const IMAGE_EXTENSIONS = /\.(heic|jpe?g|png|webp|gif|bmp|tiff?)$/i;
+const OPTIMIZABLE_IMAGE_EXTENSIONS = /\.(jpe?g|png|webp)$/i;
+const PRINTABLE_FILE_EXTENSIONS = /\.(pdf|heic|jpe?g|png|webp|gif|bmp|tiff?|docx?|pptx?|xlsx?|odt|ods|odp|rtf|txt|csv)$/i;
 const MIXED_PRINT_SERVICES = new Set(["document-printing", "document-binding"]);
 const GEN_Z_MEMES = [
   "POV: You skipped the Xerox queue and chose peace. 😌",
@@ -75,7 +77,7 @@ function formatPageRanges(pageNumbers: number[]) {
 }
 
 async function optimizeImageForUpload(file: File) {
-  if (!(file.type.startsWith("image/") || IMAGE_EXTENSIONS.test(file.name)) || file.size <= HOSTED_IMAGE_TARGET_BYTES) return file;
+  if (!OPTIMIZABLE_IMAGE_EXTENSIONS.test(file.name) || file.size <= HOSTED_IMAGE_TARGET_BYTES) return file;
   const bitmap = await createImageBitmap(file);
   try {
     const maxSide = 5000;
@@ -102,11 +104,11 @@ async function optimizeImageForUpload(file: File) {
   }
 }
 
-async function fetchUpload(input: RequestInfo | URL, init: RequestInit, attempts = 2) {
+async function fetchUpload(input: RequestInfo | URL, init: RequestInit, attempts = 3) {
   let lastError: unknown;
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     try {
-      return await fetch(input, { ...init, signal: AbortSignal.timeout(30_000) });
+      return await fetch(input, { ...init, signal: AbortSignal.timeout(60_000) });
     } catch (error) {
       lastError = error;
     }
@@ -205,7 +207,7 @@ type CartItem = {
   id: string;
   uploadId: string;
   fileName: string;
-  fileType: "PDF" | "IMAGE";
+  fileType: "PDF" | "IMAGE" | "DOCUMENT";
   pages: number;
   copies: number;
   mode: PrintMode;
@@ -232,7 +234,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   const [copies, setCopies] = useState(1);
   const [fileName, setFileName] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [fileType, setFileType] = useState<"PDF" | "IMAGE">("PDF");
+  const [fileType, setFileType] = useState<"PDF" | "IMAGE" | "DOCUMENT">("PDF");
   const [countingPages, setCountingPages] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [uploadError, setUploadError] = useState("");
@@ -357,6 +359,11 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   }, [viewer]);
 
   useEffect(() => {
+    if (!viewer || viewer.isAdmin) return;
+    fetch("/api/cart", { cache: "no-store" }).then((response) => response.ok ? response.json() : []).then((items) => setCart(Array.isArray(items) ? items : [])).catch(() => {});
+  }, [viewer?.email, viewer?.isAdmin]);
+
+  useEffect(() => {
     const storedMode = window.localStorage.getItem("printbee-login-mode");
     if (storedMode === "PARTNER") setLoginMode("PARTNER");
   }, []);
@@ -474,6 +481,11 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
       setUploadError(`"${file.name}" is too large. Please upload a PDF or image smaller than 50 MB.`);
       return;
     }
+    if (!PRINTABLE_FILE_EXTENSIONS.test(file.name)) {
+      event.target.value = "";
+      setUploadError("This file type cannot be printed. Choose a document, spreadsheet, presentation, text file, or image.");
+      return;
+    }
     setFileName(file.name);
     setSelectedFile(file);
     setColourChoice("");
@@ -489,7 +501,8 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
         setPages(1);
         setFileType("IMAGE");
       } else {
-        throw new Error("Upload only PDF, JPEG, PNG, or HEIC files.");
+        setPages(1);
+        setFileType("DOCUMENT");
       }
     } catch (error) {
       setFileName("");
@@ -525,9 +538,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
       setUploadProgress(null);
     }
     const service = printServices.find((item) => item.id === serviceId);
-    setCart((items) => [
-      ...items,
-      {
+    const cartItem: CartItem = {
         id: crypto.randomUUID(),
         uploadId: uploaded.uploadId,
         fileName,
@@ -548,8 +559,16 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
         colourPageNumbers: usesMixedPagePricing ? (colourChoice === "bw" ? "NA" : colourChoice === "colour" ? "All pages" : colourPageNumbers.trim()) : undefined,
         bwPageNumbers: usesMixedPagePricing ? bwPageNumbers : undefined,
         whatsappNumber: whatsappNumber.replace(/\D/g, ""),
-      },
-    ]);
+      };
+    try {
+      const cartResponse = await fetch("/api/cart", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cartItem) });
+      const cartResult = await cartResponse.json().catch(() => ({}));
+      if (!cartResponse.ok) throw new Error(cartResult.error ?? "The cart could not be saved.");
+    } catch (error) {
+      await fetch(`/api/cart?uploadId=${encodeURIComponent(cartItem.uploadId)}`, { method: "DELETE" }).catch(() => {});
+      return setUploadError(error instanceof Error ? error.message : "The cart could not be saved. Please try again.");
+    }
+    setCart((items) => [...items, cartItem]);
     setFileName("");
     setSelectedFile(null);
     setPages(1);
@@ -557,6 +576,15 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
     setPrintInstructions("");
     setColourPageNumbers("");
     setColourChoice("");
+  };
+
+  const removeFromCart = async (item: CartItem) => {
+    const response = await fetch(`/api/cart?uploadId=${encodeURIComponent(item.uploadId)}`, { method: "DELETE" });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      return setUploadError(data.error ?? "This item could not be removed. Please try again.");
+    }
+    setCart((items) => items.filter((current) => current.id !== item.id));
   };
 
   const cartTotal = cart.reduce((sum, item) => sum + item.total, 0);
@@ -1277,11 +1305,11 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
           {acceptingOrders ? <>
           <div className="card-heading">
             <span className="step">1</span>
-            <div><h2>Start your print</h2><p>PDF, JPEG, PNG or HEIC · A4 only</p></div>
+            <div><h2>Start your print</h2><p>Documents, spreadsheets, presentations and images · A4 only</p></div>
           </div>
 
           <label className={`upload-zone ${fileName ? "has-file" : ""}`}>
-            <input type="file" accept="application/pdf,.pdf,image/jpeg,.jpg,.jpeg,image/png,.png,image/heic,.heic" onChange={handleFile} />
+            <input type="file" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.odt,.ods,.odp,.rtf,.txt,.csv,.jpg,.jpeg,.png,.heic,.webp,.gif,.bmp,.tif,.tiff" onChange={handleFile} />
             <span className="upload-icon">{countingPages ? "…" : fileName ? "✓" : "↑"}</span>
             <strong>{fileName || "Choose a document"}</strong>
             <small>{uploadProgress !== null ? `Uploading… ${uploadProgress}%` : countingPages ? "Counting pages…" : fileName ? `${pages} ${pages === 1 ? "page" : "pages"} detected` : "or drag and drop it here"}</small>
@@ -1352,10 +1380,10 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                 const itemOption = options.find((option) => option.id === item.mode);
                 return (
                   <article className="cart-item" key={item.id}>
-                    <div className="file-badge">{item.fileType === "PDF" ? "PDF" : "IMG"}</div>
+                    <div className="file-badge">{item.fileType === "PDF" ? "PDF" : item.fileType === "IMAGE" ? "IMG" : "DOC"}</div>
                     <div className="cart-file"><h3>{item.fileName}</h3><p>{item.serviceName} · {item.pages} {item.pages === 1 ? "page" : "pages"} · A4 · {itemOption?.title ?? printModeLabel(item.mode)} · {item.copies} {item.copies === 1 ? "copy" : "copies"}</p>{item.colourPageNumbers !== undefined && <p>Colour pages: {item.colourPageNumbers} · B&amp;W pages: {item.bwPageNumbers ?? `remaining ${item.pages - (item.colourPages ?? 0)} pages`}</p>}{item.printInstructions && <p>{item.printInstructions}{item.whatsappNumber ? ` · WhatsApp ${item.whatsappNumber}` : ""}</p>}<small>{item.colourPageNumbers !== undefined ? `${item.pages - (item.colourPages ?? 0)} B&W + ${item.colourPages ?? 0} colour × ${item.copies}` : `${item.pages} × ${item.copies} × ${inr.format(item.unitPrice)}`}{item.servicePrice > 0 ? ` + ${inr.format(item.servicePrice)} service charge` : ""}</small></div>
                     <strong>{inr.format(item.total)}</strong>
-                    <button className="remove-item" onClick={() => setCart((items) => items.filter((current) => current.id !== item.id))} aria-label={`Remove ${item.fileName}`}>×</button>
+                    <button className="remove-item" onClick={() => removeFromCart(item)} aria-label={`Remove ${item.fileName}`}>×</button>
                   </article>
                 );
               })}

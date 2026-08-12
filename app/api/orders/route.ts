@@ -47,6 +47,9 @@ export async function POST(request: Request) {
   const orderNumber = `PB${String(sequence.number).padStart(3, "0")}`;
   await db.prepare(`INSERT INTO orders (id, order_number, customer_email, customer_name, mobile_number, location_id, location_name, items_json, printing_subtotal_paise, delivery_fee_paise, platform_fee_paise, packaging_fee_paise, payment_gateway_fee_paise, surge_fee_paise, late_night_fee_paise, total_paise, delivery_code_hash, delivery_code_encrypted, status, payment_status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PAYMENT_PENDING', 'PENDING', ?)`)
     .bind(id, orderNumber, viewer.email, name, mobile, location.id, location.name, JSON.stringify(body.items), printingSubtotalPaise, deliveryFeePaise, platformFeePaise, packagingFeePaise, paymentGatewayFeePaise, surgeFeePaise, lateNightFeePaise, totalPaise, hash, encryptedCode, new Date().toISOString()).run();
-  await db.batch(uploadIds.map((uploadId) => db.prepare("UPDATE uploads SET order_id=? WHERE id=?").bind(id, uploadId)));
+  await db.batch([
+    ...uploadIds.map((uploadId) => db.prepare("UPDATE uploads SET order_id=? WHERE id=?").bind(id, uploadId)),
+    ...uploadIds.map((uploadId) => db.prepare("DELETE FROM cart_items WHERE upload_id=? AND customer_email=?").bind(uploadId, viewer.email)),
+  ]);
   return NextResponse.json({ id, orderNumber, locationName: location.name, totalPaise, lateNightFeePaise, paymentMode: "RAZORPAY" });
 }

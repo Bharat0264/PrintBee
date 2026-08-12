@@ -148,6 +148,13 @@
       "when": 1786365000000,
       "tag": "0020_late_night_delivery_fee",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "6",
+      "when": 1786524000000,
+      "tag": "0021_persistent_cart",
+      "breakpoints": true
     }
   ]
 }
