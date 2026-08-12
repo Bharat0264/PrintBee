@@ -292,6 +292,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   const [withdrawUpi, setWithdrawUpi] = useState("");
   const [saved, setSaved] = useState(false);
   const [riderPayment, setRiderPayment] = useState({ riderEmail: "", amount: "", paymentDate: new Date().toISOString().slice(0, 10), note: "" });
+  const [grantPointDrafts, setGrantPointDrafts] = useState<Record<string, string>>({});
   const [riderApplicationOpen, setRiderApplicationOpen] = useState(false);
   const [riderApplication, setRiderApplication] = useState({ name: "", mobileNumber: "" });
   const [exportFrom, setExportFrom] = useState("");
@@ -374,6 +375,26 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
       window.localStorage.removeItem("printbee-referral-code");
     }).catch(() => {});
   }, [viewer]);
+
+  useEffect(() => {
+    if (!viewer || viewer.isAdmin) return;
+    const checkWalletCredits = async () => {
+      const response = await fetch("/api/me", { cache: "no-store" });
+      if (!response.ok) return;
+      const data = await response.json();
+      setPointsBalance(Number(data.pointsBalance) || 0);
+      const credit = data.latestCredit;
+      if (!credit?.id) return;
+      const seenKey = `printbee-wallet-credit-${viewer.email}`;
+      if (window.localStorage.getItem(seenKey) === credit.id) return;
+      window.localStorage.setItem(seenKey, credit.id);
+      setNotificationToast({ title: `+${credit.points} wallet points`, body: credit.description });
+      await sendOrderNotification(`+${credit.points} PrintBee wallet points`, credit.description, `wallet-${credit.id}`);
+    };
+    checkWalletCredits().catch(() => {});
+    const refresh = window.setInterval(() => checkWalletCredits().catch(() => {}), 15000);
+    return () => window.clearInterval(refresh);
+  }, [viewer?.email]);
 
   useEffect(() => {
     if (!viewer) return;
@@ -1026,6 +1047,15 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
     if (response.ok) await loadRiderOrders();
   };
 
+  const grantOrderPoints = async (orderId: string) => {
+    const points = Math.round(Number(grantPointDrafts[orderId]));
+    if (!points) return;
+    const response = await fetch("/api/admin/orders/points", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ orderId, points }) });
+    const data = await response.json().catch(() => ({}));
+    setAdminMessage(response.ok ? `${points} wallet points credited to the customer.` : data.error ?? "Points could not be credited");
+    if (response.ok) setGrantPointDrafts((drafts) => ({ ...drafts, [orderId]: "" }));
+  };
+
   const submitFeedback = async () => {
     setFeedbackMessage("");
     const response = await fetch("/api/feedback", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ orderId: feedbackOrder?.id, ...feedback }) });
@@ -1676,6 +1706,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                     <select disabled={order.status === "CANCELLED" || order.payment_status === "REJECTED"} value={order.rider_email ?? ""} onChange={(e) => assignRider(order.id, e.target.value)}>
                       <option value="">Assign available rider</option>{dashboard.riders.filter((rider: any) => rider.is_available).map((rider: any) => <option key={rider.email} value={rider.email}>{rider.name || rider.email} · Available</option>)}
                     </select>
+                    <div className="give-points-control"><input type="number" min="1" max="10000" step="1" value={grantPointDrafts[order.id] ?? ""} onChange={(event) => setGrantPointDrafts((drafts) => ({ ...drafts, [order.id]: event.target.value }))} placeholder="Give points (optional)" aria-label={`Points to give customer for ${order.order_number}`} /><button disabled={!Number(grantPointDrafts[order.id])} onClick={() => grantOrderPoints(order.id)}>Give points</button></div>
                     <div className="order-earnings"><span>Rider <b>{inr.format((order.delivery_fee_paise * .75) / 100)}</b></span><span>Admin <b>{inr.format((order.printing_subtotal_paise + order.platform_fee_paise + order.delivery_fee_paise * .2) / 100)}</b></span></div>
                     <div className="order-record-actions"><button className="hide-order-action" onClick={() => setOrderHidden(order.id, true)}>Hide from dashboard &amp; exports</button><button className="delete-order-action" onClick={() => deleteOrder(order)}>Delete this order</button></div>
                   </article>
@@ -1724,7 +1755,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                 <label className="checkout-field">Delivery location<select value={locationId} onChange={(e) => setLocationId(e.target.value)}><option value="">Select a location</option>{locations.map((location) => <option value={location.id} key={location.id}>{location.name}</option>)}</select></label>
                 {!locations.length && <p className="panel-message">No delivery locations are available yet. The admin must add one first.</p>}
                 <div className="fee-breakdown"><div><span>Printing subtotal</span><strong>{inr.format(cartPrintingTotal)}</strong></div>{cartServiceCharges > 0 && <div className="binding-charge-row"><span>Binding charges</span><strong>{inr.format(cartServiceCharges)}</strong></div>}<div><span>Delivery fee</span><strong>{inr.format(checkoutDeliveryFee)}</strong></div><div><span>Platform fee</span><strong>{inr.format(checkoutPlatformFee)}</strong></div><div><span>Handling charge ({cartPrintedPages} pages)</span><strong>{inr.format(packagingFee)}</strong></div>{surgeEnabled && <div className="surge-charge-row"><span>High-demand surge charge</span><strong>{inr.format(checkoutSurgeFee)}</strong></div>}{lateNightEnabled && <div className="surge-charge-row"><span>Late-night delivery fee</span><strong>{inr.format(checkoutLateNightFee)}</strong></div>}{pointsDiscount > 0 && <div className="points-discount-row"><span>Points discount ({redeemablePoints} points)</span><strong>−{inr.format(pointsDiscount)}</strong></div>}</div>
-                <label className="use-points-box"><input type="checkbox" checked={usePoints} disabled={redeemablePoints < 15} onChange={(event) => setUsePoints(event.target.checked)} /><span><strong>Use my points</strong><small>{pointsBalance} points available · 15 points = ₹1{redeemablePoints < 15 ? " · Earn more points to redeem" : ""}</small></span></label>
+                <button type="button" className={`wallet-balance-button ${usePoints ? "selected" : ""}`} disabled={redeemablePoints < 15} onClick={() => setUsePoints((current) => !current)}><span className="wallet-icon">₹</span><span><strong>{usePoints ? "Wallet applied" : "Use wallet balance"}</strong><small>{pointsBalance} points · worth {inr.format(pointsBalance / 15)} · 15 points = ₹1{redeemablePoints < 15 ? " · Earn more to redeem" : ""}</small></span><b>{usePoints ? "✓" : "Use"}</b></button>
                 <div className="checkout-total"><span>Estimated total</span><strong>{inr.format(Math.max(0, checkoutBeforePoints - pointsDiscount))}</strong></div>
                 <div className="pay-on-delivery-note"><strong>Secure online payment:</strong> After creating the order, complete payment through Razorpay. Printing begins only after verified payment.</div>
                 {orderError && <p className="form-error">{orderError}</p>}

@@ -349,6 +349,17 @@ footer { border-top: 1px solid var(--line); padding: 28px max(24px, calc((100% -
 .use-points-box input { width: 18px; height: 18px; accent-color: #d8a900; }
 .use-points-box span, .use-points-box small { display: block; }
 .use-points-box small { margin-top: 3px; color: var(--muted); font-size: 9px; }
+.wallet-balance-button { width: 100%; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 11px; margin: 15px 0; padding: 13px; border: 1px solid #e0bd35; border-radius: 12px; background: #fff9db; color: var(--ink); text-align: left; cursor: pointer; }
+.wallet-balance-button.selected { border-color: #168345; background: #effbf3; }
+.wallet-balance-button:disabled { opacity: .62; cursor: not-allowed; }
+.wallet-balance-button span strong, .wallet-balance-button span small { display: block; }
+.wallet-balance-button span small { margin-top: 3px; color: var(--muted); font-size: 9px; }
+.wallet-balance-button .wallet-icon { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: var(--yellow); font-size: 17px; font-weight: 900; }
+.wallet-balance-button > b { color: #14733b; font-size: 11px; }
+.give-points-control { display: flex; gap: 7px; }
+.give-points-control input { min-width: 0; flex: 1; border: 1px solid var(--line); border-radius: 8px; padding: 9px; }
+.give-points-control button { border: 0; border-radius: 8px; padding: 9px 11px; background: #fff0ad; color: var(--ink); font-weight: 800; white-space: nowrap; }
+.give-points-control button:disabled { opacity: .45; }
 .points-discount-row { color: #14733b; }
 .referral-wallet { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; padding: 14px; border-radius: 13px; background: #fff8d5; }
 .referral-wallet span small, .referral-wallet span strong { display: block; }

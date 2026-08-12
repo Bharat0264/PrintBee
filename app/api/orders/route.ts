@@ -55,7 +55,10 @@ export async function POST(request: Request) {
     db.prepare(`INSERT INTO orders (id, order_number, customer_email, customer_name, mobile_number, location_id, location_name, items_json, printing_subtotal_paise, delivery_fee_paise, platform_fee_paise, packaging_fee_paise, payment_gateway_fee_paise, surge_fee_paise, late_night_fee_paise, total_paise, points_redeemed, points_discount_paise, referral_rewarded_at, delivery_code_hash, delivery_code_encrypted, status, payment_status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PAYMENT_PENDING', 'PENDING', ?)`)
       .bind(id, orderNumber, viewer.email, name, mobile, location.id, location.name, JSON.stringify(body.items), printingSubtotalPaise, deliveryFeePaise, platformFeePaise, packagingFeePaise, paymentGatewayFeePaise, surgeFeePaise, lateNightFeePaise, totalPaise, pointsRedeemed, pointsDiscountPaise, profile?.referred_by_email ? now : null, hash, encryptedCode, now),
     ...(pointsRedeemed ? [db.prepare("UPDATE customer_profiles SET points_balance=points_balance-? WHERE email=? AND points_balance>=?").bind(pointsRedeemed, viewer.email, pointsRedeemed)] : []),
-    ...(profile?.referred_by_email ? [db.prepare("UPDATE customer_profiles SET points_balance=points_balance+10 WHERE email=?").bind(profile.referred_by_email)] : []),
+    ...(profile?.referred_by_email ? [
+      db.prepare("UPDATE customer_profiles SET points_balance=points_balance+10 WHERE email=?").bind(profile.referred_by_email),
+      db.prepare("INSERT INTO wallet_transactions (id,email,points,kind,description,order_id,created_at) VALUES (?,?,?,?,?,?,?)").bind(crypto.randomUUID(), profile.referred_by_email, 10, "REFERRAL_CREDIT", `10 referral points credited for order ${orderNumber}`, id, now),
+    ] : []),
     ...uploadIds.map((uploadId) => db.prepare("UPDATE uploads SET order_id=? WHERE id=?").bind(id, uploadId)),
     ...uploadIds.map((uploadId) => db.prepare("DELETE FROM cart_items WHERE upload_id=? AND customer_email=?").bind(uploadId, viewer.email)),
   ]);

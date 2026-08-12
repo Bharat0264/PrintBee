@@ -27,6 +27,16 @@ export const customerProfiles = sqliteTable("customer_profiles", {
   createdAt: text("created_at").notNull(),
 });
 
+export const walletTransactions = sqliteTable("wallet_transactions", {
+  id: text("id").primaryKey(),
+  email: text("email").notNull(),
+  points: integer("points").notNull(),
+  kind: text("kind").notNull(),
+  description: text("description").notNull(),
+  orderId: text("order_id"),
+  createdAt: text("created_at").notNull(),
+});
+
 export const uploads = sqliteTable("uploads", {
   id: text("id").primaryKey(),
   customerEmail: text("customer_email").notNull(),

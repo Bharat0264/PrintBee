@@ -15,7 +15,8 @@ export async function GET() {
       profile = await db.prepare("SELECT referral_code, points_balance, referred_by_email FROM customer_profiles WHERE email=?").bind(viewer.email).first<any>();
     }
   }
-  return NextResponse.json({ role: viewer.isAdmin ? "ADMIN" : row?.role ?? "CUSTOMER", approvalStatus: row?.approval_status ?? null, isAvailable: Boolean(row?.is_available), referralCode: profile?.referral_code, pointsBalance: profile?.points_balance ?? 10, hasReferrer: Boolean(profile?.referred_by_email) });
+  const latestCredit = await db.prepare("SELECT id,points,description,created_at FROM wallet_transactions WHERE email=? AND points>0 ORDER BY created_at DESC LIMIT 1").bind(viewer.email).first();
+  return NextResponse.json({ role: viewer.isAdmin ? "ADMIN" : row?.role ?? "CUSTOMER", approvalStatus: row?.approval_status ?? null, isAvailable: Boolean(row?.is_available), referralCode: profile?.referral_code, pointsBalance: profile?.points_balance ?? 10, hasReferrer: Boolean(profile?.referred_by_email), latestCredit });
 }
 
 export async function POST(request: Request) {
