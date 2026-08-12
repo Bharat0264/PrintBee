@@ -359,9 +359,9 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   }, [viewer]);
 
   useEffect(() => {
-    if (!viewer || viewer.isAdmin) return;
+    if (!viewer) return;
     fetch("/api/cart", { cache: "no-store" }).then((response) => response.ok ? response.json() : []).then((items) => setCart(Array.isArray(items) ? items : [])).catch(() => {});
-  }, [viewer?.email, viewer?.isAdmin]);
+  }, [viewer?.email]);
 
   useEffect(() => {
     const storedMode = window.localStorage.getItem("printbee-login-mode");

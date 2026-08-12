@@ -8,6 +8,7 @@ const orders = await readFile(new URL("../app/api/orders/route.ts", import.meta.
 
 test("signed-in carts are restored from durable server storage", () => {
   assert.match(app, /fetch\("\/api\/cart", \{ cache: "no-store" \}\)/);
+  assert.doesNotMatch(app, /if \(!viewer \|\| viewer\.isAdmin\) return;\s*fetch\("\/api\/cart"/);
   assert.match(cart, /SELECT c\.item_json FROM cart_items/);
   assert.match(cart, /u\.order_id IS NULL/);
 });
