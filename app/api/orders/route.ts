@@ -40,9 +40,9 @@ export async function POST(request: Request) {
   const paymentGatewayFeePaise = feeSettings?.gateway_enabled ? Math.round(feeBasePaise * 0.01) : 0;
   const grossTotalPaise = feeBasePaise + packagingFeePaise + surgeFeePaise + lateNightFeePaise + paymentGatewayFeePaise;
   const profile = await database().prepare("SELECT points_balance,referred_by_email FROM customer_profiles WHERE email=?").bind(viewer.email).first<{ points_balance: number; referred_by_email: string | null }>();
-  const redeemableRupees = body.usePoints ? Math.min(Math.floor((profile?.points_balance ?? 0) / 15), Math.max(0, Math.floor((grossTotalPaise - 100) / 100))) : 0;
-  const pointsRedeemed = redeemableRupees * 15;
-  const pointsDiscountPaise = redeemableRupees * 100;
+  const maxRedeemablePoints = Math.max(0, Math.floor((grossTotalPaise - 100) * 15 / 100));
+  const pointsRedeemed = body.usePoints ? Math.min(profile?.points_balance ?? 0, maxRedeemablePoints) : 0;
+  const pointsDiscountPaise = Math.floor(pointsRedeemed * 100 / 15);
   const totalPaise = grossTotalPaise - pointsDiscountPaise;
   const hash = await hashDeliveryCode(id, deliveryCode);
   const encryptedCode = await encryptDeliveryCode(deliveryCode);

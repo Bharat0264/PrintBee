@@ -249,6 +249,9 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   const [isRiderAvailable, setIsRiderAvailable] = useState(false);
   const [referralCode, setReferralCode] = useState("");
   const [myReferralCode, setMyReferralCode] = useState("");
+  const [hasReferrer, setHasReferrer] = useState(false);
+  const [walletOpen, setWalletOpen] = useState(false);
+  const [walletMessage, setWalletMessage] = useState("");
   const [pointsBalance, setPointsBalance] = useState(0);
   const [usePoints, setUsePoints] = useState(false);
   const [feedbackOrder, setFeedbackOrder] = useState<any>(null);
@@ -365,16 +368,25 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   useEffect(() => {
     if (!viewer) return;
     fetch("/api/me").then((response) => response.json()).then(async (data) => {
-      setRole(data.role); setApprovalStatus(data.approvalStatus ?? null); setIsRiderAvailable(Boolean(data.isAvailable)); setMyReferralCode(data.referralCode ?? ""); setPointsBalance(Number(data.pointsBalance) || 0);
+      setRole(data.role); setApprovalStatus(data.approvalStatus ?? null); setIsRiderAvailable(Boolean(data.isAvailable)); setMyReferralCode(data.referralCode ?? ""); setPointsBalance(Number(data.pointsBalance) || 0); setHasReferrer(Boolean(data.hasReferrer));
       const pendingCode = window.localStorage.getItem("printbee-referral-code");
       if (pendingCode && !data.hasReferrer) {
         const linked = await fetch("/api/me", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ referralCode: pendingCode }) });
         const result = await linked.json().catch(() => ({}));
         setAuthMessage(linked.ok ? "Referral code verified and linked to your account." : result.error ?? "Referral code could not be verified.");
+        if (linked.ok) setHasReferrer(true);
       }
       window.localStorage.removeItem("printbee-referral-code");
     }).catch(() => {});
   }, [viewer]);
+
+  useEffect(() => {
+    const code = new URLSearchParams(window.location.search).get("ref")?.trim().toUpperCase();
+    if (!code) return;
+    setReferralCode(code);
+    window.localStorage.setItem("printbee-referral-code", code);
+    if (!viewer) setLoginOpen(true); else setWalletOpen(true);
+  }, [viewer?.email]);
 
   useEffect(() => {
     if (!viewer || viewer.isAdmin) return;
@@ -1056,6 +1068,22 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
     if (response.ok) setGrantPointDrafts((drafts) => ({ ...drafts, [orderId]: "" }));
   };
 
+  const linkExistingReferral = async () => {
+    setWalletMessage("");
+    const response = await fetch("/api/me", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ referralCode }) });
+    const data = await response.json().catch(() => ({}));
+    setWalletMessage(response.ok ? "Referral code verified. You are now linked to future referral offers." : data.error ?? "Referral code could not be verified");
+    if (response.ok) { setHasReferrer(true); window.localStorage.removeItem("printbee-referral-code"); }
+  };
+
+  const shareReferral = async () => {
+    const link = `${window.location.origin}/?ref=${encodeURIComponent(myReferralCode)}`;
+    try {
+      if (navigator.share) await navigator.share({ title: "PrintBee", text: `Use my PrintBee referral code ${myReferralCode}`, url: link });
+      else { await navigator.clipboard.writeText(link); setWalletMessage("Referral link copied to your clipboard."); }
+    } catch { /* The user can cancel the share sheet. */ }
+  };
+
   const submitFeedback = async () => {
     setFeedbackMessage("");
     const response = await fetch("/api/feedback", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ orderId: feedbackOrder?.id, ...feedback }) });
@@ -1245,8 +1273,8 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   const checkoutSurgeFee = surgeEnabled ? surgeType === "FIXED" ? surgeValue : surgeBase * surgeValue / 100 : 0;
   const checkoutLateNightFee = lateNightEnabled ? lateNightType === "FIXED" ? lateNightValue : surgeBase * lateNightValue / 100 : 0;
   const checkoutBeforePoints = cartTotal + checkoutDeliveryFee + checkoutPlatformFee + packagingFee + checkoutSurgeFee + checkoutLateNightFee;
-  const redeemablePoints = Math.min(Math.floor(pointsBalance / 15) * 15, Math.max(0, Math.floor(checkoutBeforePoints - 1)) * 15);
-  const pointsDiscount = usePoints ? redeemablePoints / 15 : 0;
+  const redeemablePoints = Math.min(pointsBalance, Math.max(0, Math.floor((checkoutBeforePoints - 1) * 15)));
+  const pointsDiscount = usePoints ? Math.floor(redeemablePoints * 100 / 15) / 100 : 0;
   const revenueNow = new Date();
   const revenueStart = dashboardRange === "today" ? new Date(revenueNow.getFullYear(), revenueNow.getMonth(), revenueNow.getDate()) : dashboardRange === "week" ? new Date(revenueNow.getFullYear(), revenueNow.getMonth(), revenueNow.getDate() - 6) : new Date(revenueNow.getFullYear(), revenueNow.getMonth(), 1);
   const dashboardOrdersForRange = (dashboard?.orders ?? []).filter((order: any) => new Date(order.created_at) >= revenueStart);
@@ -1327,6 +1355,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
           {viewer?.isAdmin && <button className="admin-link" onClick={openAdminDashboard}>Admin dashboard</button>}
           {role === "ADMIN" && <button className="admin-link" onClick={openDeliveryQueue}>Delivery</button>}
           {role === "AGENT" && approvalStatus === "APPROVED" && <button className="admin-link" onClick={() => switchLoginMode("PARTNER")}>Partner portal</button>}
+          {viewer && <button className="home-wallet-button" onClick={() => { setWalletOpen(true); setWalletMessage(""); }} aria-label={`Wallet balance ${pointsBalance} points`}><span>◉</span><b>{pointsBalance}</b></button>}
           {viewer && <button className="admin-link" onClick={openMyOrders}>My orders</button>}
           {viewer ? (
             <button className="login-link" onClick={signOut} title={viewer.email}>Sign out</button>
@@ -1755,13 +1784,25 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                 <label className="checkout-field">Delivery location<select value={locationId} onChange={(e) => setLocationId(e.target.value)}><option value="">Select a location</option>{locations.map((location) => <option value={location.id} key={location.id}>{location.name}</option>)}</select></label>
                 {!locations.length && <p className="panel-message">No delivery locations are available yet. The admin must add one first.</p>}
                 <div className="fee-breakdown"><div><span>Printing subtotal</span><strong>{inr.format(cartPrintingTotal)}</strong></div>{cartServiceCharges > 0 && <div className="binding-charge-row"><span>Binding charges</span><strong>{inr.format(cartServiceCharges)}</strong></div>}<div><span>Delivery fee</span><strong>{inr.format(checkoutDeliveryFee)}</strong></div><div><span>Platform fee</span><strong>{inr.format(checkoutPlatformFee)}</strong></div><div><span>Handling charge ({cartPrintedPages} pages)</span><strong>{inr.format(packagingFee)}</strong></div>{surgeEnabled && <div className="surge-charge-row"><span>High-demand surge charge</span><strong>{inr.format(checkoutSurgeFee)}</strong></div>}{lateNightEnabled && <div className="surge-charge-row"><span>Late-night delivery fee</span><strong>{inr.format(checkoutLateNightFee)}</strong></div>}{pointsDiscount > 0 && <div className="points-discount-row"><span>Points discount ({redeemablePoints} points)</span><strong>−{inr.format(pointsDiscount)}</strong></div>}</div>
-                <button type="button" className={`wallet-balance-button ${usePoints ? "selected" : ""}`} disabled={redeemablePoints < 15} onClick={() => setUsePoints((current) => !current)}><span className="wallet-icon">₹</span><span><strong>{usePoints ? "Wallet applied" : "Use wallet balance"}</strong><small>{pointsBalance} points · worth {inr.format(pointsBalance / 15)} · 15 points = ₹1{redeemablePoints < 15 ? " · Earn more to redeem" : ""}</small></span><b>{usePoints ? "✓" : "Use"}</b></button>
+                <button type="button" className={`wallet-balance-button ${usePoints ? "selected" : ""}`} disabled={redeemablePoints < 1} onClick={() => setUsePoints((current) => !current)}><span className="wallet-icon">₹</span><span><strong>{usePoints ? "Wallet applied" : "Use wallet balance"}</strong><small>{pointsBalance} points · worth {inr.format(pointsBalance / 15)} · every point is redeemable</small></span><b>{usePoints ? "✓" : "Use"}</b></button>
                 <div className="checkout-total"><span>Estimated total</span><strong>{inr.format(Math.max(0, checkoutBeforePoints - pointsDiscount))}</strong></div>
                 <div className="pay-on-delivery-note"><strong>Secure online payment:</strong> After creating the order, complete payment through Razorpay. Printing begins only after verified payment.</div>
                 {orderError && <p className="form-error">{orderError}</p>}
                 <button className="save-button" disabled={!locations.length || paymentProcessing} onClick={placeOrder}>{paymentProcessing ? "Starting Razorpay..." : "Pay now"}</button>
               </>
             )}
+          </section>
+        </div>
+      )}
+
+      {walletOpen && (
+        <div className="modal-backdrop" role="presentation" onMouseDown={() => setWalletOpen(false)}>
+          <section className="checkout-modal wallet-modal" role="dialog" aria-modal="true" aria-labelledby="wallet-title" onMouseDown={(event) => event.stopPropagation()}>
+            <button className="close" onClick={() => setWalletOpen(false)} aria-label="Close wallet">×</button>
+            <div className="wallet-heading"><span>◉</span><div><small>PRINTBEE WALLET</small><h2 id="wallet-title">{pointsBalance} points</h2><p>Worth {inr.format(pointsBalance / 15)} · every point can be redeemed at checkout.</p></div></div>
+            <div className="earn-more-card"><div className="admin-badge">EARN MORE</div><h3>Invite friends to PrintBee</h3><p>Share your unique referral code or link. You earn 10 points whenever a referred account places an order.</p><label>Your referral code<input readOnly value={myReferralCode} /></label><label>Shareable referral link<input readOnly value={typeof window === "undefined" ? "" : `${window.location.origin}/?ref=${myReferralCode}`} /></label><button className="save-button" disabled={!myReferralCode} onClick={shareReferral}>Share referral link</button></div>
+            {!hasReferrer ? <div className="existing-referral-card"><h3>Have a referral code?</h3><p>Existing users can link a valid code too. This is optional and can be done once.</p><label className="checkout-field">Referral code<input value={referralCode} onChange={(event) => setReferralCode(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))} placeholder="PBXXXXXXXX" /></label><button className="save-button" disabled={!referralCode.trim()} onClick={linkExistingReferral}>Verify referral code</button></div> : <div className="referral-linked">✓ A referral code is linked to your account.</div>}
+            {walletMessage && <p className="panel-message">{walletMessage}</p>}
           </section>
         </div>
       )}

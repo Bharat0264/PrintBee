@@ -356,6 +356,20 @@ footer { border-top: 1px solid var(--line); padding: 28px max(24px, calc((100% -
 .wallet-balance-button span small { margin-top: 3px; color: var(--muted); font-size: 9px; }
 .wallet-balance-button .wallet-icon { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: var(--yellow); font-size: 17px; font-weight: 900; }
 .wallet-balance-button > b { color: #14733b; font-size: 11px; }
+.home-wallet-button { display: inline-flex; align-items: center; gap: 5px; border: 1px solid #e0bd35 !important; border-radius: 999px !important; padding: 7px 10px !important; background: #fff8d5 !important; color: var(--ink) !important; }
+.home-wallet-button span { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--yellow); font-size: 11px; }
+.home-wallet-button b { font-size: 11px; }
+.wallet-heading { display: flex; align-items: center; gap: 14px; padding: 16px; border-radius: 15px; background: #fff8d5; }
+.wallet-heading > span { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 50%; background: var(--yellow); font-size: 22px; }
+.wallet-heading small, .wallet-heading p { color: var(--muted); font-size: 9px; }
+.wallet-heading h2 { margin: 2px 0 !important; }
+.wallet-heading p { margin: 0; }
+.earn-more-card, .existing-referral-card { margin-top: 15px; padding: 16px; border: 1px solid var(--line); border-radius: 13px; }
+.earn-more-card h3, .existing-referral-card h3 { margin: 9px 0 4px; }
+.earn-more-card p, .existing-referral-card p { margin: 0 0 12px; color: var(--muted); font-size: 10px; line-height: 1.5; }
+.earn-more-card label { display: block; margin: 9px 0; color: #555; font-size: 10px; font-weight: 800; }
+.earn-more-card input { width: 100%; margin-top: 5px; border: 1px solid var(--line); border-radius: 8px; padding: 10px; background: #f7f7f7; color: var(--ink); }
+.referral-linked { margin-top: 14px; padding: 12px; border-radius: 10px; background: #effbf3; color: #14733b; font-size: 11px; font-weight: 800; }
 .give-points-control { display: flex; gap: 7px; }
 .give-points-control input { min-width: 0; flex: 1; border: 1px solid var(--line); border-radius: 8px; padding: 9px; }
 .give-points-control button { border: 0; border-radius: 8px; padding: 9px 11px; background: #fff0ad; color: var(--ink); font-weight: 800; white-space: nowrap; }
