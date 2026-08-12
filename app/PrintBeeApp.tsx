@@ -1353,6 +1353,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
         </a>
         <nav aria-label="Main navigation">
           <a href="#how">How it works</a>
+          <a href="#points">Earn points</a>
           <a href="#pricing">Pricing</a>
           {viewer?.isAdmin && <button className="admin-link" onClick={openAdminDashboard}>Admin dashboard</button>}
           {role === "ADMIN" && <button className="admin-link" onClick={openDeliveryQueue}>Delivery</button>}
@@ -1507,6 +1508,20 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
         <div><span>01</span><strong>Upload</strong><p>Add your PDF or image securely.</p></div>
         <div><span>02</span><strong>Choose</strong><p>Pick one of four simple A4 options.</p></div>
         <div><span>03</span><strong>We deliver</strong><p>Fresh prints arrive at your door.</p></div>
+      </section>
+
+      <section className="points-guide" id="points" aria-labelledby="points-guide-title">
+        <div className="points-guide-heading">
+          <div className="eyebrow"><span>●</span> PrintBee Points</div>
+          <h2 id="points-guide-title">Print more. Invite friends. Earn points.</h2>
+          <p>Points are added automatically only after an order is successfully delivered and the delivery OTP is verified.</p>
+        </div>
+        <div className="points-guide-grid">
+          <article><span>01</span><strong>10 welcome points</strong><p>Every new customer starts with 10 bonus points in their PrintBee wallet.</p></article>
+          <article><span>02</span><strong>Earn on your orders</strong><p>Get 1 point for every complete ₹10 spent on each of your own delivered orders.</p></article>
+          <article><span>03</span><strong>Earn from referrals</strong><p>Invite friends with your referral code. You get 1 point for every complete ₹15 they spend on delivered orders.</p></article>
+        </div>
+        <div className="points-guide-note"><strong>Use your rewards</strong><span>15 points = ₹1 off at checkout. Amounts below the next ₹10 or ₹15 are rounded down and do not carry forward. Cancelled, unpaid and undelivered orders earn no points.</span></div>
       </section>
 
       <section className="app-scanner" aria-labelledby="app-scanner-title">

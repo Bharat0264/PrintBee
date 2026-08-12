@@ -192,6 +192,18 @@ h1 em { color: var(--yellow); font-style: normal; }
 .how span { color: var(--yellow); font-size: 12px; font-weight: 900; }
 .how strong { display: block; font-size: 19px; margin: 7px 0; }
 .how p { margin: 0; color: #aeb0b5; font-size: 13px; }
+.points-guide { max-width: 1132px; margin: 0 auto 90px; padding: clamp(28px, 5vw, 54px); border: 1px solid #e0bd35; border-radius: 24px; background: linear-gradient(135deg, #fff9dc, #fff 62%); }
+.points-guide-heading { max-width: 680px; }
+.points-guide-heading h2 { margin: 14px 0 10px; font-size: clamp(30px, 5vw, 48px); line-height: 1.05; letter-spacing: -2px; }
+.points-guide-heading > p { margin: 0; color: var(--muted); line-height: 1.6; }
+.points-guide-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 30px; }
+.points-guide-grid article { padding: 22px; border: 1px solid var(--line); border-radius: 15px; background: #fff; box-shadow: 0 12px 30px rgba(38, 31, 8, .05); }
+.points-guide-grid article > span { display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--yellow); font-size: 10px; font-weight: 900; }
+.points-guide-grid strong { display: block; margin: 15px 0 7px; font-size: 17px; }
+.points-guide-grid p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.55; }
+.points-guide-note { display: grid; grid-template-columns: auto 1fr; gap: 14px; margin-top: 14px; padding: 16px 18px; border-radius: 12px; background: var(--ink); color: #fff; }
+.points-guide-note strong { color: var(--yellow); white-space: nowrap; }
+.points-guide-note span { color: #c5c7cb; font-size: 11px; line-height: 1.5; }
 .pricing { max-width: 1080px; margin: auto; padding: 30px 24px 100px; display: grid; grid-template-columns: .8fr 1.2fr; gap: 70px; align-items: center; }
 .section-intro h2 { font-size: 42px; line-height: 1.1; letter-spacing: -2px; margin: 18px 0; }
 .section-intro p { color: var(--muted); line-height: 1.6; }
@@ -508,6 +520,9 @@ footer { border-top: 1px solid var(--line); padding: 28px max(24px, calc((100% -
   .trust-row { justify-content: center; }
   .order-card { padding: 20px; border-radius: 18px; }
   .how { margin: 0 16px 70px; grid-template-columns: 1fr; }
+  .points-guide { margin: 0 16px 70px; }
+  .points-guide-grid { grid-template-columns: 1fr; }
+  .points-guide-note { grid-template-columns: 1fr; }
   .cart-section { margin: 0 16px 34px; padding: 22px; }
   .how > div { border-right: 0; border-bottom: 1px solid #393c41; }
   .pricing { grid-template-columns: 1fr; gap: 30px; }
