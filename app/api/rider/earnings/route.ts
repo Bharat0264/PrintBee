@@ -9,13 +9,14 @@ async function riderAccount(email: string) {
   const earnings = await db.prepare("SELECT COUNT(*) total_rides, COALESCE(SUM(CAST(delivery_fee_paise * 3 / 4 AS INTEGER)), 0) earned_paise FROM orders WHERE rider_email=? AND status='DELIVERED' AND hidden_at IS NULL").bind(email).first<{ total_rides: number; earned_paise: number }>();
   const reserved = await db.prepare("SELECT COALESCE(SUM(amount_paise), 0) reserved_paise FROM rider_withdrawals WHERE rider_email=?").bind(email).first<{ reserved_paise: number }>();
   const history = await db.prepare("SELECT id, upi_id, amount_paise, status, requested_at, updated_at FROM rider_withdrawals WHERE rider_email=? ORDER BY requested_at DESC LIMIT 25").bind(email).all();
-  return { totalRides: earnings?.total_rides ?? 0, earnedPaise: earnings?.earned_paise ?? 0, availablePaise: Math.max(0, (earnings?.earned_paise ?? 0) - (reserved?.reserved_paise ?? 0)), withdrawals: history.results };
+  const deliveredOrders = await db.prepare("SELECT id,order_number,location_name,delivery_fee_paise,CAST(delivery_fee_paise * 3 / 4 AS INTEGER) earned_paise,delivered_at FROM orders WHERE rider_email=? AND status='DELIVERED' AND hidden_at IS NULL ORDER BY delivered_at DESC LIMIT 100").bind(email).all();
+  return { totalRides: earnings?.total_rides ?? 0, earnedPaise: earnings?.earned_paise ?? 0, availablePaise: Math.max(0, (earnings?.earned_paise ?? 0) - (reserved?.reserved_paise ?? 0)), withdrawals: history.results, deliveredOrders: deliveredOrders.results };
 }
 
 export async function GET() {
   const viewer = await getViewer();
   if (!viewer) return NextResponse.json({ error: "Sign in required" }, { status: 401 });
-  if (viewer.isAdmin) return NextResponse.json({ totalRides: 0, earnedPaise: 0, availablePaise: 0, withdrawals: [] });
+  if (viewer.isAdmin) return NextResponse.json({ totalRides: 0, earnedPaise: 0, availablePaise: 0, withdrawals: [], deliveredOrders: [] });
   const account = await riderAccount(viewer.email);
   if (!account) return NextResponse.json({ error: "Approved delivery-partner access required" }, { status: 403 });
   return NextResponse.json(account);

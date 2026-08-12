@@ -176,6 +176,13 @@
       "when": 1786557600000,
       "tag": "0024_wallet_transactions",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "6",
+      "when": 1786561200000,
+      "tag": "0025_delivered_order_spend_rewards",
+      "breakpoints": true
     }
   ]
 }

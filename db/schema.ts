@@ -100,6 +100,7 @@ export const orders = sqliteTable("orders", {
   pointsRedeemed: integer("points_redeemed").notNull().default(0),
   pointsDiscountPaise: integer("points_discount_paise").notNull().default(0),
   referralRewardedAt: text("referral_rewarded_at"),
+  spendPointsAwarded: integer("spend_points_awarded").notNull().default(0),
 });
 
 export const orderFeedback = sqliteTable("order_feedback", {
