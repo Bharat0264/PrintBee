@@ -344,6 +344,29 @@ footer { border-top: 1px solid var(--line); padding: 28px max(24px, calc((100% -
 .checkout-modal > p { color: var(--muted); font-size: 12px; line-height: 1.5; }
 .checkout-field { display: block; margin: 15px 0; color: #555; font-size: 11px; font-weight: 800; }
 .checkout-field input, .checkout-field select { display: block; width: 100%; margin-top: 6px; border: 1px solid var(--line); border-radius: 10px; background: white; padding: 12px; outline: none; }
+.checkout-field textarea { display: block; width: 100%; margin-top: 6px; border: 1px solid var(--line); border-radius: 10px; padding: 12px; resize: vertical; font: inherit; }
+.use-points-box { display: flex; gap: 11px; align-items: center; margin: 15px 0; padding: 13px; border: 1px solid #e0bd35; border-radius: 12px; background: #fff9db; cursor: pointer; }
+.use-points-box input { width: 18px; height: 18px; accent-color: #d8a900; }
+.use-points-box span, .use-points-box small { display: block; }
+.use-points-box small { margin-top: 3px; color: var(--muted); font-size: 9px; }
+.points-discount-row { color: #14733b; }
+.referral-wallet { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; padding: 14px; border-radius: 13px; background: #fff8d5; }
+.referral-wallet span small, .referral-wallet span strong { display: block; }
+.referral-wallet p { grid-column: 1 / -1; margin: 0; color: var(--muted); font-size: 10px; line-height: 1.5; }
+.feedback-invite { width: 100%; margin: 4px 0 10px; border: 1px solid #e0bd35; border-radius: 10px; padding: 12px; background: #fff8d5; font-weight: 800; }
+.star-field { margin: 13px 0; border: 0; padding: 0; }
+.star-field legend { margin-bottom: 4px; color: #555; font-size: 11px; font-weight: 800; }
+.star-field div { display: flex; gap: 5px; }
+.star-field button { border: 0; padding: 2px; background: transparent; color: #d8d8d8; font-size: 29px; line-height: 1; cursor: pointer; }
+.star-field button.selected { color: #e0ad00; }
+.skip-feedback { width: 100%; margin-top: 8px; border: 0; background: transparent; color: var(--muted); font-weight: 700; }
+.availability-control { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.availability-control span { color: var(--muted); font-size: 10px; font-weight: 800; }
+.availability-control button.available { background: #168345; }
+.delivery-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.assigned-orders article .reject-assignment { background: #fff0ed; color: #a33a2b; }
+.rider-available { color: #168345 !important; font-weight: 800; }
+.rider-unavailable { color: #a33a2b !important; font-weight: 800; }
 .checkout-total { display: flex; justify-content: space-between; align-items: center; margin: 20px 0; padding-top: 17px; border-top: 1px solid var(--line); }
 .checkout-total span { color: var(--muted); font-size: 12px; }
 .checkout-total strong { font-size: 23px; }

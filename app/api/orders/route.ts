@@ -7,7 +7,7 @@ export async function POST(request: Request) {
   if (!viewer) return NextResponse.json({ error: "Sign in required" }, { status: 401 });
   const availability = await database().prepare("SELECT accepting_orders FROM order_availability WHERE id='main'").first<{ accepting_orders: number }>();
   if (availability?.accepting_orders === 0) return NextResponse.json({ error: "Service will be live soon. We are not accepting orders right now." }, { status: 503 });
-  const body = await request.json() as { customerName?: string; mobileNumber?: string; locationId?: string; items?: unknown[]; totalPaise?: number };
+  const body = await request.json() as { customerName?: string; mobileNumber?: string; locationId?: string; items?: unknown[]; totalPaise?: number; usePoints?: boolean };
   const name = body.customerName?.trim();
   const mobile = body.mobileNumber?.replace(/\D/g, "");
   if (!name || !mobile || mobile.length !== 10 || !body.locationId || !body.items?.length) {
@@ -38,18 +38,26 @@ export async function POST(request: Request) {
   const surgeFeePaise = feeSettings?.surge_enabled ? feeSettings.surge_type === "FIXED" ? Math.round(Number(feeSettings.surge_value) * 100) : Math.round(feeBasePaise * Number(feeSettings.surge_value) / 100) : 0;
   const lateNightFeePaise = feeSettings?.late_night_enabled ? feeSettings.late_night_type === "FIXED" ? Math.round(Number(feeSettings.late_night_value) * 100) : Math.round(feeBasePaise * Number(feeSettings.late_night_value) / 100) : 0;
   const paymentGatewayFeePaise = feeSettings?.gateway_enabled ? Math.round(feeBasePaise * 0.01) : 0;
-  const totalPaise = feeBasePaise + packagingFeePaise + surgeFeePaise + lateNightFeePaise + paymentGatewayFeePaise;
+  const grossTotalPaise = feeBasePaise + packagingFeePaise + surgeFeePaise + lateNightFeePaise + paymentGatewayFeePaise;
+  const profile = await database().prepare("SELECT points_balance,referred_by_email FROM customer_profiles WHERE email=?").bind(viewer.email).first<{ points_balance: number; referred_by_email: string | null }>();
+  const redeemableRupees = body.usePoints ? Math.min(Math.floor((profile?.points_balance ?? 0) / 15), Math.max(0, Math.floor((grossTotalPaise - 100) / 100))) : 0;
+  const pointsRedeemed = redeemableRupees * 15;
+  const pointsDiscountPaise = redeemableRupees * 100;
+  const totalPaise = grossTotalPaise - pointsDiscountPaise;
   const hash = await hashDeliveryCode(id, deliveryCode);
   const encryptedCode = await encryptDeliveryCode(deliveryCode);
   const db = database();
   const sequence = await db.prepare("UPDATE order_sequences SET next_value=next_value+1 WHERE id='orders' RETURNING next_value-1 number").first<{ number: number }>();
   if (!sequence) return NextResponse.json({ error: "Order numbering is temporarily unavailable" }, { status: 503 });
   const orderNumber = `PB${String(sequence.number).padStart(3, "0")}`;
-  await db.prepare(`INSERT INTO orders (id, order_number, customer_email, customer_name, mobile_number, location_id, location_name, items_json, printing_subtotal_paise, delivery_fee_paise, platform_fee_paise, packaging_fee_paise, payment_gateway_fee_paise, surge_fee_paise, late_night_fee_paise, total_paise, delivery_code_hash, delivery_code_encrypted, status, payment_status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PAYMENT_PENDING', 'PENDING', ?)`)
-    .bind(id, orderNumber, viewer.email, name, mobile, location.id, location.name, JSON.stringify(body.items), printingSubtotalPaise, deliveryFeePaise, platformFeePaise, packagingFeePaise, paymentGatewayFeePaise, surgeFeePaise, lateNightFeePaise, totalPaise, hash, encryptedCode, new Date().toISOString()).run();
+  const now = new Date().toISOString();
   await db.batch([
+    db.prepare(`INSERT INTO orders (id, order_number, customer_email, customer_name, mobile_number, location_id, location_name, items_json, printing_subtotal_paise, delivery_fee_paise, platform_fee_paise, packaging_fee_paise, payment_gateway_fee_paise, surge_fee_paise, late_night_fee_paise, total_paise, points_redeemed, points_discount_paise, referral_rewarded_at, delivery_code_hash, delivery_code_encrypted, status, payment_status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PAYMENT_PENDING', 'PENDING', ?)`)
+      .bind(id, orderNumber, viewer.email, name, mobile, location.id, location.name, JSON.stringify(body.items), printingSubtotalPaise, deliveryFeePaise, platformFeePaise, packagingFeePaise, paymentGatewayFeePaise, surgeFeePaise, lateNightFeePaise, totalPaise, pointsRedeemed, pointsDiscountPaise, profile?.referred_by_email ? now : null, hash, encryptedCode, now),
+    ...(pointsRedeemed ? [db.prepare("UPDATE customer_profiles SET points_balance=points_balance-? WHERE email=? AND points_balance>=?").bind(pointsRedeemed, viewer.email, pointsRedeemed)] : []),
+    ...(profile?.referred_by_email ? [db.prepare("UPDATE customer_profiles SET points_balance=points_balance+10 WHERE email=?").bind(profile.referred_by_email)] : []),
     ...uploadIds.map((uploadId) => db.prepare("UPDATE uploads SET order_id=? WHERE id=?").bind(id, uploadId)),
     ...uploadIds.map((uploadId) => db.prepare("DELETE FROM cart_items WHERE upload_id=? AND customer_email=?").bind(uploadId, viewer.email)),
   ]);
-  return NextResponse.json({ id, orderNumber, locationName: location.name, totalPaise, lateNightFeePaise, paymentMode: "RAZORPAY" });
+  return NextResponse.json({ id, orderNumber, locationName: location.name, totalPaise, lateNightFeePaise, pointsRedeemed, pointsDiscountPaise, paymentMode: "RAZORPAY" });
 }

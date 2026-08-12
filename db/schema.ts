@@ -16,6 +16,15 @@ export const appUsers = sqliteTable("app_users", {
   name: text("name"),
   mobileNumber: text("mobile_number"),
   approvalStatus: text("approval_status").notNull().default("APPROVED"),
+  isAvailable: integer("is_available", { mode: "boolean" }).notNull().default(false),
+});
+
+export const customerProfiles = sqliteTable("customer_profiles", {
+  email: text("email").primaryKey(),
+  referralCode: text("referral_code").notNull().unique(),
+  referredByEmail: text("referred_by_email"),
+  pointsBalance: integer("points_balance").notNull().default(0),
+  createdAt: text("created_at").notNull(),
 });
 
 export const uploads = sqliteTable("uploads", {
@@ -78,6 +87,20 @@ export const orders = sqliteTable("orders", {
   paymentQrDeletedAt: text("payment_qr_deleted_at"),
   hiddenAt: text("hidden_at"),
   hiddenBy: text("hidden_by"),
+  pointsRedeemed: integer("points_redeemed").notNull().default(0),
+  pointsDiscountPaise: integer("points_discount_paise").notNull().default(0),
+  referralRewardedAt: text("referral_rewarded_at"),
+});
+
+export const orderFeedback = sqliteTable("order_feedback", {
+  orderId: text("order_id").primaryKey(),
+  customerEmail: text("customer_email").notNull(),
+  serviceRating: integer("service_rating").notNull(),
+  riderRating: integer("rider_rating").notNull(),
+  printQualityRating: integer("print_quality_rating").notNull(),
+  overallRating: integer("overall_rating").notNull(),
+  description: text("description"),
+  createdAt: text("created_at").notNull(),
 });
 
 export const riderPayments = sqliteTable("rider_payments", {
