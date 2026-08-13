@@ -34,9 +34,9 @@ const inr = new Intl.NumberFormat("en-IN", {
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 const HOSTED_IMAGE_TARGET_BYTES = 700 * 1024;
 const CHUNKED_UPLOAD_THRESHOLD_BYTES = 700 * 1024;
-const IMAGE_EXTENSIONS = /\.(heic|jpe?g|png|webp|gif|bmp|tiff?)$/i;
-const OPTIMIZABLE_IMAGE_EXTENSIONS = /\.(jpe?g|png|webp)$/i;
-const PRINTABLE_FILE_EXTENSIONS = /\.pdf$/i;
+const IMAGE_EXTENSIONS = /\.(heic|jpe?g|png)$/i;
+const OPTIMIZABLE_IMAGE_EXTENSIONS = /\.(jpe?g|png)$/i;
+const PRINTABLE_FILE_EXTENSIONS = /\.(pdf|heic|jpe?g|png)$/i;
 const MIXED_PRINT_SERVICES = new Set(["document-printing", "document-binding"]);
 const GEN_Z_MEMES = [
   "POV: You skipped the Xerox queue and chose peace. 😌",
@@ -527,12 +527,12 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
       event.target.value = "";
       setFileName("");
       setSelectedFile(null);
-      setUploadError(`"${file.name}" is too large. Please upload a PDF smaller than 50 MB.`);
+      setUploadError(`"${file.name}" is too large. Please upload a PDF or image smaller than 50 MB.`);
       return;
     }
     if (!PRINTABLE_FILE_EXTENSIONS.test(file.name)) {
       event.target.value = "";
-      setUploadError("Only PDF files are accepted. Save or export your document as a PDF, then upload it again.");
+      setUploadError("Only PDF, JPG/JPEG, PNG and HEIC files are accepted.");
       return;
     }
     setFileName(file.name);
@@ -546,8 +546,11 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
         const pdf = await PDFDocument.load(await file.arrayBuffer(), { ignoreEncryption: true });
         setPages(pdf.getPageCount());
         setFileType("PDF");
+      } else if (IMAGE_EXTENSIONS.test(file.name)) {
+        setPages(1);
+        setFileType("IMAGE");
       } else {
-        throw new Error("Only PDF files are accepted.");
+        throw new Error("Only PDF, JPG/JPEG, PNG and HEIC files are accepted.");
       }
     } catch (error) {
       setFileName("");
@@ -1391,16 +1394,16 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
           {acceptingOrders ? <>
           <div className="card-heading">
             <span className="step">1</span>
-            <div><h2>Start your print</h2><p>PDF files only · A4 printing</p></div>
+            <div><h2>Start your print</h2><p>PDF, JPG, PNG or HEIC · A4 printing</p></div>
           </div>
 
           <label className={`upload-zone ${fileName ? "has-file" : ""}`}>
-            <input type="file" accept=".pdf,application/pdf" onChange={handleFile} />
+            <input type="file" accept=".pdf,.jpg,.jpeg,.png,.heic,application/pdf,image/jpeg,image/png,image/heic,image/heif" onChange={handleFile} />
             <span className="upload-icon">{countingPages ? "…" : fileName ? "✓" : "↑"}</span>
             <strong>{fileName || "Choose a document"}</strong>
-            <small>{uploadProgress !== null ? `Uploading… ${uploadProgress}%` : countingPages ? "Counting PDF pages…" : fileName ? `${pages} ${pages === 1 ? "page" : "pages"} detected` : "PDF files only"}</small>
+            <small>{uploadProgress !== null ? `Uploading… ${uploadProgress}%` : countingPages ? "Checking file…" : fileName ? `${pages} ${pages === 1 ? "page" : "pages"} detected` : "PDF or image files"}</small>
           </label>
-          <p className="file-retention-note"><strong>Please upload PDF files only.</strong> PDF format lets PrintBee calculate the correct number of pages and preserve your print layout. Export Word documents and images as PDF before uploading. Files are deleted after delivery or cancellation. Maximum file size: 50 MB.</p>
+          <p className="file-retention-note"><strong>Accepted files: PDF, JPG/JPEG, PNG and HEIC only.</strong> PDFs are counted automatically; each image is treated as one printable page. Export other files as PDF before uploading. Files are deleted after delivery or cancellation. Maximum file size: 50 MB.</p>
           {uploadError && <p className="upload-error">{uploadError}</p>}
 
           {fileName && <>
