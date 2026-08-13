@@ -424,6 +424,11 @@ footer { border-top: 1px solid var(--line); padding: 28px max(24px, calc((100% -
 .checkout-total strong { font-size: 23px; }
 .checkout-modal .save-button { width: 100%; background: var(--yellow); color: var(--ink); }
 .checkout-modal .save-button:disabled { opacity: .4; cursor: not-allowed; }
+.packaging-choice { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 14px 0; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: white; color: var(--ink); text-align: left; cursor: pointer; }
+.packaging-choice span { display: grid; gap: 3px; }
+.packaging-choice small { color: var(--muted); }
+.packaging-choice b { white-space: nowrap; color: #8a6500; }
+.packaging-choice.selected { border-color: #e1b800; background: #fff9d9; }
 .form-error { color: #b42318 !important; font-weight: 700; }
 .payment-warning { margin: 14px 0; padding: 12px 14px; border: 1px solid #efb5ad; border-left: 4px solid #c83f32; border-radius: 9px; background: #fff4f2; color: #842b23; font-size: 11px; line-height: 1.5; }
 .pay-on-delivery-note { margin: 14px 0; padding: 12px 14px; border: 1px solid #ead28d; border-left: 4px solid var(--yellow); border-radius: 9px; background: #fff9e8; color: #684f0b; font-size: 11px; line-height: 1.5; }

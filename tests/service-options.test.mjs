@@ -4,7 +4,6 @@ import test from "node:test";
 
 const appSource = await readFile(new URL("../app/PrintBeeApp.tsx", import.meta.url), "utf8");
 const apiSource = await readFile(new URL("../app/api/print-services/route.ts", import.meta.url), "utf8");
-const orderSource = await readFile(new URL("../app/api/orders/route.ts", import.meta.url), "utf8");
 
 test("customers choose visible service options instead of a dropdown", () => {
   assert.match(appSource, /className="service-option-grid"/);
@@ -14,16 +13,11 @@ test("customers choose visible service options instead of a dropdown", () => {
   assert.doesNotMatch(appSource, /<select value=\{serviceId\}/);
 });
 
-test("admin can edit service details and packaging behavior", () => {
+test("admin can edit service details", () => {
   assert.match(apiSource, /ON CONFLICT\(id\) DO UPDATE/);
   assert.match(apiSource, /counts_for_packaging/);
   assert.match(appSource, /Edit service option/);
-  assert.match(appSource, /Count this service's pages for handling charges/);
-});
-
-test("server excludes non-printing service pages from packaging", () => {
-  assert.match(orderSource, /SELECT counts_for_packaging FROM print_services/);
-  assert.match(orderSource, /if \(service\.counts_for_packaging\) totalPrintedPages/);
+  assert.doesNotMatch(appSource, /Count this service's pages for handling charges/);
 });
 
 test("existing non-printing services default to excluded packaging pages", async () => {

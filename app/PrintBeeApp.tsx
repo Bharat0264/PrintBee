@@ -158,7 +158,6 @@ async function uploadPrintableFile(file: File, pageCount: number, onProgress?: (
 type Viewer = { email: string; isAdmin: boolean } | null;
 type LocationOption = { id: string; name: string; delivery_fee_paise?: number; platform_fee_paise?: number };
 type PrintService = { id: string; name: string; description: string; active: number; is_binding: number; price_paise: number; counts_for_packaging: number };
-type PackagingRule = { id: string; min_pages: number; max_pages: number; charge_paise: number };
 type SupabaseConfig = { url: string; anonKey: string } | null;
 type RazorpayResult = { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string };
 type ColourChoice = "" | "bw" | "colour" | "mixed";
@@ -182,10 +181,10 @@ function printSummary(items: any[] = []) {
 }
 
 function revenueSummary(orders: any[] = [], fallbackPrices: Prices) {
-  const totals = { colourPrints: 0, colourPages: 0, colourAmount: 0, bwPrints: 0, bwPages: 0, bwAmount: 0, delivery: 0, handling: 0, platform: 0 };
+  const totals = { colourPrints: 0, colourPages: 0, colourAmount: 0, bwPrints: 0, bwPages: 0, bwAmount: 0, delivery: 0, packaging: 0, platform: 0 };
   for (const order of orders) {
     totals.delivery += Number(order.delivery_fee_paise) || 0;
-    totals.handling += Number(order.packaging_fee_paise) || 0;
+    totals.packaging += Number(order.packaging_fee_paise) || 0;
     totals.platform += Number(order.platform_fee_paise) || 0;
     for (const item of order.items ?? []) {
       const documentPages = Math.max(1, Number(item.pages) || 1);
@@ -306,11 +305,12 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   const [notificationMessage, setNotificationMessage] = useState("");
   const [notificationToast, setNotificationToast] = useState<{ title: string; body: string } | null>(null);
   const [notificationPromptOpen, setNotificationPromptOpen] = useState(false);
-  const [adminSection, setAdminSection] = useState<"dashboard" | "revenue" | "orders" | "locations" | "riders" | "services" | "packaging">("dashboard");
+  const [adminSection, setAdminSection] = useState<"dashboard" | "revenue" | "orders" | "locations" | "riders" | "services">("dashboard");
   const [dashboardRange, setDashboardRange] = useState<"today" | "week" | "month">("today");
   const [printServices, setPrintServices] = useState<PrintService[]>([]);
-  const [packagingRules, setPackagingRules] = useState<PackagingRule[]>([]);
-  const [packagingDraft, setPackagingDraft] = useState({ id: "", minPages: 1, maxPages: 25, charge: 0 });
+  const [packagingEnabled, setPackagingEnabled] = useState(false);
+  const [packagingFee, setPackagingFee] = useState(0);
+  const [needsPackaging, setNeedsPackaging] = useState(false);
   const [serviceId, setServiceId] = useState("document-printing");
   const [printInstructions, setPrintInstructions] = useState("");
   const [colourPageNumbers, setColourPageNumbers] = useState("");
@@ -340,7 +340,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
     return () => { window.clearInterval(refresh); window.removeEventListener("focus", refreshOnFocus); };
   }, []);
 
-  useEffect(() => { fetch("/api/fee-settings", { cache: "no-store" }).then((r) => r.ok ? r.json() : {}).then((data) => { if (typeof data.gatewayEnabled === "boolean") setGatewayEnabled(data.gatewayEnabled); setSurgeEnabled(Boolean(data.surgeEnabled)); setSurgeType(data.surgeType === "FIXED" ? "FIXED" : "PERCENT"); setSurgeValue(Number(data.surgeValue) || 0); setLateNightEnabled(Boolean(data.lateNightEnabled)); setLateNightType(data.lateNightType === "FIXED" ? "FIXED" : "PERCENT"); setLateNightValue(Number(data.lateNightValue) || 0); }).catch(() => {}); }, []);
+  useEffect(() => { fetch("/api/fee-settings", { cache: "no-store" }).then((r) => r.ok ? r.json() : {}).then((data) => { if (typeof data.gatewayEnabled === "boolean") setGatewayEnabled(data.gatewayEnabled); setSurgeEnabled(Boolean(data.surgeEnabled)); setSurgeType(data.surgeType === "FIXED" ? "FIXED" : "PERCENT"); setSurgeValue(Number(data.surgeValue) || 0); setLateNightEnabled(Boolean(data.lateNightEnabled)); setLateNightType(data.lateNightType === "FIXED" ? "FIXED" : "PERCENT"); setLateNightValue(Number(data.lateNightValue) || 0); setPackagingEnabled(Boolean(data.packagingEnabled)); setPackagingFee(Math.max(0, Number(data.packagingFee) || 0)); }).catch(() => {}); }, []);
 
   useEffect(() => {
     const loadAvailability = async () => {
@@ -454,7 +454,6 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
       if (Notification.permission === "default") setNotificationPromptOpen(true);
     }
     fetch("/api/print-services", { cache: "no-store" }).then((response) => response.ok ? response.json() : []).then(setPrintServices).catch(() => {});
-    fetch("/api/packaging-charges").then((response) => response.ok ? response.json() : []).then(setPackagingRules).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -640,8 +639,6 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   const cartTotal = cart.reduce((sum, item) => sum + item.total, 0);
   const cartServiceCharges = cart.reduce((sum, item) => sum + (item.servicePrice || 0), 0);
   const cartPrintingTotal = cartTotal - cartServiceCharges;
-  const cartPrintedPages = cart.reduce((sum, item) => sum + (item.countsForPackaging !== false ? item.pages * item.copies : 0), 0);
-  const packagingFee = (packagingRules.find((rule) => cartPrintedPages >= rule.min_pages && cartPrintedPages <= rule.max_pages)?.charge_paise ?? 0) / 100;
 
   const savePrices = async () => {
     const response = await fetch("/api/print-prices", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(draftPrices) });
@@ -683,12 +680,12 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
     seconds: Math.floor((countdownMs % 60000) / 1000),
   };
 
-  const saveFeeSettings = async (updates: Partial<{ gatewayEnabled: boolean; surgeEnabled: boolean; surgeType: "PERCENT" | "FIXED"; surgeValue: number; lateNightEnabled: boolean; lateNightType: "PERCENT" | "FIXED"; lateNightValue: number }> = {}) => {
-    const settings = { gatewayEnabled, surgeEnabled, surgeType, surgeValue, lateNightEnabled, lateNightType, lateNightValue, ...updates };
+  const saveFeeSettings = async (updates: Partial<{ gatewayEnabled: boolean; surgeEnabled: boolean; surgeType: "PERCENT" | "FIXED"; surgeValue: number; lateNightEnabled: boolean; lateNightType: "PERCENT" | "FIXED"; lateNightValue: number; packagingEnabled: boolean; packagingFee: number }> = {}) => {
+    const settings = { gatewayEnabled, surgeEnabled, surgeType, surgeValue, lateNightEnabled, lateNightType, lateNightValue, packagingEnabled, packagingFee, ...updates };
     const response = await fetch("/api/fee-settings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(settings) });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) { setNotificationMessage(data.error ?? "Fee settings could not be saved."); return; }
-    setGatewayEnabled(data.gatewayEnabled); setSurgeEnabled(data.surgeEnabled); setSurgeType(data.surgeType); setSurgeValue(data.surgeValue); setLateNightEnabled(data.lateNightEnabled); setLateNightType(data.lateNightType); setLateNightValue(data.lateNightValue); setNotificationMessage("Checkout fee settings saved.");
+    setGatewayEnabled(data.gatewayEnabled); setSurgeEnabled(data.surgeEnabled); setSurgeType(data.surgeType); setSurgeValue(data.surgeValue); setLateNightEnabled(data.lateNightEnabled); setLateNightType(data.lateNightType); setLateNightValue(data.lateNightValue); setPackagingEnabled(data.packagingEnabled); setPackagingFee(data.packagingFee); if (!data.packagingEnabled) setNeedsPackaging(false); setNotificationMessage("Checkout fee settings saved.");
   };
 
   const supabase = supabaseConfig
@@ -750,11 +747,12 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
     const response = await fetch("/api/orders", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ customerName, mobileNumber, locationId, items: cart, totalPaise: Math.round(cartTotal * 100), usePoints }),
+      body: JSON.stringify({ customerName, mobileNumber, locationId, items: cart, totalPaise: Math.round(cartTotal * 100), usePoints, needsPackaging }),
     });
     const data = await response.json();
     if (!response.ok) return setOrderError(data.error ?? "Order could not be placed");
     setCart([]);
+    setNeedsPackaging(false);
     if (data.pointsRedeemed) setPointsBalance((current) => Math.max(0, current - data.pointsRedeemed));
     const pendingResult = { ...data, paid: false };
     setOrderResult(pendingResult);
@@ -1124,23 +1122,6 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
     if (response.ok) setPrintServices((items) => items.filter((item) => item.id !== id));
   };
 
-  const savePackagingRule = async () => {
-    const response = await fetch("/api/packaging-charges", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(packagingDraft) });
-    const data = await response.json();
-    setAdminMessage(response.ok ? "Handling charge saved." : data.error);
-    if (response.ok) {
-      const rulesResponse = await fetch("/api/packaging-charges");
-      if (rulesResponse.ok) setPackagingRules(await rulesResponse.json());
-      setPackagingDraft({ id: "", minPages: 1, maxPages: 25, charge: 0 });
-    }
-  };
-
-  const deletePackagingRule = async (id: string) => {
-    await fetch("/api/packaging-charges", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
-    const response = await fetch("/api/packaging-charges");
-    if (response.ok) setPackagingRules(await response.json());
-  };
-
   const recordRiderPayment = async () => {
     const response = await fetch("/api/admin/rider-payments", {
       method: "POST",
@@ -1273,7 +1254,8 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   const checkoutSurgeFee = surgeEnabled ? surgeType === "FIXED" ? surgeValue : surgeBase * surgeValue / 100 : 0;
   const checkoutLateNightFee = lateNightEnabled ? lateNightType === "FIXED" ? lateNightValue : surgeBase * lateNightValue / 100 : 0;
   const checkoutGatewayFee = gatewayEnabled ? surgeBase * .01 : 0;
-  const checkoutBeforePoints = cartTotal + checkoutDeliveryFee + checkoutPlatformFee + packagingFee + checkoutSurgeFee + checkoutLateNightFee + checkoutGatewayFee;
+  const checkoutPackagingFee = packagingEnabled && needsPackaging ? packagingFee : 0;
+  const checkoutBeforePoints = cartTotal + checkoutDeliveryFee + checkoutPlatformFee + checkoutPackagingFee + checkoutSurgeFee + checkoutLateNightFee + checkoutGatewayFee;
   const redeemablePoints = Math.min(pointsBalance, Math.max(0, Math.floor((checkoutBeforePoints - 1) * 15)));
   const pointsDiscount = usePoints ? Math.floor(redeemablePoints * 100 / 15) / 100 : 0;
   const revenueNow = new Date();
@@ -1564,7 +1546,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
           <section className="admin-modal admin-portal" role="dialog" aria-modal="true" aria-labelledby="admin-title" onMouseDown={(e) => e.stopPropagation()}>
             <aside className="admin-sidebar">
               <div className="admin-sidebar-brand"><img src="/printbee-logo.png" alt="" /><strong>PrintBee Admin</strong></div>
-              {([["dashboard", "Dashboard", "⌂"], ["revenue", "Revenue", "₹"], ["orders", "Orders", "▤"], ["locations", "Locations", "⌖"], ["riders", "Rider approvals", "♙"], ["services", "Print services", "＋"], ["packaging", "Handling charges", "₹"]] as const).map(([id, label, icon]) => <button key={id} className={adminSection === id ? "active" : ""} onClick={() => { setAdminSection(id); window.setTimeout(() => document.getElementById(`admin-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" }), 0); }}><span>{icon}</span>{label}{id === "orders" && <b>{dashboard?.orders?.length ?? 0}</b>}</button>)}
+              {([["dashboard", "Dashboard", "⌂"], ["revenue", "Revenue", "₹"], ["orders", "Orders", "▤"], ["locations", "Locations", "⌖"], ["riders", "Rider approvals", "♙"], ["services", "Print services", "＋"]] as const).map(([id, label, icon]) => <button key={id} className={adminSection === id ? "active" : ""} onClick={() => { setAdminSection(id); window.setTimeout(() => document.getElementById(`admin-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" }), 0); }}><span>{icon}</span>{label}{id === "orders" && <b>{dashboard?.orders?.length ?? 0}</b>}</button>)}
               {notificationPermission !== "granted" && <button onClick={enableNotifications}><span>♬</span>Enable order alerts</button>}
               {notificationPermission === "granted" && <button onClick={testNotifications}><span>♬</span>Test sound + banner</button>}
               <button className="admin-sidebar-exit" onClick={() => setAdminOpen(false)}>← Back to website</button>
@@ -1588,7 +1570,9 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
             </div>
             <div className="service-admin fee-controls">
               <h3>Checkout fee controls</h3>
-              <div className={`order-toggle-panel ${gatewayEnabled ? "on" : "off"}`}><span><strong>Payment gateway fee (1%)</strong><small>Calculated on printing + delivery + platform; handling excluded. Hidden from customer breakdown.</small></span><button role="switch" aria-checked={gatewayEnabled} onClick={() => saveFeeSettings({ gatewayEnabled: !gatewayEnabled })}><i />{gatewayEnabled ? "ON" : "OFF"}</button></div>
+              <div className={`order-toggle-panel ${gatewayEnabled ? "on" : "off"}`}><span><strong>Payment gateway fee (1%)</strong><small>Calculated on printing + delivery + platform. Hidden from customer breakdown.</small></span><button role="switch" aria-checked={gatewayEnabled} onClick={() => saveFeeSettings({ gatewayEnabled: !gatewayEnabled })}><i />{gatewayEnabled ? "ON" : "OFF"}</button></div>
+              <div className={`order-toggle-panel ${packagingEnabled ? "on" : "off"}`}><span><strong>Optional packaging</strong><small>When enabled, customers can add packaging to their order for the price below.</small></span><button role="switch" aria-checked={packagingEnabled} onClick={() => saveFeeSettings({ packagingEnabled: !packagingEnabled })}><i />{packagingEnabled ? "ON" : "OFF"}</button></div>
+              <div className="service-admin-form"><label>Packaging price (₹)<input aria-label="Packaging price" type="number" min="0" step="0.01" value={packagingFee} onChange={(e) => setPackagingFee(Math.max(0, Number(e.target.value)))} /></label><button onClick={() => saveFeeSettings()}>Save packaging price</button></div>
               <div className={`order-toggle-panel ${surgeEnabled ? "on" : "off"}`}><span><strong>Surge charge</strong><small>Shown to customers as a high-demand charge.</small></span><button role="switch" aria-checked={surgeEnabled} onClick={() => saveFeeSettings({ surgeEnabled: !surgeEnabled })}><i />{surgeEnabled ? "ON" : "OFF"}</button></div>
               <div className="service-admin-form"><select value={surgeType} onChange={(e) => setSurgeType(e.target.value as "PERCENT" | "FIXED")}><option value="PERCENT">Percentage (%)</option><option value="FIXED">Fixed amount (₹)</option></select><input type="number" min="0" step="0.01" value={surgeValue} onChange={(e) => setSurgeValue(Math.max(0, Number(e.target.value)))} /><button onClick={() => saveFeeSettings()}>Save surge charge</button></div>
               <div className={`order-toggle-panel ${lateNightEnabled ? "on" : "off"}`}><span><strong>Late-night delivery fee</strong><small>Shown separately in checkout and saved with each order.</small></span><button role="switch" aria-checked={lateNightEnabled} onClick={() => saveFeeSettings({ lateNightEnabled: !lateNightEnabled })}><i />{lateNightEnabled ? "ON" : "OFF"}</button></div>
@@ -1606,20 +1590,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
             <div className="service-admin">
               <h3>{newService.id ? "Edit service option" : "Add a print, documentation, or finishing service"}</h3>
               <div className="service-admin-form"><input value={newService.name} onChange={(e) => setNewService({ ...newService, name: e.target.value })} placeholder="Example: Soft binding" /><input maxLength={125} value={newService.description} onChange={(e) => setNewService({ ...newService, description: e.target.value })} placeholder="Description (125 characters)" /><label className="service-price-field">Price (₹)<input type="number" min="0" step=".01" value={newService.price} onChange={(e) => setNewService({ ...newService, price: Math.max(0, Number(e.target.value)) })} /></label><label><input type="checkbox" checked={newService.isBinding} onChange={(e) => setNewService({ ...newService, isBinding: e.target.checked })} /> Request page instructions and WhatsApp</label><button onClick={addPrintService}>{newService.id ? "Save changes" : "Add service"}</button>{newService.id && <button className="secondary-button" onClick={() => setNewService({ id: "", name: "", description: "", isBinding: false, countsForPackaging: true, price: 0 })}>Cancel</button>}</div>
-              <label className="packaging-count-toggle"><input type="checkbox" checked={newService.countsForPackaging} onChange={(e) => setNewService({ ...newService, countsForPackaging: e.target.checked })} /> Count this service's pages for handling charges</label>
-              <div className="service-chips">{printServices.map((service) => <span key={service.id}><b>{service.name} · {inr.format(service.price_paise / 100)}</b><small>{service.description}</small><small>{service.counts_for_packaging ? "Printed pages count toward handling charges" : "Pages excluded from handling charges"}</small><button onClick={() => setNewService({ id: service.id, name: service.name, description: service.description, isBinding: Boolean(service.is_binding), countsForPackaging: Boolean(service.counts_for_packaging), price: service.price_paise / 100 })}>Edit</button>{!["document-printing", "document-binding"].includes(service.id) && <button onClick={() => removePrintService(service.id)}>Remove</button>}</span>)}</div>
-            </div>
-            <div className="service-admin packaging-admin" id="admin-packaging">
-              <h2>Handling charges</h2>
-              <p>Add or edit non-overlapping page ranges. For example, “Below 30” means pages 1–29, followed by 30–50. The matching charge is calculated automatically at checkout.</p>
-              <div className="dashboard-range" aria-label="Quick handling charge page ranges">
-                <button type="button" onClick={() => setPackagingDraft({ id: "", minPages: 1, maxPages: 29, charge: 0 })}>Below 30</button>
-                <button type="button" onClick={() => setPackagingDraft({ id: "", minPages: 30, maxPages: 50, charge: 0 })}>30–50</button>
-                <button type="button" onClick={() => setPackagingDraft({ id: "", minPages: 51, maxPages: 9999, charge: 0 })}>Above 50</button>
-              </div>
-              <div className="service-admin-form"><label>From pages<input type="number" min="1" value={packagingDraft.minPages} onChange={(e) => setPackagingDraft({ ...packagingDraft, minPages: Number(e.target.value) })} /></label><label>To pages<input type="number" min="1" value={packagingDraft.maxPages} onChange={(e) => setPackagingDraft({ ...packagingDraft, maxPages: Number(e.target.value) })} /></label><label>Handling charge (₹)<input type="number" min="0" step=".01" value={packagingDraft.charge} onChange={(e) => setPackagingDraft({ ...packagingDraft, charge: Number(e.target.value) })} /></label><button onClick={savePackagingRule}>{packagingDraft.id ? "Save edited charge" : "Add charge"}</button></div>
-              {packagingDraft.id && <button className="secondary-button" onClick={() => setPackagingDraft({ id: "", minPages: 1, maxPages: 29, charge: 0 })}>Cancel editing</button>}
-              <div className="service-chips">{packagingRules.map((rule) => <span key={rule.id}><b>{rule.min_pages === 1 && rule.max_pages === 29 ? "Below 30" : rule.min_pages === 30 && rule.max_pages === 50 ? "30–50" : rule.min_pages === 51 && rule.max_pages === 9999 ? "Above 50" : `${rule.min_pages}–${rule.max_pages}`} pages · {inr.format(rule.charge_paise / 100)}</b><button onClick={() => { setPackagingDraft({ id: rule.id, minPages: rule.min_pages, maxPages: rule.max_pages, charge: rule.charge_paise / 100 }); document.getElementById("admin-packaging")?.scrollIntoView({ behavior: "smooth" }); }}>Edit</button><button onClick={() => deletePackagingRule(rule.id)}>Remove</button></span>)}</div>
+              <div className="service-chips">{printServices.map((service) => <span key={service.id}><b>{service.name} · {inr.format(service.price_paise / 100)}</b><small>{service.description}</small><button onClick={() => setNewService({ id: service.id, name: service.name, description: service.description, isBinding: Boolean(service.is_binding), countsForPackaging: Boolean(service.counts_for_packaging), price: service.price_paise / 100 })}>Edit</button>{!["document-printing", "document-binding"].includes(service.id) && <button onClick={() => removePrintService(service.id)}>Remove</button>}</span>)}</div>
             </div>
             <div className="admin-divider" />
             <h3 id="admin-locations">Delivery locations</h3>
@@ -1654,7 +1625,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                   <div><small>B&amp;W pages</small><strong>{revenueTotals.bwPages}</strong></div>
                   <div><small>B&amp;W amount received</small><strong>{inr.format(revenueTotals.bwAmount)}</strong></div>
                   <div><small>Delivery charges revenue</small><strong>{inr.format(revenueTotals.delivery / 100)}</strong></div>
-                  <div><small>Handling fee revenue</small><strong>{inr.format(revenueTotals.handling / 100)}</strong></div>
+                  <div><small>Packaging fee revenue</small><strong>{inr.format(revenueTotals.packaging / 100)}</strong></div>
                   <div><small>Platform fee revenue</small><strong>{inr.format(revenueTotals.platform / 100)}</strong></div>
                 </div>
                 <h3>Location performance</h3>
@@ -1684,7 +1655,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                 <p>Paid order revenue, rider earnings, and PrintBee revenue per order.</p>
                 <div className="revenue-table">
                   <div className="revenue-head"><span>Order</span><span>Revenue</span><span>Delivery partner</span><span>Rider fee</span><span>Admin revenue</span></div>
-                  {dashboard.revenueOrders?.length ? dashboard.revenueOrders.map((entry: any) => <article key={entry.order_number}><span><strong>{entry.order_number}</strong><small>{new Date(entry.created_at).toLocaleDateString("en-IN")}</small></span><strong>{inr.format(entry.revenue_paise / 100)}</strong><span><strong>{entry.rider_name}</strong><small>{entry.rider_email || "Awaiting assignment"}</small></span><strong>{inr.format(entry.rider_fee_paise / 100)}</strong><span><strong>{inr.format(entry.admin_revenue_paise / 100)}</strong><small>Print {inr.format(entry.printing_subtotal_paise / 100)} + handling {inr.format((entry.packaging_fee_paise ?? 0) / 100)} + platform {inr.format(entry.platform_fee_paise / 100)} + 20% delivery</small></span></article>) : <p>No paid-order revenue yet.</p>}
+                  {dashboard.revenueOrders?.length ? dashboard.revenueOrders.map((entry: any) => <article key={entry.order_number}><span><strong>{entry.order_number}</strong><small>{new Date(entry.created_at).toLocaleDateString("en-IN")}</small></span><strong>{inr.format(entry.revenue_paise / 100)}</strong><span><strong>{entry.rider_name}</strong><small>{entry.rider_email || "Awaiting assignment"}</small></span><strong>{inr.format(entry.rider_fee_paise / 100)}</strong><span><strong>{inr.format(entry.admin_revenue_paise / 100)}</strong><small>Print {inr.format(entry.printing_subtotal_paise / 100)} + packaging {inr.format((entry.packaging_fee_paise ?? 0) / 100)} + platform {inr.format(entry.platform_fee_paise / 100)} + 20% delivery</small></span></article>) : <p>No paid-order revenue yet.</p>}
                 </div>
                 <div className="order-export-panel">
                   <div><h3>Export orders</h3><p>Download a PDF containing visible orders only. Hidden orders are excluded.</p></div>
@@ -1803,7 +1774,8 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                 <label className="checkout-field">Mobile number<input value={mobileNumber} onChange={(e) => setMobileNumber(e.target.value.replace(/\D/g, "").slice(0, 10))} placeholder="10-digit mobile number" inputMode="numeric" /></label>
                 <label className="checkout-field">Delivery location<select value={locationId} onChange={(e) => setLocationId(e.target.value)}><option value="">Select a location</option>{locations.map((location) => <option value={location.id} key={location.id}>{location.name}</option>)}</select></label>
                 {!locations.length && <p className="panel-message">No delivery locations are available yet. The admin must add one first.</p>}
-                <div className="fee-breakdown"><div><span>Printing subtotal</span><strong>{inr.format(cartPrintingTotal)}</strong></div>{cartServiceCharges > 0 && <div className="binding-charge-row"><span>Binding charges</span><strong>{inr.format(cartServiceCharges)}</strong></div>}<div><span>Delivery fee</span><strong>{inr.format(checkoutDeliveryFee)}</strong></div><div><span>Platform fee</span><strong>{inr.format(checkoutPlatformFee)}</strong></div><div><span>Handling charge ({cartPrintedPages} pages)</span><strong>{inr.format(packagingFee)}</strong></div>{surgeEnabled && <div className="surge-charge-row"><span>High-demand surge charge</span><strong>{inr.format(checkoutSurgeFee)}</strong></div>}{lateNightEnabled && <div className="surge-charge-row"><span>Late-night delivery fee</span><strong>{inr.format(checkoutLateNightFee)}</strong></div>}{gatewayEnabled && <div><span>Payment gateway fee</span><strong>{inr.format(checkoutGatewayFee)}</strong></div>}{pointsDiscount > 0 && <div className="points-discount-row"><span>Points discount ({redeemablePoints} points)</span><strong>−{inr.format(pointsDiscount)}</strong></div>}</div>
+                {packagingEnabled && <button type="button" className={`packaging-choice ${needsPackaging ? "selected" : ""}`} aria-pressed={needsPackaging} onClick={() => setNeedsPackaging((current) => !current)}><span><strong>Need packaging for this order?</strong><small>Add protective packaging for {inr.format(packagingFee)}.</small></span><b>{needsPackaging ? "✓ Added" : "Add"}</b></button>}
+                <div className="fee-breakdown"><div><span>Printing subtotal</span><strong>{inr.format(cartPrintingTotal)}</strong></div>{cartServiceCharges > 0 && <div className="binding-charge-row"><span>Binding charges</span><strong>{inr.format(cartServiceCharges)}</strong></div>}<div><span>Delivery fee</span><strong>{inr.format(checkoutDeliveryFee)}</strong></div><div><span>Platform fee</span><strong>{inr.format(checkoutPlatformFee)}</strong></div>{needsPackaging && packagingEnabled && <div className="packaging-charge-row"><span>Packaging fee</span><strong>{inr.format(checkoutPackagingFee)}</strong></div>}{surgeEnabled && <div className="surge-charge-row"><span>High-demand surge charge</span><strong>{inr.format(checkoutSurgeFee)}</strong></div>}{lateNightEnabled && <div className="surge-charge-row"><span>Late-night delivery fee</span><strong>{inr.format(checkoutLateNightFee)}</strong></div>}{gatewayEnabled && <div><span>Payment gateway fee</span><strong>{inr.format(checkoutGatewayFee)}</strong></div>}{pointsDiscount > 0 && <div className="points-discount-row"><span>Points discount ({redeemablePoints} points)</span><strong>−{inr.format(pointsDiscount)}</strong></div>}</div>
                 <button type="button" className={`wallet-balance-button ${usePoints ? "selected" : ""}`} disabled={redeemablePoints < 1} onClick={() => setUsePoints((current) => !current)}><span className="wallet-icon">₹</span><span><strong>{usePoints ? "Wallet applied" : "Use wallet balance"}</strong><small>{pointsBalance} points · worth {inr.format(pointsBalance / 15)} · every point is redeemable</small></span><b>{usePoints ? "✓" : "Use"}</b></button>
                 <div className="checkout-total"><span>Estimated total</span><strong>{inr.format(Math.max(0, checkoutBeforePoints - pointsDiscount))}</strong></div>
                 <div className="points-earned-preview"><span>◉</span><div><strong>You’ll earn {Math.floor(Math.max(0, checkoutBeforePoints - pointsDiscount) / 10)} wallet points</strong><small>Credited after this order is successfully delivered.</small></div></div>

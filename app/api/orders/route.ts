@@ -7,7 +7,7 @@ export async function POST(request: Request) {
   if (!viewer) return NextResponse.json({ error: "Sign in required" }, { status: 401 });
   const availability = await database().prepare("SELECT accepting_orders FROM order_availability WHERE id='main'").first<{ accepting_orders: number }>();
   if (availability?.accepting_orders === 0) return NextResponse.json({ error: "Service will be live soon. We are not accepting orders right now." }, { status: 503 });
-  const body = await request.json() as { customerName?: string; mobileNumber?: string; locationId?: string; items?: unknown[]; totalPaise?: number; usePoints?: boolean };
+  const body = await request.json() as { customerName?: string; mobileNumber?: string; locationId?: string; items?: unknown[]; totalPaise?: number; usePoints?: boolean; needsPackaging?: boolean };
   const name = body.customerName?.trim();
   const mobile = body.mobileNumber?.replace(/\D/g, "");
   if (!name || !mobile || mobile.length !== 10 || !body.locationId || !body.items?.length) {
@@ -23,17 +23,14 @@ export async function POST(request: Request) {
   const platformFeePaise = location.platform_fee_paise ?? 350;
   const uploadIds = body.items.map((item: any) => item.uploadId).filter(Boolean);
   if (uploadIds.length !== body.items.length) return NextResponse.json({ error: "Every cart item must finish uploading" }, { status: 400 });
-  let totalPrintedPages = 0;
   for (const item of body.items as Array<{ uploadId?: string; copies?: number; serviceId?: string }>) {
     const upload = await database().prepare("SELECT id, page_count FROM uploads WHERE id=? AND customer_email=? AND order_id IS NULL").bind(item.uploadId, viewer.email).first<{ id: string; page_count: number }>();
     if (!upload) return NextResponse.json({ error: "One or more uploaded files are unavailable" }, { status: 400 });
-    const service = await database().prepare("SELECT counts_for_packaging FROM print_services WHERE id=? AND active=1").bind(item.serviceId || "document-printing").first<{ counts_for_packaging: number }>();
+    const service = await database().prepare("SELECT id FROM print_services WHERE id=? AND active=1").bind(item.serviceId || "document-printing").first<{ id: string }>();
     if (!service) return NextResponse.json({ error: "One or more selected services are unavailable" }, { status: 400 });
-    if (service.counts_for_packaging) totalPrintedPages += upload.page_count * Math.max(1, Math.min(100, Math.round(Number(item.copies) || 1)));
   }
-  const packagingRule = await database().prepare("SELECT charge_paise FROM packaging_charge_rules WHERE min_pages<=? AND max_pages>=? ORDER BY min_pages DESC LIMIT 1").bind(totalPrintedPages, totalPrintedPages).first<{ charge_paise: number }>();
-  const packagingFeePaise = packagingRule?.charge_paise ?? 0;
-  const feeSettings = await database().prepare("SELECT gateway_enabled,surge_enabled,surge_type,surge_value,late_night_enabled,late_night_type,late_night_value FROM checkout_fee_settings WHERE id='main'").first<any>();
+  const feeSettings = await database().prepare("SELECT gateway_enabled,surge_enabled,surge_type,surge_value,late_night_enabled,late_night_type,late_night_value,packaging_enabled,packaging_fee_paise FROM checkout_fee_settings WHERE id='main'").first<any>();
+  const packagingFeePaise = body.needsPackaging && feeSettings?.packaging_enabled ? Math.max(0, Number(feeSettings.packaging_fee_paise) || 0) : 0;
   const feeBasePaise = printingSubtotalPaise + deliveryFeePaise + platformFeePaise;
   const surgeFeePaise = feeSettings?.surge_enabled ? feeSettings.surge_type === "FIXED" ? Math.round(Number(feeSettings.surge_value) * 100) : Math.round(feeBasePaise * Number(feeSettings.surge_value) / 100) : 0;
   const lateNightFeePaise = feeSettings?.late_night_enabled ? feeSettings.late_night_type === "FIXED" ? Math.round(Number(feeSettings.late_night_value) * 100) : Math.round(feeBasePaise * Number(feeSettings.late_night_value) / 100) : 0;
