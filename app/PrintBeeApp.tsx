@@ -36,7 +36,7 @@ const HOSTED_IMAGE_TARGET_BYTES = 700 * 1024;
 const CHUNKED_UPLOAD_THRESHOLD_BYTES = 700 * 1024;
 const IMAGE_EXTENSIONS = /\.(heic|jpe?g|png|webp|gif|bmp|tiff?)$/i;
 const OPTIMIZABLE_IMAGE_EXTENSIONS = /\.(jpe?g|png|webp)$/i;
-const PRINTABLE_FILE_EXTENSIONS = /\.(pdf|heic|jpe?g|png|webp|gif|bmp|tiff?|docx?|pptx?|xlsx?|odt|ods|odp|rtf|txt|csv)$/i;
+const PRINTABLE_FILE_EXTENSIONS = /\.pdf$/i;
 const MIXED_PRINT_SERVICES = new Set(["document-printing", "document-binding"]);
 const GEN_Z_MEMES = [
   "POV: You skipped the Xerox queue and chose peace. 😌",
@@ -527,12 +527,12 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
       event.target.value = "";
       setFileName("");
       setSelectedFile(null);
-      setUploadError(`"${file.name}" is too large. Please upload a PDF or image smaller than 50 MB.`);
+      setUploadError(`"${file.name}" is too large. Please upload a PDF smaller than 50 MB.`);
       return;
     }
     if (!PRINTABLE_FILE_EXTENSIONS.test(file.name)) {
       event.target.value = "";
-      setUploadError("This file type cannot be printed. Choose a document, spreadsheet, presentation, text file, or image.");
+      setUploadError("Only PDF files are accepted. Save or export your document as a PDF, then upload it again.");
       return;
     }
     setFileName(file.name);
@@ -546,12 +546,8 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
         const pdf = await PDFDocument.load(await file.arrayBuffer(), { ignoreEncryption: true });
         setPages(pdf.getPageCount());
         setFileType("PDF");
-      } else if (IMAGE_EXTENSIONS.test(file.name)) {
-        setPages(1);
-        setFileType("IMAGE");
       } else {
-        setPages(1);
-        setFileType("DOCUMENT");
+        throw new Error("Only PDF files are accepted.");
       }
     } catch (error) {
       setFileName("");
@@ -1395,16 +1391,16 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
           {acceptingOrders ? <>
           <div className="card-heading">
             <span className="step">1</span>
-            <div><h2>Start your print</h2><p>Documents, spreadsheets, presentations and images · A4 only</p></div>
+            <div><h2>Start your print</h2><p>PDF files only · A4 printing</p></div>
           </div>
 
           <label className={`upload-zone ${fileName ? "has-file" : ""}`}>
-            <input type="file" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.odt,.ods,.odp,.rtf,.txt,.csv,.jpg,.jpeg,.png,.heic,.webp,.gif,.bmp,.tif,.tiff" onChange={handleFile} />
+            <input type="file" accept=".pdf,application/pdf" onChange={handleFile} />
             <span className="upload-icon">{countingPages ? "…" : fileName ? "✓" : "↑"}</span>
             <strong>{fileName || "Choose a document"}</strong>
-            <small>{uploadProgress !== null ? `Uploading… ${uploadProgress}%` : countingPages ? "Counting pages…" : fileName ? `${pages} ${pages === 1 ? "page" : "pages"} detected` : "or drag and drop it here"}</small>
+            <small>{uploadProgress !== null ? `Uploading… ${uploadProgress}%` : countingPages ? "Counting PDF pages…" : fileName ? `${pages} ${pages === 1 ? "page" : "pages"} detected` : "PDF files only"}</small>
           </label>
-          <p className="file-retention-note"><strong>Document privacy:</strong> Your uploaded files will be deleted once the order is delivered or cancelled. Maximum file size: 50 MB.</p>
+          <p className="file-retention-note"><strong>Please upload PDF files only.</strong> PDF format lets PrintBee calculate the correct number of pages and preserve your print layout. Export Word documents and images as PDF before uploading. Files are deleted after delivery or cancellation. Maximum file size: 50 MB.</p>
           {uploadError && <p className="upload-error">{uploadError}</p>}
 
           {fileName && <>

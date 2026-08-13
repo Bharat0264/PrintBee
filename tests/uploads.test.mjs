@@ -6,20 +6,21 @@ const appSource = await readFile(new URL("../app/PrintBeeApp.tsx", import.meta.u
 const uploadSource = await readFile(new URL("../app/api/uploads/route.ts", import.meta.url), "utf8");
 const chunkedSource = await readFile(new URL("../app/api/uploads/chunked/route.ts", import.meta.url), "utf8");
 
-test("accepts common printable document and image files up to 50 MB", () => {
+test("accepts only PDF files up to 50 MB", () => {
   assert.match(appSource, /50 \* 1024 \* 1024/);
-  assert.match(appSource, /\.pdf,.doc,.docx,.ppt,.pptx/);
-  assert.match(uploadSource, /docx\?\|pptx\?\|xlsx\?/);
+  assert.match(appSource, /accept="\.pdf,application\/pdf"/);
+  assert.match(uploadSource, /\/\\\.pdf\$\/i/);
+  assert.doesNotMatch(appSource, /\.docx/);
   assert.match(uploadSource, /50 \* 1024 \* 1024/);
 });
 
 test("accepts PDF files even when the browser supplies a generic MIME type", () => {
-  assert.match(uploadSource, /pdf\|heic/);
+  assert.match(uploadSource, /\/\\\.pdf\$\/i/);
   assert.match(uploadSource, /maximum upload size is 50 MB/);
 });
 
 test("continues to reject non-printable file types", () => {
-  assert.match(uploadSource, /This file type cannot be printed/);
+  assert.match(uploadSource, /Only PDF files are accepted/);
 });
 
 test("optimizes images and splits larger files below the request-layer threshold", () => {
@@ -41,8 +42,8 @@ test("large uploads report progress and cannot remain stuck as page counting", (
   assert.doesNotMatch(chunkedSource, /objects\.map\(\(object\) => object!\.arrayBuffer\(\)\)/);
 });
 
-test("accepts browser-optimized WebP payloads produced from allowed images", () => {
-  assert.match(uploadSource, /jpe\?g\|png\|webp/);
-  assert.match(chunkedSource, /jpe\?g\|png\|webp/);
-  assert.match(appSource, /accept=[^\n]*webp/);
+test("rejects document and image extensions in every upload path", () => {
+  assert.doesNotMatch(uploadSource, /docx|jpe\?g|webp/);
+  assert.doesNotMatch(chunkedSource, /docx|jpe\?g|webp/);
+  assert.doesNotMatch(appSource, /accept=[^\n]*(docx|webp)/);
 });
