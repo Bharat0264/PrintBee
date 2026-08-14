@@ -167,6 +167,7 @@ type ColourChoice = "" | "bw" | "colour" | "mixed";
 function printSummary(items: any[] = []) {
   const totals = { bwSingle: 0, bwDouble: 0, colourSingle: 0, colourDouble: 0 };
   for (const item of items) {
+    if (item.kind === "ADDON") continue;
     const pages = Math.max(1, Number(item.pages) || 1) * Math.max(1, Number(item.copies) || 1);
     const colourPages = Math.max(0, Math.min(Number(item.pages) || 1, Number(item.colourPages) || 0)) * Math.max(1, Number(item.copies) || 1);
     if (item.colourPageNumbers !== undefined) {
@@ -189,6 +190,7 @@ function revenueSummary(orders: any[] = [], fallbackPrices: Prices) {
     totals.packaging += Number(order.packaging_fee_paise) || 0;
     totals.platform += Number(order.platform_fee_paise) || 0;
     for (const item of order.items ?? []) {
+      if (item.kind === "ADDON") continue;
       const documentPages = Math.max(1, Number(item.pages) || 1);
       const copies = Math.max(1, Number(item.copies) || 1);
       const priceDivisor = item.mode?.endsWith("double") ? 2 : 1;
@@ -206,6 +208,8 @@ function revenueSummary(orders: any[] = [], fallbackPrices: Prices) {
 }
 
 type CartItem = {
+  kind?: "PRINT" | "ADDON";
+  addonId?: string;
   id: string;
   uploadId: string;
   fileName: string;
@@ -325,6 +329,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   const [addons, setAddons] = useState<Addon[]>([]);
   const [selectedAddonIds, setSelectedAddonIds] = useState<string[]>([]);
   const [newAddon, setNewAddon] = useState({ id: "", name: "", description: "", price: 0 });
+  const [addonMessage, setAddonMessage] = useState("");
 
   useEffect(() => {
     const randomValues = new Uint32Array(1);
@@ -649,6 +654,22 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
       return setUploadError(data.error ?? "This item could not be removed. Please try again.");
     }
     setCart((items) => items.filter((current) => current.id !== item.id));
+  };
+
+  const addStandaloneAddon = async (addon: Addon) => {
+    if (!viewer) return setLoginOpen(true);
+    const price = addon.price_paise / 100;
+    const item: CartItem = {
+      kind: "ADDON", addonId: addon.id, id: `addon-${addon.id}`, uploadId: `addon:${addon.id}`,
+      fileName: addon.name, fileType: "DOCUMENT", pages: 0, copies: 1, mode: "bw-single", unitPrice: 0,
+      total: price, serviceId: "addon-only", serviceName: "Add-on only", servicePrice: 0,
+      countsForPackaging: false, addons: [{ id: addon.id, name: addon.name, price }], addonsTotal: price,
+    };
+    const response = await fetch("/api/cart", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(item) });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) return setAddonMessage(data.error ?? "This add-on could not be added.");
+    setCart((items) => [...items.filter((current) => current.uploadId !== item.uploadId), item]);
+    setAddonMessage(`${addon.name} added to your cart.`);
   };
 
   const cartTotal = cart.reduce((sum, item) => sum + item.total, 0);
@@ -1442,6 +1463,13 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
           <p className="file-retention-note"><strong>Accepted files: PDF, JPG/JPEG, PNG and HEIC only.</strong> PDFs are counted automatically; each image is treated as one printable page. Export other files as PDF before uploading. Files are deleted after delivery or cancellation. Maximum file size: 50 MB.</p>
           {uploadError && <p className="upload-error">{uploadError}</p>}
 
+          {addons.length > 0 && <div className="binding-fields standalone-addons">
+            <strong>Don’t need printouts? Order add-ons only</strong>
+            <p>No document upload is required. Choose a product below and proceed directly to checkout.</p>
+            <div className="service-option-grid" role="group" aria-label="Add-on products">{addons.map((addon) => <button type="button" key={addon.id} onClick={() => addStandaloneAddon(addon)}><span><strong>{addon.name}</strong><small>{addon.description}</small></span><b>{inr.format(addon.price_paise / 100)} · Add</b></button>)}</div>
+            {addonMessage && <small className="notification-message" role="status">{addonMessage}</small>}
+          </div>}
+
           {fileName && <>
           <div className="field-label"><span className="step">2</span> Choose service</div>
           <div className="service-option-grid" role="radiogroup" aria-label="Print service">
@@ -1508,11 +1536,11 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
 
       <section className="cart-section" id="cart" aria-labelledby="cart-title">
         <div className="cart-heading">
-          <div><div className="eyebrow"><span>●</span> Your print cart</div><h2 id="cart-title">{cart.length ? `${cart.length} ${cart.length === 1 ? "document" : "documents"} ready` : "Your cart is empty"}</h2></div>
+          <div><div className="eyebrow"><span>●</span> Your cart</div><h2 id="cart-title">{cart.length ? `${cart.length} ${cart.length === 1 ? "item" : "items"} ready` : "Your cart is empty"}</h2></div>
           {cart.length > 0 && <strong>{inr.format(cartTotal)}</strong>}
         </div>
         {cart.length === 0 ? (
-          <div className="empty-cart"><span>▤</span><p>Upload a document above and click <strong>Add to cart</strong>.</p></div>
+          <div className="empty-cart"><span>▤</span><p>Upload a document or choose an add-on product above.</p></div>
         ) : (
           <>
             <div className="cart-items">
@@ -1520,8 +1548,8 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                 const itemOption = options.find((option) => option.id === item.mode);
                 return (
                   <article className="cart-item" key={item.id}>
-                    <div className="file-badge">{item.fileType === "PDF" ? "PDF" : item.fileType === "IMAGE" ? "IMG" : "DOC"}</div>
-                    <div className="cart-file"><h3>{item.fileName}</h3><p>{item.serviceName} · {item.pages} {item.pages === 1 ? "page" : "pages"} · A4 · {itemOption?.title ?? printModeLabel(item.mode)} · {item.copies} {item.copies === 1 ? "copy" : "copies"}</p>{item.colourPageNumbers !== undefined && <p>Colour pages: {item.colourPageNumbers} · B&amp;W pages: {item.bwPageNumbers ?? `remaining ${item.pages - (item.colourPages ?? 0)} pages`}</p>}{item.addons?.length ? <p>Add-ons: {item.addons.map((addon) => addon.name).join(", ")}</p> : null}{item.printInstructions && <p>{item.printInstructions}{item.whatsappNumber ? ` · WhatsApp ${item.whatsappNumber}` : ""}</p>}<small>{item.colourPageNumbers !== undefined ? `${item.pages - (item.colourPages ?? 0)} B&W + ${item.colourPages ?? 0} colour × ${item.copies}` : `${item.pages}${item.mode.endsWith("double") ? " ÷ 2" : ""} × ${item.copies} × ${inr.format(item.unitPrice)}`}{item.servicePrice > 0 ? ` + ${inr.format(item.servicePrice)} service charge` : ""}{item.addonsTotal ? ` + ${inr.format(item.addonsTotal)} add-ons` : ""}</small></div>
+                    <div className="file-badge">{item.kind === "ADDON" ? "ADD" : item.fileType === "PDF" ? "PDF" : item.fileType === "IMAGE" ? "IMG" : "DOC"}</div>
+                    {item.kind === "ADDON" ? <div className="cart-file"><h3>{item.fileName}</h3><p>Add-on only · No printout required</p><small>Fixed product price</small></div> : <div className="cart-file"><h3>{item.fileName}</h3><p>{item.serviceName} · {item.pages} {item.pages === 1 ? "page" : "pages"} · A4 · {itemOption?.title ?? printModeLabel(item.mode)} · {item.copies} {item.copies === 1 ? "copy" : "copies"}</p>{item.colourPageNumbers !== undefined && <p>Colour pages: {item.colourPageNumbers} · B&amp;W pages: {item.bwPageNumbers ?? `remaining ${item.pages - (item.colourPages ?? 0)} pages`}</p>}{item.addons?.length ? <p>Add-ons: {item.addons.map((addon) => addon.name).join(", ")}</p> : null}{item.printInstructions && <p>{item.printInstructions}{item.whatsappNumber ? ` · WhatsApp ${item.whatsappNumber}` : ""}</p>}<small>{item.colourPageNumbers !== undefined ? `${item.pages - (item.colourPages ?? 0)} B&W + ${item.colourPages ?? 0} colour × ${item.copies}` : `${item.pages}${item.mode.endsWith("double") ? " ÷ 2" : ""} × ${item.copies} × ${inr.format(item.unitPrice)}`}{item.servicePrice > 0 ? ` + ${inr.format(item.servicePrice)} service charge` : ""}{item.addonsTotal ? ` + ${inr.format(item.addonsTotal)} add-ons` : ""}</small></div>}
                     <strong>{inr.format(item.total)}</strong>
                     <button className="remove-item" onClick={() => removeFromCart(item)} aria-label={`Remove ${item.fileName}`}>×</button>
                   </article>
@@ -1761,19 +1789,19 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                     {order.payment_rejection_reason && <div className="cancelled-note"><strong>Payment rejected</strong><small>{order.payment_rejection_reason}</small></div>}
                     {order.status === "CANCELLED" && <div className="cancelled-note"><strong>Cancelled</strong><small>{order.cancellation_reason}</small></div>}
                     <div className="document-details">
-                      <strong>Documents</strong>
+                      <strong>Order items</strong>
                       {(() => { const total = printSummary(order.items); return <div className="print-summary"><span>B&amp;W: {total.bwSingle + total.bwDouble} pages</span><span>Colour: {total.colourSingle + total.colourDouble} pages</span></div>; })()}
                       {order.items?.length ? order.items.map((item: any, index: number) => (
                         <div key={`${item.uploadId ?? item.fileName}-${index}`}>
                           <span>{item.fileName ?? `Document ${index + 1}`}</span>
-                          <small>Doc {index + 1}: {item.pages ?? 1} pages · {item.copies ?? 1} copies · {printModeLabel(item.mode)}{item.serviceName ? ` · ${item.serviceName}` : ""}</small>
+                          {item.kind === "ADDON" ? <small>Add-on only · {inr.format(item.total ?? item.addonsTotal ?? 0)}</small> : <small>Doc {index + 1}: {item.pages ?? 1} pages · {item.copies ?? 1} copies · {printModeLabel(item.mode)}{item.serviceName ? ` · ${item.serviceName}` : ""}</small>}
                           {item.colourPageNumbers !== undefined && <small><b>Colour pages:</b> {item.colourPageNumbers} · all remaining pages B&amp;W</small>}
                           {item.bwPageNumbers && <small><b>B&amp;W pages:</b> {item.bwPageNumbers}</small>}
                           {item.printInstructions && <small><b>Instructions:</b> {item.printInstructions} · WhatsApp {item.whatsappNumber}</small>}
                         </div>
                       )) : <small>No document details saved for this legacy order.</small>}
                     </div>
-                    <div className="file-links">{order.files?.length ? order.files.map((file: any) => file.deleted_at ? <span className="deleted-file" key={file.id}>{file.original_name} · deleted {new Date(file.deleted_at).toLocaleDateString("en-IN")}</span> : <a key={file.id} href={`/api/admin/files/${file.id}/download`}>Download {file.original_name}</a>) : <span>Legacy order — document was not stored</span>}</div>
+                    <div className="file-links">{order.files?.length ? order.files.map((file: any) => file.deleted_at ? <span className="deleted-file" key={file.id}>{file.original_name} · deleted {new Date(file.deleted_at).toLocaleDateString("en-IN")}</span> : <a key={file.id} href={`/api/admin/files/${file.id}/download`}>Download {file.original_name}</a>) : <span>{order.items?.every((item: any) => item.kind === "ADDON") ? "Add-on-only order — no document required" : "Legacy order — document was not stored"}</span>}</div>
                     {(["DELIVERED", "CANCELLED"].includes(String(order.status).toUpperCase()) || order.delivered_at || order.cancelled_at) && (order.files?.some((file: any) => !file.deleted_at) ? <button className="delete-files-action" onClick={() => deleteOrderFiles(order.id)}>Delete {order.files.filter((file: any) => !file.deleted_at).length} document{order.files.filter((file: any) => !file.deleted_at).length === 1 ? "" : "s"} from storage</button> : <div className="files-cleared-note">No stored documents remain for this order.</div>)}
                     <select disabled={order.status === "CANCELLED" || order.payment_status === "REJECTED"} value={order.status} onChange={(e) => updateOrderStatus(order.id, e.target.value)}>
                       {order.status === "CANCELLED" && <option value="CANCELLED">Cancelled</option>}

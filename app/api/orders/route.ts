@@ -21,9 +21,14 @@ export async function POST(request: Request) {
   const printingSubtotalPaise = Math.max(0, Math.round(Number(body.totalPaise) || 0));
   const deliveryFeePaise = location.delivery_fee_paise ?? 1500;
   const platformFeePaise = location.platform_fee_paise ?? 350;
-  const uploadIds = body.items.map((item: any) => item.uploadId).filter(Boolean);
-  if (uploadIds.length !== body.items.length) return NextResponse.json({ error: "Every cart item must finish uploading" }, { status: 400 });
-  for (const item of body.items as Array<{ uploadId?: string; copies?: number; serviceId?: string }>) {
+  const uploadIds = body.items.filter((item: any) => item.kind !== "ADDON").map((item: any) => item.uploadId).filter(Boolean);
+  if (uploadIds.length !== body.items.filter((item: any) => item.kind !== "ADDON").length) return NextResponse.json({ error: "Every print item must finish uploading" }, { status: 400 });
+  for (const item of body.items as Array<{ kind?: string; addonId?: string; uploadId?: string; copies?: number; serviceId?: string }>) {
+    if (item.kind === "ADDON") {
+      const addon = await database().prepare("SELECT id FROM addons WHERE id=? AND active=1").bind(item.addonId).first<{ id: string }>();
+      if (!addon) return NextResponse.json({ error: "One or more selected add-ons are unavailable" }, { status: 400 });
+      continue;
+    }
     const upload = await database().prepare("SELECT id, page_count FROM uploads WHERE id=? AND customer_email=? AND order_id IS NULL").bind(item.uploadId, viewer.email).first<{ id: string; page_count: number }>();
     if (!upload) return NextResponse.json({ error: "One or more uploaded files are unavailable" }, { status: 400 });
     const service = await database().prepare("SELECT id FROM print_services WHERE id=? AND active=1").bind(item.serviceId || "document-printing").first<{ id: string }>();
@@ -54,6 +59,7 @@ export async function POST(request: Request) {
     ...(pointsRedeemed ? [db.prepare("UPDATE customer_profiles SET points_balance=points_balance-? WHERE email=? AND points_balance>=?").bind(pointsRedeemed, viewer.email, pointsRedeemed)] : []),
     ...uploadIds.map((uploadId) => db.prepare("UPDATE uploads SET order_id=? WHERE id=?").bind(id, uploadId)),
     ...uploadIds.map((uploadId) => db.prepare("DELETE FROM cart_items WHERE upload_id=? AND customer_email=?").bind(uploadId, viewer.email)),
+    ...(body.items as any[]).filter((item) => item.kind === "ADDON").map((item) => db.prepare("DELETE FROM cart_items WHERE id=? AND customer_email=?").bind(item.id, viewer.email)),
   ]);
   return NextResponse.json({ id, orderNumber, locationName: location.name, totalPaise, lateNightFeePaise, pointsRedeemed, pointsDiscountPaise, paymentMode: "RAZORPAY" });
 }
