@@ -157,6 +157,16 @@ export const printPrices = sqliteTable("print_prices", {
   updatedAt: text("updated_at").notNull(),
 });
 
+export const addons = sqliteTable("addons", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description").notNull().default(""),
+  pricePaise: integer("price_paise").notNull().default(0),
+  active: integer("active", { mode: "boolean" }).notNull().default(true),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
 export const orderAvailability = sqliteTable("order_availability", {
   id: text("id").primaryKey(),
   acceptingOrders: integer("accepting_orders", { mode: "boolean" }).notNull().default(true),
