@@ -627,6 +627,17 @@ footer { border-top: 1px solid var(--line); padding: 28px max(24px, calc((100% -
 .revenue-table article > strong:last-of-type, .revenue-table article > span:last-child > strong { color: #17633a; }
 .document-details .print-summary { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; border: 0; padding: 0 0 9px; }
 .document-details .print-summary span { padding: 7px; border-radius: 6px; background: #eceae4; font-size: 9px; }
+.compact-order-details { padding: 8px; }
+.compact-order-details > div { padding: 6px 0; }
+.optional-products { margin-top: 6px; padding: 7px; border-radius: 6px; background: #fff8dc; }
+.optional-products > b { display: block; margin-bottom: 4px; font-size: 9px; }
+.optional-products small, .order-bill-summary span { display: flex !important; justify-content: space-between; gap: 12px; }
+.optional-products small strong { flex: 0 0 auto; }
+.order-bill-summary { margin-top: 5px; padding: 9px !important; border: 1px solid var(--line) !important; border-radius: 7px; background: white; }
+.order-bill-summary > strong { display: block; margin-bottom: 5px; font-size: 10px; }
+.order-bill-summary span { padding: 3px 0; }
+.order-bill-summary span small { margin: 0 !important; }
+.order-bill-summary .bill-total { margin-top: 4px; padding-top: 7px; border-top: 1px solid var(--ink); font-size: 11px; }
 .payment-review-details { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .payment-review-details span { padding: 10px; border-radius: 8px; background: #f4f2ec; }
 .payment-review-details small, .payment-review-details strong { display: block; overflow-wrap: anywhere; }

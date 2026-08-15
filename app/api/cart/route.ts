@@ -19,7 +19,7 @@ export async function POST(request: Request) {
     const addon = await database().prepare("SELECT id,name,description,price_paise FROM addons WHERE id=? AND active=1").bind(item.addonId).first<{ id: string; name: string; description: string; price_paise: number }>();
     if (!addon || item.uploadId !== `addon:${addon.id}`) return NextResponse.json({ error: "This add-on is unavailable" }, { status: 400 });
     const price = addon.price_paise / 100;
-    Object.assign(item, { fileName: addon.name, total: price, addonsTotal: price, addons: [{ id: addon.id, name: addon.name, price }] });
+    Object.assign(item, { fileName: addon.name, total: price, addonsTotal: price, addons: [{ id: addon.id, name: addon.name, description: addon.description, price }] });
   }
   const itemJson = JSON.stringify(item);
   if (itemJson.length > 20_000) return NextResponse.json({ error: "Invalid cart item" }, { status: 400 });

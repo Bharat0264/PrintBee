@@ -230,7 +230,7 @@ type CartItem = {
   colourPageNumbers?: string;
   bwPageNumbers?: string;
   whatsappNumber?: string;
-  addons?: Array<{ id: string; name: string; price: number }>;
+  addons?: Array<{ id: string; name: string; description?: string; price: number }>;
   addonsTotal?: number;
 };
 
@@ -315,7 +315,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   const [notificationToast, setNotificationToast] = useState<{ title: string; body: string } | null>(null);
   const [notificationPromptOpen, setNotificationPromptOpen] = useState(false);
   const [adminSection, setAdminSection] = useState<"dashboard" | "revenue" | "orders" | "locations" | "riders" | "services">("dashboard");
-  const [dashboardRange, setDashboardRange] = useState<"today" | "week" | "month">("today");
+  const [dashboardRange, setDashboardRange] = useState<"today" | "week" | "month" | "lifetime">("today");
   const [printServices, setPrintServices] = useState<PrintService[]>([]);
   const [packagingEnabled, setPackagingEnabled] = useState(false);
   const [packagingFee, setPackagingFee] = useState(0);
@@ -511,8 +511,11 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   useEffect(() => {
     if (!viewer || viewer.isAdmin || loginMode !== "CUSTOMER") return;
     checkCustomerNotifications();
-    const refresh = window.setInterval(checkCustomerNotifications, 15000);
-    return () => window.clearInterval(refresh);
+    const refresh = window.setInterval(checkCustomerNotifications, 5000);
+    const refreshNow = () => checkCustomerNotifications();
+    window.addEventListener("focus", refreshNow);
+    document.addEventListener("visibilitychange", refreshNow);
+    return () => { window.clearInterval(refresh); window.removeEventListener("focus", refreshNow); document.removeEventListener("visibilitychange", refreshNow); };
   }, [viewer, loginMode, notificationPermission]);
 
   const selected = options.find((item) => item.id === mode)!;
@@ -625,7 +628,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
         colourPageNumbers: usesMixedPagePricing ? (colourChoice === "bw" ? "NA" : colourChoice === "colour" ? "All pages" : colourPageNumbers.trim()) : undefined,
         bwPageNumbers: usesMixedPagePricing ? bwPageNumbers : undefined,
         whatsappNumber: whatsappNumber.replace(/\D/g, ""),
-        addons: selectedAddons.map((addon) => ({ id: addon.id, name: addon.name, price: addon.price_paise / 100 })),
+        addons: selectedAddons.map((addon) => ({ id: addon.id, name: addon.name, description: addon.description, price: addon.price_paise / 100 })),
         addonsTotal,
       };
     try {
@@ -663,7 +666,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
       kind: "ADDON", addonId: addon.id, id: `addon-${addon.id}`, uploadId: `addon:${addon.id}`,
       fileName: addon.name, fileType: "DOCUMENT", pages: 0, copies: 1, mode: "bw-single", unitPrice: 0,
       total: price, serviceId: "addon-only", serviceName: "Add-on only", servicePrice: 0,
-      countsForPackaging: false, addons: [{ id: addon.id, name: addon.name, price }], addonsTotal: price,
+      countsForPackaging: false, addons: [{ id: addon.id, name: addon.name, description: addon.description, price }], addonsTotal: price,
     };
     const response = await fetch("/api/cart", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(item) });
     const data = await response.json().catch(() => ({}));
@@ -917,12 +920,12 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
       for (const order of orders) {
         if (order.payment_status !== "PAID") continue;
         const before = previous[order.id];
-        if ((!before || before.payment_status !== "PAID") && Date.now() - new Date(order.created_at).getTime() < 30 * 60 * 1000) await sendOrderNotification("Order received", `${order.order_number} has been paid and received by PrintBee.`, `${order.id}-received`);
+        if (!before && Date.now() - new Date(order.created_at).getTime() < 30 * 60 * 1000) await sendOrderNotification("Order received", `${order.order_number} has been paid and received by PrintBee.`, `${order.id}-received`);
         if (order.has_payment_qr && !before?.has_payment_qr) await sendOrderNotification("Payment QR generated", `${order.order_number}: Pay while we deliver. Open My Orders and scan the payment scanner. Displaying the scanner may take a little time.`, `${order.id}-qr`);
         if (order.status === "PRINTING" && before?.status !== "PRINTING") await sendOrderNotification("Printing started", `${order.order_number} is now being printed.`, `${order.id}-printing`);
         if (order.status === "READY_FOR_PICKUP" && before?.status !== "READY_FOR_PICKUP") await sendOrderNotification("Ready for pickup", `${order.order_number} is printed and ready for a delivery partner.`, `${order.id}-ready`);
         if (order.status === "RIDER_ASSIGNED" && before?.status !== "RIDER_ASSIGNED") await sendOrderNotification("Delivery partner assigned", `${order.rider_name || "A delivery partner"} is assigned to ${order.order_number}.`, `${order.id}-rider`);
-        if (order.payment_status === "PAID" && before?.payment_status !== "PAID") await sendOrderNotification("Payment verified", `Payment for ${order.order_number} was received and verified. Share the OTP only after receiving your prints.`, `${order.id}-paid`);
+        if (before && order.payment_status === "PAID" && before.payment_status !== "PAID") await sendOrderNotification("Payment verified", `Payment for ${order.order_number} was received and verified. Share the OTP only after receiving your prints.`, `${order.id}-paid`);
         if (order.status === "DELIVERED" && before?.status !== "DELIVERED") await sendOrderNotification("Order delivered", `${order.order_number} has been marked delivered. Thank you for using PrintBee.`, `${order.id}-delivered`);
       }
       const snapshot = Object.fromEntries(orders.map((order) => [order.id, { status: order.status, payment_status: order.payment_status, has_payment_qr: Boolean(order.has_payment_qr) }]));
@@ -1315,16 +1318,17 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   const redeemablePoints = Math.min(pointsBalance, Math.max(0, Math.floor((checkoutBeforePoints - 1) * 15)));
   const pointsDiscount = usePoints ? Math.floor(redeemablePoints * 100 / 15) / 100 : 0;
   const revenueNow = new Date();
-  const revenueStart = dashboardRange === "today" ? new Date(revenueNow.getFullYear(), revenueNow.getMonth(), revenueNow.getDate()) : dashboardRange === "week" ? new Date(revenueNow.getFullYear(), revenueNow.getMonth(), revenueNow.getDate() - 6) : new Date(revenueNow.getFullYear(), revenueNow.getMonth(), 1);
-  const dashboardOrdersForRange = (dashboard?.orders ?? []).filter((order: any) => new Date(order.created_at) >= revenueStart);
-  const revenueTotals = revenueSummary(dashboardOrdersForRange, prices);
+  const revenueStart = dashboardRange === "today" ? new Date(revenueNow.getFullYear(), revenueNow.getMonth(), revenueNow.getDate()) : dashboardRange === "week" ? new Date(revenueNow.getFullYear(), revenueNow.getMonth(), revenueNow.getDate() - 6) : dashboardRange === "month" ? new Date(revenueNow.getFullYear(), revenueNow.getMonth(), 1) : null;
+  const dashboardOrdersForRange = (dashboard?.orders ?? []).filter((order: any) => !revenueStart || new Date(order.created_at) >= revenueStart);
+  const paidDashboardOrdersForRange = dashboardOrdersForRange.filter((order: any) => order.payment_status === "PAID");
+  const revenueTotals = revenueSummary(paidDashboardOrdersForRange, prices);
   const dashboardSummaryForRange = {
     total: dashboardOrdersForRange.length,
     paid: dashboardOrdersForRange.filter((order: any) => order.payment_status === "PAID").length,
     unpaid: dashboardOrdersForRange.filter((order: any) => order.payment_status !== "PAID").length,
     delivered: dashboardOrdersForRange.filter((order: any) => order.status === "DELIVERED").length,
     ready: dashboardOrdersForRange.filter((order: any) => order.status === "READY_FOR_PICKUP").length,
-    revenuePaise: dashboardOrdersForRange.reduce((sum: number, order: any) => sum + (Number(order.total_paise) || 0), 0),
+    revenuePaise: paidDashboardOrdersForRange.reduce((sum: number, order: any) => sum + (Number(order.total_paise) || 0), 0),
   };
   const printTotalsForRange = printSummary(dashboardOrdersForRange.flatMap((order: any) => order.items || []));
 
@@ -1701,7 +1705,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
               <div className="dashboard-block">
                 <div className="admin-divider" />
                 <h2 id="admin-dashboard">Operations dashboard</h2>
-                <div className="dashboard-range"><button className={dashboardRange === "today" ? "active" : ""} onClick={() => setDashboardRange("today")}>Today</button><button className={dashboardRange === "week" ? "active" : ""} onClick={() => setDashboardRange("week")}>This week</button><button className={dashboardRange === "month" ? "active" : ""} onClick={() => setDashboardRange("month")}>This month</button></div>
+                <div className="dashboard-range"><button className={dashboardRange === "today" ? "active" : ""} onClick={() => setDashboardRange("today")}>Today</button><button className={dashboardRange === "week" ? "active" : ""} onClick={() => setDashboardRange("week")}>This week</button><button className={dashboardRange === "month" ? "active" : ""} onClick={() => setDashboardRange("month")}>This month</button><button className={dashboardRange === "lifetime" ? "active" : ""} onClick={() => setDashboardRange("lifetime")}>Lifetime</button></div>
                 <div className="metric-grid">
                   <div><small>Total orders</small><strong>{dashboardSummaryForRange.total}</strong></div>
                   <div><small>Paid</small><strong>{dashboardSummaryForRange.paid}</strong></div>
@@ -1794,25 +1798,27 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                     </div>
                     <span className="status-chip">{order.payment_status} · {order.status}</span>
                     <strong>{inr.format(order.total_paise / 100)}</strong>
-                    <div className="payment-review-details"><span><small>Payment method</small><strong>{order.payment_status === "PAY_ON_DELIVERY" ? "Pay on delivery" : order.payment_reference || order.payment_status}</strong></span><span><small>Amount to collect</small><strong>{inr.format(order.total_paise / 100)}</strong></span><span><small>Payment gateway fee</small><strong>{inr.format((order.payment_gateway_fee_paise ?? 0) / 100)}</strong></span><span><small>Surge charge</small><strong>{inr.format((order.surge_fee_paise ?? 0) / 100)}</strong></span><span><small>Late-night delivery fee</small><strong>{inr.format((order.late_night_fee_paise ?? 0) / 100)}</strong></span></div>
+                    <div className="payment-review-details"><span><small>Payment</small><strong>{order.payment_status === "PAY_ON_DELIVERY" ? "Pay on delivery" : order.payment_reference || order.payment_status}</strong></span><span><small>Total</small><strong>{inr.format(order.total_paise / 100)}</strong></span></div>
                     {order.payment_status === "PAID" && order.payment_verified_at && <div className="payment-cleared-note"><strong>Payment received and verified</strong><small>Verified {new Date(order.payment_verified_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })} by {order.payment_verified_by}. Scanner deleted from admin, customer and delivery-partner views.</small></div>}
                     {Boolean(order.has_payment_qr) && <div className="admin-payment-qr"><strong>Legacy payment scanner</strong><img src={`/api/orders/${order.id}/payment-qr`} alt={`Payment scanner for ${order.order_number}`} /></div>}
                     {order.payment_status === "PAY_ON_DELIVERY" && order.status !== "CANCELLED" && <div className="payment-review-actions"><button className="mini-action" onClick={() => reviewPayment(order.id, "APPROVE")}>Payment received & verified</button></div>}
                     {order.payment_status === "PENDING" && order.status !== "CANCELLED" && <div className="payment-review-actions"><button className="mini-action" disabled={!order.payment_reference} onClick={() => reviewPayment(order.id, "APPROVE")}>Payment verified</button><button onClick={() => reviewPayment(order.id, "REJECT", "REFERENCE")}>Wrong payment ID</button><button onClick={() => reviewPayment(order.id, "REJECT", "AMOUNT")}>Wrong amount</button><button onClick={() => reviewPayment(order.id, "REJECT", "BOTH")}>Both mismatch</button></div>}
                     {order.payment_rejection_reason && <div className="cancelled-note"><strong>Payment rejected</strong><small>{order.payment_rejection_reason}</small></div>}
                     {order.status === "CANCELLED" && <div className="cancelled-note"><strong>Cancelled</strong><small>{order.cancellation_reason}</small></div>}
-                    <div className="document-details">
-                      <strong>Order items</strong>
+                    <div className="document-details compact-order-details">
+                      <strong>Order summary</strong>
                       {(() => { const total = printSummary(order.items); return <div className="print-summary"><span>B&amp;W: {total.bwSingle + total.bwDouble} pages</span><span>Colour: {total.colourSingle + total.colourDouble} pages</span></div>; })()}
                       {order.items?.length ? order.items.map((item: any, index: number) => (
                         <div key={`${item.uploadId ?? item.fileName}-${index}`}>
                           <span>{item.fileName ?? `Document ${index + 1}`}</span>
-                          {item.kind === "ADDON" ? <small>Add-on only · {inr.format(item.total ?? item.addonsTotal ?? 0)}</small> : <small>Doc {index + 1}: {item.pages ?? 1} pages · {item.copies ?? 1} copies · {printModeLabel(item.mode)}{item.serviceName ? ` · ${item.serviceName}` : ""}</small>}
+                          {item.kind === "ADDON" ? <small>Optional product · {item.addons?.[0]?.description || "Add-on only"} · {inr.format(item.total ?? item.addonsTotal ?? 0)}</small> : <small>{String(item.fileType ?? "PDF").toUpperCase()} · {printModeLabel(item.mode)} · {item.pages ?? 1} pages · {item.copies ?? 1} {item.copies === 1 ? "copy" : "copies"} · {item.serviceName || "Document printing"}</small>}
                           {item.colourPageNumbers !== undefined && <small><b>Colour pages:</b> {item.colourPageNumbers} · all remaining pages B&amp;W</small>}
                           {item.bwPageNumbers && <small><b>B&amp;W pages:</b> {item.bwPageNumbers}</small>}
                           {item.printInstructions && <small><b>Instructions:</b> {item.printInstructions} · WhatsApp {item.whatsappNumber}</small>}
+                          {item.kind !== "ADDON" && item.addons?.length ? <div className="optional-products"><b>Optional products</b>{item.addons.map((addon: any) => <small key={addon.id}><span>{addon.name}{addon.description ? ` — ${addon.description}` : ""}</span><strong>{inr.format(addon.price)}</strong></small>)}</div> : null}
                         </div>
                       )) : <small>No document details saved for this legacy order.</small>}
+                      <div className="order-bill-summary"><strong>Bill summary</strong><span><small>Printing &amp; products</small><b>{inr.format(order.printing_subtotal_paise / 100)}</b></span><span><small>Delivery</small><b>{inr.format(order.delivery_fee_paise / 100)}</b></span><span><small>Platform fee</small><b>{inr.format(order.platform_fee_paise / 100)}</b></span>{(order.packaging_fee_paise ?? 0) > 0 && <span><small>Packaging</small><b>{inr.format(order.packaging_fee_paise / 100)}</b></span>}{(order.payment_gateway_fee_paise ?? 0) > 0 && <span><small>Payment fee</small><b>{inr.format(order.payment_gateway_fee_paise / 100)}</b></span>}{(order.surge_fee_paise ?? 0) > 0 && <span><small>Surge charge</small><b>{inr.format(order.surge_fee_paise / 100)}</b></span>}{(order.late_night_fee_paise ?? 0) > 0 && <span><small>Late-night delivery</small><b>{inr.format(order.late_night_fee_paise / 100)}</b></span>}<span className="bill-total"><small>Total</small><b>{inr.format(order.total_paise / 100)}</b></span></div>
                     </div>
                     <div className="file-links">{order.files?.length ? order.files.map((file: any) => file.deleted_at ? <span className="deleted-file" key={file.id}>{file.original_name} · deleted {new Date(file.deleted_at).toLocaleDateString("en-IN")}</span> : <a key={file.id} href={`/api/admin/files/${file.id}/download`}>Download {file.original_name}</a>) : <span>{order.items?.every((item: any) => item.kind === "ADDON") ? "Add-on-only order — no document required" : "Legacy order — document was not stored"}</span>}</div>
                     {(["DELIVERED", "CANCELLED"].includes(String(order.status).toUpperCase()) || order.delivered_at || order.cancelled_at) && (order.files?.some((file: any) => !file.deleted_at) ? <button className="delete-files-action" onClick={() => deleteOrderFiles(order.id)}>Delete {order.files.filter((file: any) => !file.deleted_at).length} document{order.files.filter((file: any) => !file.deleted_at).length === 1 ? "" : "s"} from storage</button> : <div className="files-cleared-note">No stored documents remain for this order.</div>)}
