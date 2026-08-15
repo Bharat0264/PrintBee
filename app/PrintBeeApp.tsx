@@ -253,6 +253,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   const [reviewerEmail, setReviewerEmail] = useState("");
   const [reviewerPassword, setReviewerPassword] = useState("");
   const [role, setRole] = useState<string | null>(viewer?.isAdmin ? "ADMIN" : null);
+  const [adminRole, setAdminRole] = useState<string | null>(viewer?.isAdmin ? "OWNER" : null);
   const [approvalStatus, setApprovalStatus] = useState<string | null>(null);
   const [isRiderAvailable, setIsRiderAvailable] = useState(false);
   const [referralCode, setReferralCode] = useState("");
@@ -318,6 +319,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   const [dashboardRange, setDashboardRange] = useState<"today" | "week" | "month" | "lifetime">("today");
   const [adminOrderSearch, setAdminOrderSearch] = useState("");
   const [adminOrderStatus, setAdminOrderStatus] = useState("ALL");
+  const [adminPage, setAdminPage] = useState(1);
   const [printServices, setPrintServices] = useState<PrintService[]>([]);
   const [packagingEnabled, setPackagingEnabled] = useState(false);
   const [packagingFee, setPackagingFee] = useState(0);
@@ -331,6 +333,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   const [addons, setAddons] = useState<Addon[]>([]);
   const [selectedAddonIds, setSelectedAddonIds] = useState<string[]>([]);
   const [newAddon, setNewAddon] = useState({ id: "", name: "", description: "", price: 0 });
+  const [newAdminMember, setNewAdminMember] = useState({ email: "", role: "OPERATIONS" });
   const [addonMessage, setAddonMessage] = useState("");
 
   useEffect(() => {
@@ -383,7 +386,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   useEffect(() => {
     if (!viewer) return;
     fetch("/api/me").then((response) => response.json()).then(async (data) => {
-      setRole(data.role); setApprovalStatus(data.approvalStatus ?? null); setIsRiderAvailable(Boolean(data.isAvailable)); setMyReferralCode(data.referralCode ?? ""); setPointsBalance(Number(data.pointsBalance) || 0); setHasReferrer(Boolean(data.hasReferrer));
+      setRole(data.role); setAdminRole(data.adminRole ?? null); setApprovalStatus(data.approvalStatus ?? null); setIsRiderAvailable(Boolean(data.isAvailable)); setMyReferralCode(data.referralCode ?? ""); setPointsBalance(Number(data.pointsBalance) || 0); setHasReferrer(Boolean(data.hasReferrer));
       const pendingCode = window.localStorage.getItem("printbee-referral-code");
       if (pendingCode && !data.hasReferrer) {
         const linked = await fetch("/api/me", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ referralCode: pendingCode }) });
@@ -482,7 +485,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
     if (!adminOpen || adminSection !== "orders") return;
     let lastNewest = dashboard?.orders?.[0]?.id ?? "";
     const refresh = window.setInterval(async () => {
-      const response = await fetch("/api/admin/dashboard", { cache: "no-store" });
+      const response = await fetch(`/api/admin/dashboard?page=${adminPage}&pageSize=25`, { cache: "no-store" });
       if (!response.ok) return;
       const next = await response.json();
       const newest = next.orders?.[0]?.id ?? "";
@@ -508,7 +511,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
       setDashboard(next);
     }, 5000);
     return () => window.clearInterval(refresh);
-  }, [adminOpen, adminSection]);
+  }, [adminOpen, adminSection, adminPage]);
 
   useEffect(() => {
     if (!viewer || viewer.isAdmin || loginMode !== "CUSTOMER") return;
@@ -894,6 +897,19 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
     }
   };
 
+  const subscribeToBackgroundPush = async () => {
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) throw new Error("Background push is not supported on this device");
+    const keyResponse = await fetch("/api/push/subscribe", { cache: "no-store" });
+    const keyData = await keyResponse.json();
+    if (!keyResponse.ok) throw new Error(keyData.error ?? "Push service is unavailable");
+    const padding = "=".repeat((4 - keyData.publicKey.length % 4) % 4);
+    const bytes = Uint8Array.from(atob((keyData.publicKey + padding).replace(/-/g, "+").replace(/_/g, "/")), (character) => character.charCodeAt(0));
+    const registration = await navigator.serviceWorker.ready;
+    const subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: bytes });
+    const response = await fetch("/api/push/subscribe", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(subscription) });
+    if (!response.ok) throw new Error("This device could not be registered for background alerts");
+  };
+
   const enableNotifications = async () => {
     setNotificationMessage("");
     if (!("Notification" in window)) return setNotificationMessage("This browser does not support notifications. On iPhone, add PrintBee to the Home Screen and open it from there.");
@@ -902,8 +918,9 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
     if (permission === "granted") {
       setNotificationPromptOpen(false);
       window.localStorage.removeItem(`printbee-order-notifications-${viewer?.email ?? "user"}`);
+      try { await subscribeToBackgroundPush(); } catch (error) { setNotificationMessage(error instanceof Error ? error.message : "Background push setup failed"); return; }
       const sent = await sendOrderNotification("PrintBee notifications enabled", "This is a test. Order updates will appear like this while PrintBee is open.", `printbee-enabled-${Date.now()}`);
-      setNotificationMessage(sent ? "Test notification sent. Check your notification tray." : "Permission was granted, but this browser blocked the test notification.");
+      setNotificationMessage(sent ? "Background alerts enabled. Updates can arrive even when PrintBee is closed." : "Background alerts enabled for this device.");
     } else if (permission === "denied") {
       setNotificationPromptOpen(false);
       setNotificationMessage("Notifications are blocked. Allow them in your browser’s site settings, then reload PrintBee.");
@@ -1084,10 +1101,10 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
     }
   };
 
-  const openAdminDashboard = async () => {
+  const openAdminDashboard = async (page = adminPage) => {
     setAdminOpen(true);
-    const response = await fetch("/api/admin/dashboard");
-    if (response.ok) setDashboard(await response.json());
+    const response = await fetch(`/api/admin/dashboard?page=${page}&pageSize=25`);
+    if (response.ok) { setDashboard(await response.json()); setAdminPage(page); }
   };
 
   const updateOrderStatus = async (orderId: string, status: string) => {
@@ -1123,6 +1140,21 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
     const data = await response.json().catch(() => ({}));
     setAdminMessage(response.ok ? `${points} wallet points credited to the customer.` : data.error ?? "Points could not be credited");
     if (response.ok) setGrantPointDrafts((drafts) => ({ ...drafts, [orderId]: "" }));
+  };
+
+  const saveAdminMember = async () => {
+    const response = await fetch("/api/admin/members", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(newAdminMember) });
+    const data = await response.json();
+    setAdminMessage(response.ok ? `${data.email} saved as ${data.role.toLowerCase()}.` : data.error ?? "Admin member could not be saved");
+    if (response.ok) { setNewAdminMember({ email: "", role: "OPERATIONS" }); await openAdminDashboard(); }
+  };
+
+  const removeAdminMember = async (email: string) => {
+    if (!window.confirm(`Remove admin access for ${email}?`)) return;
+    const response = await fetch("/api/admin/members", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email }) });
+    const data = await response.json();
+    setAdminMessage(response.ok ? `${email} removed from the admin team.` : data.error ?? "Admin member could not be removed");
+    if (response.ok) await openAdminDashboard();
   };
 
   const linkExistingReferral = async () => {
@@ -1421,7 +1453,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
           <a href="#how">How it works</a>
           <a href="#points">Earn points</a>
           <a href="#pricing">Pricing</a>
-          {viewer?.isAdmin && <button className="admin-link" onClick={openAdminDashboard}>Admin dashboard</button>}
+          {viewer?.isAdmin && <button className="admin-link" onClick={() => openAdminDashboard(1)}>Admin dashboard</button>}
           {role === "ADMIN" && <button className="admin-link" onClick={openDeliveryQueue}>Delivery</button>}
           {role === "AGENT" && approvalStatus === "APPROVED" && <button className="admin-link" onClick={() => switchLoginMode("PARTNER")}>Partner portal</button>}
           {viewer && <button className="home-wallet-button" onClick={() => { setWalletOpen(true); setWalletMessage(""); }} aria-label={`Wallet balance ${pointsBalance} points`}><span>◉</span><b>{pointsBalance}</b></button>}
@@ -1739,9 +1771,11 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                   <div><small>Paid revenue</small><strong>{inr.format(dashboardSummaryForRange.revenuePaise / 100)}</strong></div>
                   <div><small>B&amp;W pages</small><strong>{printTotalsForRange.bwSingle + printTotalsForRange.bwDouble}</strong></div><div><small>Colour pages</small><strong>{printTotalsForRange.colourSingle + printTotalsForRange.colourDouble}</strong></div>
                 </div>
+                {adminRole === "OWNER" && <section className="admin-team-panel"><div><h3>Admin team &amp; access</h3><p>Owners have full access. Operations manages orders and riders; accountants view revenue and exports; support handles customer order queries.</p></div><div className="admin-team-form"><input type="email" value={newAdminMember.email} onChange={(event) => setNewAdminMember({ ...newAdminMember, email: event.target.value })} placeholder="team@printbee.co.in" /><select value={newAdminMember.role} onChange={(event) => setNewAdminMember({ ...newAdminMember, role: event.target.value })}><option value="OPERATIONS">Operations manager</option><option value="ACCOUNTANT">Accountant</option><option value="SUPPORT">Support</option><option value="OWNER">Owner</option></select><button disabled={!newAdminMember.email.trim()} onClick={saveAdminMember}>Add or update</button></div><div className="admin-team-list">{dashboard.adminMembers?.map((member: any) => <span key={member.email}><span><strong>{member.email}</strong><small>{String(member.role).replaceAll("_", " ")}</small></span>{member.email !== viewer?.email && <button onClick={() => removeAdminMember(member.email)}>Remove</button>}</span>)}</div></section>}
                 <div className="admin-divider" />
                 <h2 id="admin-revenue">Revenue</h2>
                 <p>Paid printing and fee revenue for the selected period.</p>
+                {dashboard.dailySales?.length ? <section className="sales-chart" aria-label="Paid sales during the last 30 days"><div className="sales-chart-heading"><span><strong>30-day sales trend</strong><small>Daily paid revenue and order volume</small></span><strong>{inr.format(dashboard.dailySales.reduce((sum: number, day: any) => sum + Number(day.revenue_paise || 0), 0) / 100)}</strong></div><div className="sales-bars">{dashboard.dailySales.map((day: any) => { const peak = Math.max(...dashboard.dailySales.map((entry: any) => Number(entry.revenue_paise) || 0), 1); return <div key={day.day} title={`${new Date(`${day.day}T00:00:00`).toLocaleDateString("en-IN")}: ${inr.format(day.revenue_paise / 100)}, ${day.orders} orders`}><i style={{ height: `${Math.max(5, Number(day.revenue_paise) / peak * 100)}%` }} /><small>{new Date(`${day.day}T00:00:00`).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}</small></div>; })}</div></section> : null}
                 <div className="metric-grid revenue-summary-grid">
                   <div><small>Colour prints</small><strong>{revenueTotals.colourPrints}</strong></div>
                   <div><small>Colour pages</small><strong>{revenueTotals.colourPages}</strong></div>
@@ -1859,6 +1893,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                     <div className="order-record-actions"><button className="hide-order-action" onClick={() => setOrderHidden(order.id, true)}>Hide from dashboard &amp; exports</button><button className="delete-order-action" onClick={() => deleteOrder(order)}>Delete this order</button></div>
                   </article>
                 )) : <p>No orders match the current filters.</p>}</div>
+                {dashboard.pagination?.pages > 1 && <nav className="admin-pagination" aria-label="Order pages"><button disabled={adminPage <= 1} onClick={() => openAdminDashboard(adminPage - 1)}>Previous</button><span>Page <strong>{adminPage}</strong> of {dashboard.pagination.pages} · {dashboard.pagination.total} paid orders</span><button disabled={adminPage >= dashboard.pagination.pages} onClick={() => openAdminDashboard(adminPage + 1)}>Next</button></nav>}
                 <h3>Hidden orders</h3>
                 <p>Archived orders are excluded from the dashboard, revenue/profit, location and rider totals, active users, and exports.</p>
                 <div className="hidden-orders">{dashboard.hiddenOrders?.length ? dashboard.hiddenOrders.map((order: any) => (
@@ -1887,6 +1922,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                 <div className="payment-pending"><small>Payment status</small><strong>{orderResult.paid ? "PAID" : "PAYMENT REQUIRED"}</strong></div>
                 {(orderResult.lateNightFeePaise ?? 0) > 0 && <div className="payment-pending"><small>Late-night delivery fee</small><strong>{inr.format((orderResult.lateNightFeePaise ?? 0) / 100)}</strong></div>}
                 {orderResult.paid && orderResult.deliveryCode && <div><small>Your delivery code</small><strong>{orderResult.deliveryCode}</strong></div>}
+                {orderResult.paid && <a className="invoice-link" href={`/api/orders/${orderResult.id}/invoice`}>Download GST-style invoice PDF</a>}
                 <p>{orderResult.paid ? "Payment verified. Give this code to the delivery agent only after receiving your prints." : `Pay ${inr.format(orderResult.totalPaise / 100)} securely through Razorpay so printing can begin.`}</p>
                 {!orderResult.paid && <button className="save-button" disabled={paymentProcessing} onClick={() => startRazorpayPayment(orderResult)}>{paymentProcessing ? "Starting payment..." : `Pay ${inr.format(orderResult.totalPaise / 100)} now`}</button>}
                 {orderError && <p className="panel-message">{orderError}</p>}

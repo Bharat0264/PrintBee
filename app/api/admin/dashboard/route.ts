@@ -1,14 +1,21 @@
 import { NextResponse } from "next/server";
 import { database } from "../../db";
 import { getViewer } from "../../../supabase/server";
+import { cleanupAbandonedCheckouts } from "../../maintenance";
 
-export async function GET() {
+export async function GET(request: Request) {
   const viewer = await getViewer();
   if (!viewer?.isAdmin) return NextResponse.json({ error: "Admin access required" }, { status: 403 });
+  await cleanupAbandonedCheckouts();
   const db = database();
-  const [summary, orders, hiddenOrders, revenueOrders, activeUsers, walletUsers, riders, riderApplications, locations, locationStats, files, riderPayments, riderWithdrawals] = await Promise.all([
+  const params = new URL(request.url).searchParams;
+  const page = Math.max(1, Number(params.get("page")) || 1);
+  const pageSize = Math.min(100, Math.max(10, Number(params.get("pageSize")) || 25));
+  const offset = (page - 1) * pageSize;
+  const [summary, orders, orderCount, hiddenOrders, revenueOrders, activeUsers, walletUsers, riders, riderApplications, locations, locationStats, files, riderPayments, riderWithdrawals, dailySales, adminMembers] = await Promise.all([
     db.prepare(`SELECT COUNT(*) total, SUM(CASE WHEN status='DELIVERED' THEN 1 ELSE 0 END) delivered, COUNT(*) paid, 0 unpaid, SUM(total_paise) revenue_paise, SUM(CASE WHEN status='READY_FOR_PICKUP' THEN 1 ELSE 0 END) ready FROM orders WHERE hidden_at IS NULL AND payment_status='PAID'`).first(),
-    db.prepare(`SELECT id, order_number, customer_email, customer_name, mobile_number, location_name, items_json, printing_subtotal_paise, delivery_fee_paise, platform_fee_paise, packaging_fee_paise, payment_gateway_fee_paise, surge_fee_paise, late_night_fee_paise, total_paise, payment_status, payment_reference, payment_rejection_reason, payment_verified_at, payment_verified_by, payment_qr_storage_key IS NOT NULL has_payment_qr, payment_qr_file_name, payment_qr_deleted_at, status, rider_email, cancellation_reason, cancelled_at, cancelled_by, delivered_at, created_at FROM orders WHERE hidden_at IS NULL AND payment_status='PAID' ORDER BY created_at DESC`).all(),
+    db.prepare(`SELECT id, order_number, customer_email, customer_name, mobile_number, location_name, items_json, printing_subtotal_paise, delivery_fee_paise, platform_fee_paise, packaging_fee_paise, payment_gateway_fee_paise, surge_fee_paise, late_night_fee_paise, total_paise, payment_status, payment_reference, payment_rejection_reason, payment_verified_at, payment_verified_by, payment_qr_storage_key IS NOT NULL has_payment_qr, payment_qr_file_name, payment_qr_deleted_at, status, rider_email, cancellation_reason, cancelled_at, cancelled_by, delivered_at, created_at FROM orders WHERE hidden_at IS NULL AND payment_status='PAID' ORDER BY created_at DESC LIMIT ? OFFSET ?`).bind(pageSize, offset).all(),
+    db.prepare("SELECT COUNT(*) count FROM orders WHERE hidden_at IS NULL AND payment_status='PAID'").first<{ count: number }>(),
     db.prepare(`SELECT id, order_number, customer_name, location_name, total_paise, payment_status, status, hidden_at, hidden_by, created_at FROM orders WHERE hidden_at IS NOT NULL ORDER BY hidden_at DESC LIMIT 100`).all(),
     db.prepare(`SELECT o.order_number, o.total_paise revenue_paise, o.printing_subtotal_paise, o.delivery_fee_paise, o.platform_fee_paise, o.packaging_fee_paise, o.rider_email, COALESCE(u.name, o.rider_email, 'Not assigned') rider_name, CAST(o.delivery_fee_paise * 3 / 4 AS INTEGER) rider_fee_paise, o.printing_subtotal_paise + o.platform_fee_paise + o.packaging_fee_paise + CAST(o.delivery_fee_paise / 5 AS INTEGER) admin_revenue_paise, o.created_at FROM orders o LEFT JOIN app_users u ON u.email=o.rider_email WHERE o.payment_status='PAID' AND o.hidden_at IS NULL ORDER BY o.created_at DESC LIMIT 100`).all(),
     db.prepare(`SELECT customer_email email, MAX(customer_name) name, MAX(mobile_number) mobile_number, COUNT(*) order_count, SUM(CASE WHEN payment_status='PAID' THEN total_paise ELSE 0 END) paid_spend_paise, MAX(created_at) last_order_at FROM orders WHERE hidden_at IS NULL GROUP BY customer_email ORDER BY last_order_at DESC LIMIT 100`).all(),
@@ -20,6 +27,8 @@ export async function GET() {
     db.prepare("SELECT id, order_id, original_name, deleted_at FROM uploads WHERE order_id IS NOT NULL ORDER BY created_at").all(),
     db.prepare("SELECT id, rider_email, amount_paise, payment_date, note, recorded_by, created_at FROM rider_payments ORDER BY payment_date DESC, created_at DESC LIMIT 100").all(),
     db.prepare("SELECT id, rider_email, upi_id, amount_paise, status, requested_at, updated_at, updated_by FROM rider_withdrawals ORDER BY requested_at DESC LIMIT 100").all(),
+    db.prepare("SELECT substr(created_at,1,10) day,COUNT(*) orders,SUM(total_paise) revenue_paise FROM orders WHERE payment_status='PAID' AND hidden_at IS NULL AND created_at>=datetime('now','-29 days') GROUP BY substr(created_at,1,10) ORDER BY day").all(),
+    db.prepare("SELECT email,role,created_at,created_by,updated_at FROM admin_members ORDER BY CASE role WHEN 'OWNER' THEN 1 WHEN 'OPERATIONS' THEN 2 WHEN 'ACCOUNTANT' THEN 3 ELSE 4 END,email").all(),
   ]);
   const filesByOrder = new Map<string, unknown[]>();
   for (const file of files.results as Array<{ id: string; order_id: string; original_name: string; deleted_at: string | null }>) {
@@ -29,6 +38,9 @@ export async function GET() {
   }
   return NextResponse.json({
     summary,
+    pagination: { page, pageSize, total: Number(orderCount?.count) || 0, pages: Math.max(1, Math.ceil((Number(orderCount?.count) || 0) / pageSize)) },
+    dailySales: dailySales.results,
+    adminMembers: adminMembers.results,
     revenueOrders: revenueOrders.results,
     activeUsers: activeUsers.results,
     walletUsers: walletUsers.results,

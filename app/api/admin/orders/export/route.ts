@@ -4,7 +4,7 @@ import { getViewer } from "../../../../supabase/server";
 
 export async function GET(request: Request) {
   const viewer = await getViewer();
-  if (!viewer?.isAdmin) return NextResponse.json({ error: "Admin access required" }, { status: 403 });
+  if (!viewer?.isAdmin || !["OWNER", "ACCOUNTANT"].includes(viewer.adminRole || "")) return NextResponse.json({ error: "Accounting access required" }, { status: 403 });
   const params = new URL(request.url).searchParams;
   const range = params.get("range");
   const now = new Date();

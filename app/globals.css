@@ -282,6 +282,30 @@ footer { border-top: 1px solid var(--line); padding: 28px max(24px, calc((100% -
 .admin-order-toolbar > span strong, .admin-order-toolbar > span small { display: block; }
 .admin-order-toolbar > span strong { color: var(--yellow); font-size: 17px; }
 .admin-order-toolbar > span small { color: #adb2ba; font-size: 8px; }
+.admin-pagination { display: flex; align-items: center; justify-content: center; gap: 14px; padding: 16px; border: 1px solid var(--line); border-top: 0; background: white; font-size: 10px; }
+.admin-pagination button { border: 1px solid #d7dbe1; border-radius: 8px; padding: 8px 13px; background: #f8f9fa; font-weight: 800; }
+.admin-pagination button:disabled { opacity: .4; }
+.invoice-link { display: inline-flex; margin-top: 8px; color: #735500; font-size: 9px; font-weight: 900; }
+.sales-chart { margin: 16px 0 24px; padding: 20px; border: 1px solid #dfe2e7; border-radius: 14px; background: white; }
+.sales-chart-heading { display: flex; justify-content: space-between; gap: 20px; }
+.sales-chart-heading span strong, .sales-chart-heading span small { display: block; }
+.sales-chart-heading span small { margin-top: 4px; color: var(--muted); font-size: 9px; }
+.sales-chart-heading > strong { font-size: 20px; }
+.sales-bars { height: 190px; display: flex; align-items: stretch; gap: 5px; margin-top: 22px; padding-top: 8px; border-bottom: 1px solid #cfd3d8; }
+.sales-bars > div { min-width: 9px; flex: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 6px; }
+.sales-bars i { width: 100%; max-width: 28px; min-height: 5px; border-radius: 4px 4px 0 0; background: var(--yellow); }
+.sales-bars small { height: 30px; color: #747b86; font-size: 7px; writing-mode: vertical-rl; }
+.admin-team-panel { margin: 18px 0 28px; padding: 20px; border-radius: 14px; background: #171a20; color: white; }
+.admin-team-panel h3 { margin: 0 0 5px; color: white; }
+.admin-team-panel p { margin: 0; color: #adb2ba; font-size: 10px; }
+.admin-team-form { display: grid; grid-template-columns: 1fr 210px auto; gap: 8px; margin: 16px 0; }
+.admin-team-form input, .admin-team-form select { min-width: 0; border: 1px solid #3c414a; border-radius: 8px; padding: 10px; background: #252a31; color: white; }
+.admin-team-form button { border: 0; border-radius: 8px; padding: 10px 15px; background: var(--yellow); font-weight: 900; }
+.admin-team-list { display: grid; gap: 6px; }
+.admin-team-list > span { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 11px; border-radius: 8px; background: #252a31; }
+.admin-team-list strong, .admin-team-list small { display: block; }
+.admin-team-list small { margin-top: 3px; color: #aeb3bc; font-size: 8px; text-transform: capitalize; }
+.admin-team-list button { border: 0; background: transparent; color: #ff9b8e; font-size: 8px; font-weight: 900; }
 .admin-portal .admin-orders { grid-template-columns: 1fr; gap: 0; border: 1px solid var(--line); border-top: 0; background: white; }
 .admin-portal .admin-orders article { border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: white; }
 .order-earnings { grid-column: 1 / -1; display: flex; gap: 18px; padding: 8px; border-radius: 7px; background: #edf7f0; font-size: 9px; }

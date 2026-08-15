@@ -16,7 +16,7 @@ export async function GET() {
     }
   }
   const latestCredit = await db.prepare("SELECT id,points,description,created_at FROM wallet_transactions WHERE email=? AND points>0 ORDER BY created_at DESC LIMIT 1").bind(viewer.email).first();
-  return NextResponse.json({ role: viewer.isAdmin ? "ADMIN" : row?.role ?? "CUSTOMER", approvalStatus: row?.approval_status ?? null, isAvailable: Boolean(row?.is_available), referralCode: profile?.referral_code, pointsBalance: profile?.points_balance ?? 10, hasReferrer: Boolean(profile?.referred_by_email), latestCredit });
+  return NextResponse.json({ role: viewer.isAdmin ? "ADMIN" : row?.role ?? "CUSTOMER", adminRole: viewer.adminRole ?? null, approvalStatus: row?.approval_status ?? null, isAvailable: Boolean(row?.is_available), referralCode: profile?.referral_code, pointsBalance: profile?.points_balance ?? 10, hasReferrer: Boolean(profile?.referred_by_email), latestCredit });
 }
 
 export async function POST(request: Request) {

@@ -19,6 +19,23 @@ export const appUsers = sqliteTable("app_users", {
   isAvailable: integer("is_available", { mode: "boolean" }).notNull().default(false),
 });
 
+export const adminMembers = sqliteTable("admin_members", {
+  email: text("email").primaryKey(),
+  role: text("role", { enum: ["OWNER", "OPERATIONS", "ACCOUNTANT", "SUPPORT"] }).notNull(),
+  createdAt: text("created_at").notNull(),
+  createdBy: text("created_by").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
+export const pushSubscriptions = sqliteTable("push_subscriptions", {
+  id: text("id").primaryKey(),
+  email: text("email").notNull(),
+  endpoint: text("endpoint").notNull().unique(),
+  subscriptionJson: text("subscription_json").notNull(),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
 export const customerProfiles = sqliteTable("customer_profiles", {
   email: text("email").primaryKey(),
   referralCode: text("referral_code").notNull().unique(),

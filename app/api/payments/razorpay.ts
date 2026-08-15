@@ -1,4 +1,5 @@
 import { database } from "../db";
+import { sendPushToAdmins, sendPushToEmail } from "../push/send";
 
 export function razorpayConfig() {
   const keyId = process.env.RAZORPAY_KEY_ID;
@@ -41,6 +42,10 @@ export async function markRazorpayOrderPaid(razorpayOrderId: string, paymentId: 
     ...uploadIds.map((uploadId) => db.prepare("UPDATE uploads SET order_id=? WHERE id=? AND customer_email=? AND order_id IS NULL").bind(order.id, uploadId, order.customer_email)),
     ...uploadIds.map((uploadId) => db.prepare("DELETE FROM cart_items WHERE upload_id=? AND customer_email=?").bind(uploadId, order.customer_email)),
     ...items.filter((item) => item.kind === "ADDON").map((item) => db.prepare("DELETE FROM cart_items WHERE id=? AND customer_email=?").bind(item.id, order.customer_email)),
+  ]);
+  await Promise.all([
+    sendPushToEmail(order.customer_email, { title: "Order placed", body: `${finalOrderNumber} was created after payment verification.`, tag: `${order.id}-paid`, url: "/" }),
+    sendPushToAdmins({ title: "New paid order", body: `${finalOrderNumber} is paid and ready for operations.`, tag: `admin-${order.id}`, url: "/" }),
   ]);
   return { orderNumber: finalOrderNumber };
 }

@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import { database, encryptDeliveryCode, hashDeliveryCode } from "../db";
 import { getViewer } from "../../supabase/server";
+import { cleanupAbandonedCheckouts } from "../maintenance";
 
 export async function POST(request: Request) {
   const viewer = await getViewer();
   if (!viewer) return NextResponse.json({ error: "Sign in required" }, { status: 401 });
+  await cleanupAbandonedCheckouts();
   const availability = await database().prepare("SELECT accepting_orders FROM order_availability WHERE id='main'").first<{ accepting_orders: number }>();
   if (availability?.accepting_orders === 0) return NextResponse.json({ error: "Service will be live soon. We are not accepting orders right now." }, { status: 503 });
   const body = await request.json() as { customerName?: string; mobileNumber?: string; locationId?: string; items?: unknown[]; totalPaise?: number; usePoints?: boolean; needsPackaging?: boolean };
