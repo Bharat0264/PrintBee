@@ -4,7 +4,7 @@ import { getViewer } from "../../../../supabase/server";
 
 export async function POST(request: Request) {
   const viewer = await getViewer();
-  if (!viewer?.isAdmin) return NextResponse.json({ error: "Admin access required" }, { status: 403 });
+  if (!viewer?.isAdmin || !["OWNER", "OPERATIONS"].includes(viewer.adminRole || "")) return NextResponse.json({ error: "Operations access required" }, { status: 403 });
   const { locationId, action, name } = await request.json() as { locationId?: string; action?: "RENAME" | "DELETE"; name?: string };
   if (!locationId || !action) return NextResponse.json({ error: "Location and action are required" }, { status: 400 });
   const db = database();

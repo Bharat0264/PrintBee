@@ -17,7 +17,7 @@ test("double-sided B&W and colour options are customer and admin configurable", 
 
 test("admin-managed fixed-price add-ons flow through cart and checkout", () => {
   assert.match(migration, /CREATE TABLE `addons`/);
-  assert.match(api, /if \(!viewer\?\.isAdmin\)/);
+  assert.match(api, /OWNER.*OPERATIONS/);
   assert.match(app, /fetch\("\/api\/addons"/);
   assert.match(app, /addonsTotal/);
   assert.match(app, />Add-ons</);

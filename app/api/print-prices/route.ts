@@ -16,7 +16,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   const viewer = await getViewer();
-  if (!viewer?.isAdmin) return NextResponse.json({ error: "Admin access required" }, { status: 403 });
+  if (!viewer?.isAdmin || !["OWNER", "OPERATIONS"].includes(viewer.adminRole || "")) return NextResponse.json({ error: "Operations access required" }, { status: 403 });
   const body = await request.json() as Partial<Record<(typeof PRICE_IDS)[number], number>>;
   const values = PRICE_IDS.map((id) => Math.round(Number(body[id]) * 100));
   if (values.some((value) => !Number.isFinite(value) || value < 0)) {

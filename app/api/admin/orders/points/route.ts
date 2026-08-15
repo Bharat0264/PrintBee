@@ -4,7 +4,7 @@ import { getViewer } from "../../../../supabase/server";
 
 export async function POST(request: Request) {
   const viewer = await getViewer();
-  if (!viewer?.isAdmin) return NextResponse.json({ error: "Admin access required" }, { status: 403 });
+  if (!viewer?.isAdmin || !["OWNER", "OPERATIONS"].includes(viewer.adminRole || "")) return NextResponse.json({ error: "Operations access required" }, { status: 403 });
   const { orderId, points } = await request.json() as { orderId?: string; points?: number };
   const cleanPoints = Math.round(Number(points));
   if (!orderId || !Number.isInteger(cleanPoints) || cleanPoints < 1 || cleanPoints > 10000) return NextResponse.json({ error: "Enter between 1 and 10,000 points" }, { status: 400 });

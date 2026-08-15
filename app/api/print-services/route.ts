@@ -9,7 +9,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   const viewer = await getViewer();
-  if (!viewer?.isAdmin) return NextResponse.json({ error: "Admin access required" }, { status: 403 });
+  if (!viewer?.isAdmin || !["OWNER", "OPERATIONS"].includes(viewer.adminRole || "")) return NextResponse.json({ error: "Operations access required" }, { status: 403 });
   const body = await request.json() as { id?: string; name?: string; description?: string; isBinding?: boolean; countsForPackaging?: boolean; price?: number };
   const name = body.name?.trim();
   if (!name || name.length > 60) return NextResponse.json({ error: "Enter a service name up to 60 characters" }, { status: 400 });
@@ -23,7 +23,7 @@ export async function POST(request: Request) {
 
 export async function DELETE(request: Request) {
   const viewer = await getViewer();
-  if (!viewer?.isAdmin) return NextResponse.json({ error: "Admin access required" }, { status: 403 });
+  if (!viewer?.isAdmin || !["OWNER", "OPERATIONS"].includes(viewer.adminRole || "")) return NextResponse.json({ error: "Operations access required" }, { status: 403 });
   const { id } = await request.json() as { id?: string };
   if (!id) return NextResponse.json({ error: "Service is required" }, { status: 400 });
   await database().prepare("UPDATE print_services SET active=0 WHERE id=?").bind(id).run();

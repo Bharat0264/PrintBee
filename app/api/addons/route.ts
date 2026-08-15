@@ -9,7 +9,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   const viewer = await getViewer();
-  if (!viewer?.isAdmin) return NextResponse.json({ error: "Admin access required" }, { status: 403 });
+  if (!viewer?.isAdmin || !["OWNER", "OPERATIONS"].includes(viewer.adminRole || "")) return NextResponse.json({ error: "Operations access required" }, { status: 403 });
   const body = await request.json() as { id?: string; name?: string; description?: string; price?: number };
   const name = body.name?.trim();
   const pricePaise = Math.round(Number(body.price) * 100);
@@ -24,7 +24,7 @@ export async function POST(request: Request) {
 
 export async function DELETE(request: Request) {
   const viewer = await getViewer();
-  if (!viewer?.isAdmin) return NextResponse.json({ error: "Admin access required" }, { status: 403 });
+  if (!viewer?.isAdmin || !["OWNER", "OPERATIONS"].includes(viewer.adminRole || "")) return NextResponse.json({ error: "Operations access required" }, { status: 403 });
   const { id } = await request.json() as { id?: string };
   if (!id) return NextResponse.json({ error: "Add-on is required" }, { status: 400 });
   await database().prepare("UPDATE addons SET active=0,updated_at=? WHERE id=?").bind(new Date().toISOString(), id).run();

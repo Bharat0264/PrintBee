@@ -4,7 +4,7 @@ import { getViewer } from "../../../supabase/server";
 
 export async function POST(request: Request) {
   const viewer = await getViewer();
-  if (!viewer?.isAdmin) return NextResponse.json({ error: "Admin access required" }, { status: 403 });
+  if (!viewer?.isAdmin || !["OWNER", "ACCOUNTANT"].includes(viewer.adminRole || "")) return NextResponse.json({ error: "Accounting access required" }, { status: 403 });
 
   const body = await request.json() as { riderEmail?: string; amount?: number; paymentDate?: string; note?: string };
   const riderEmail = body.riderEmail?.trim().toLowerCase();
