@@ -49,17 +49,14 @@ export async function POST(request: Request) {
   const hash = await hashDeliveryCode(id, deliveryCode);
   const encryptedCode = await encryptDeliveryCode(deliveryCode);
   const db = database();
-  const sequence = await db.prepare("UPDATE order_sequences SET next_value=next_value+1 WHERE id='orders' RETURNING next_value-1 number").first<{ number: number }>();
-  if (!sequence) return NextResponse.json({ error: "Order numbering is temporarily unavailable" }, { status: 503 });
-  const orderNumber = `PB${String(sequence.number).padStart(3, "0")}`;
+  const existing = await db.prepare("SELECT id,order_number,location_name,total_paise,late_night_fee_paise,points_redeemed,points_discount_paise FROM orders WHERE customer_email=? AND payment_status='PENDING' AND status='PAYMENT_PENDING' AND location_id=? AND items_json=? AND total_paise=? ORDER BY created_at DESC LIMIT 1")
+    .bind(viewer.email, location.id, JSON.stringify(body.items), totalPaise).first<any>();
+  if (existing) return NextResponse.json({ id: existing.id, orderNumber: null, locationName: existing.location_name, totalPaise: existing.total_paise, lateNightFeePaise: existing.late_night_fee_paise, pointsRedeemed: existing.points_redeemed, pointsDiscountPaise: existing.points_discount_paise, paymentMode: "RAZORPAY" });
+  const orderNumber = `CHECKOUT-${id}`;
   const now = new Date().toISOString();
   await db.batch([
     db.prepare(`INSERT INTO orders (id, order_number, customer_email, customer_name, mobile_number, location_id, location_name, items_json, printing_subtotal_paise, delivery_fee_paise, platform_fee_paise, packaging_fee_paise, payment_gateway_fee_paise, surge_fee_paise, late_night_fee_paise, total_paise, points_redeemed, points_discount_paise, referral_rewarded_at, delivery_code_hash, delivery_code_encrypted, status, payment_status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PAYMENT_PENDING', 'PENDING', ?)`)
       .bind(id, orderNumber, viewer.email, name, mobile, location.id, location.name, JSON.stringify(body.items), printingSubtotalPaise, deliveryFeePaise, platformFeePaise, packagingFeePaise, paymentGatewayFeePaise, surgeFeePaise, lateNightFeePaise, totalPaise, pointsRedeemed, pointsDiscountPaise, null, hash, encryptedCode, now),
-    ...(pointsRedeemed ? [db.prepare("UPDATE customer_profiles SET points_balance=points_balance-? WHERE email=? AND points_balance>=?").bind(pointsRedeemed, viewer.email, pointsRedeemed)] : []),
-    ...uploadIds.map((uploadId) => db.prepare("UPDATE uploads SET order_id=? WHERE id=?").bind(id, uploadId)),
-    ...uploadIds.map((uploadId) => db.prepare("DELETE FROM cart_items WHERE upload_id=? AND customer_email=?").bind(uploadId, viewer.email)),
-    ...(body.items as any[]).filter((item) => item.kind === "ADDON").map((item) => db.prepare("DELETE FROM cart_items WHERE id=? AND customer_email=?").bind(item.id, viewer.email)),
   ]);
-  return NextResponse.json({ id, orderNumber, locationName: location.name, totalPaise, lateNightFeePaise, pointsRedeemed, pointsDiscountPaise, paymentMode: "RAZORPAY" });
+  return NextResponse.json({ id, orderNumber: null, locationName: location.name, totalPaise, lateNightFeePaise, pointsRedeemed, pointsDiscountPaise, paymentMode: "RAZORPAY" });
 }

@@ -275,6 +275,13 @@ footer { border-top: 1px solid var(--line); padding: 28px max(24px, calc((100% -
 .service-chips small { color: var(--muted); }
 .service-chips button { justify-self: start; border: 0; padding: 0; background: transparent; color: #a33a2b; font-size: 8px; font-weight: 800; }
 .orders-table-head { display: grid; grid-template-columns: 2fr 1fr 1fr 1.2fr 1fr .8fr; gap: 10px; padding: 10px 14px; border-radius: 10px 10px 0 0; background: #25282e; color: #cfd1d5; font-size: 8px; font-weight: 900; text-transform: uppercase; }
+.admin-order-toolbar { display: grid; grid-template-columns: minmax(260px, 1fr) 190px auto; align-items: end; gap: 10px; margin: 12px 0; padding: 14px; border: 1px solid #dfe2e7; border-radius: 12px; background: white; box-shadow: 0 5px 18px rgba(22, 28, 36, .04); }
+.admin-order-toolbar label { color: #68707d; font-size: 8px; font-weight: 900; letter-spacing: .6px; text-transform: uppercase; }
+.admin-order-toolbar input, .admin-order-toolbar select { width: 100%; margin-top: 6px; border: 1px solid #d8dce2; border-radius: 8px; padding: 10px; background: #fafbfc; color: #171a20; font-size: 10px; }
+.admin-order-toolbar > span { min-width: 105px; padding: 8px 12px; border-radius: 8px; background: #171a20; color: white; text-align: right; }
+.admin-order-toolbar > span strong, .admin-order-toolbar > span small { display: block; }
+.admin-order-toolbar > span strong { color: var(--yellow); font-size: 17px; }
+.admin-order-toolbar > span small { color: #adb2ba; font-size: 8px; }
 .admin-portal .admin-orders { grid-template-columns: 1fr; gap: 0; border: 1px solid var(--line); border-top: 0; background: white; }
 .admin-portal .admin-orders article { border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: white; }
 .order-earnings { grid-column: 1 / -1; display: flex; gap: 18px; padding: 8px; border-radius: 7px; background: #edf7f0; font-size: 9px; }
@@ -565,6 +572,7 @@ footer { border-top: 1px solid var(--line); padding: 28px max(24px, calc((100% -
   .admin-sidebar > button { width: auto; flex: 0 0 auto; padding: 9px; font-size: 10px; }
   .admin-main { padding: 20px 14px 60px; }
   .orders-table-head { display: none; }
+  .admin-order-toolbar { grid-template-columns: 1fr; }
   .service-admin-form { grid-template-columns: 1fr; }
 }
 

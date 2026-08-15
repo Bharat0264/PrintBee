@@ -316,6 +316,8 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   const [notificationPromptOpen, setNotificationPromptOpen] = useState(false);
   const [adminSection, setAdminSection] = useState<"dashboard" | "revenue" | "orders" | "locations" | "riders" | "services">("dashboard");
   const [dashboardRange, setDashboardRange] = useState<"today" | "week" | "month" | "lifetime">("today");
+  const [adminOrderSearch, setAdminOrderSearch] = useState("");
+  const [adminOrderStatus, setAdminOrderStatus] = useState("ALL");
   const [printServices, setPrintServices] = useState<PrintService[]>([]);
   const [packagingEnabled, setPackagingEnabled] = useState(false);
   const [packagingFee, setPackagingFee] = useState(0);
@@ -783,20 +785,21 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   };
 
   const placeOrder = async () => {
+    if (paymentProcessing) return;
+    setPaymentProcessing(true);
     setOrderError("");
-    const response = await fetch("/api/orders", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ customerName, mobileNumber, locationId, items: cart, totalPaise: Math.round(cartTotal * 100), usePoints, needsPackaging }),
-    });
-    const data = await response.json();
-    if (!response.ok) return setOrderError(data.error ?? "Order could not be placed");
-    setCart([]);
-    setNeedsPackaging(false);
-    if (data.pointsRedeemed) setPointsBalance((current) => Math.max(0, current - data.pointsRedeemed));
-    const pendingResult = { ...data, paid: false };
-    setOrderResult(pendingResult);
-    await startRazorpayPayment(pendingResult);
+    try {
+      const response = await fetch("/api/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ customerName, mobileNumber, locationId, items: cart, totalPaise: Math.round(cartTotal * 100), usePoints, needsPackaging }),
+      });
+      const data = await response.json();
+      if (!response.ok) return setOrderError(data.error ?? "Payment checkout could not be prepared");
+      const pendingResult = { ...data, paid: false };
+      setOrderResult(pendingResult);
+      await startRazorpayPayment(pendingResult);
+    } finally { setPaymentProcessing(false); }
   };
 
   const startRazorpayPayment = async (order: { id: string; orderNumber?: string; totalPaise?: number }) => {
@@ -830,8 +833,11 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
           const verifyResponse = await fetch("/api/payments/razorpay/verify", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ orderId: order.id, ...result }) });
           const verified = await verifyResponse.json();
           if (!verifyResponse.ok) return setOrderError(verified.error ?? "Payment verification failed");
-          setOrderResult((current) => current?.id === order.id ? { ...current, paid: true, deliveryCode: verified.deliveryCode } : current);
-          await sendOrderNotification("Payment successful", `${paymentOrder.orderNumber} was paid and verified.`, `${order.id}-paid`);
+          setOrderResult((current) => current?.id === order.id ? { ...current, orderNumber: verified.orderNumber, paid: true, deliveryCode: verified.deliveryCode } : current);
+          setCart([]);
+          setNeedsPackaging(false);
+          if ((order as any).pointsRedeemed) setPointsBalance((current) => Math.max(0, current - Number((order as any).pointsRedeemed)));
+          await sendOrderNotification("Order placed", `${verified.orderNumber} was created after payment verification.`, `${order.id}-paid`);
           await checkCustomerNotifications();
         },
         modal: { ondismiss: () => setPaymentProcessing(false) },
@@ -1019,36 +1025,49 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
       const pdf = await PDFDocument.create();
       const regular = await pdf.embedFont(StandardFonts.Helvetica);
       const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
-      const pageSize: [number, number] = [595.28, 841.89];
+      const pageSize: [number, number] = [841.89, 595.28];
       let page = pdf.addPage(pageSize);
-      let y = 800;
+      let y = 558;
+      const columns = [36, 120, 252, 350, 442, 555, 664];
+      const widths = [80, 128, 94, 88, 109, 105, 140];
+      const clean = (value: unknown, width: number) => String(value ?? "-").replace(/[^\x20-\x7E]/g, " ").slice(0, width);
+      const money = (value: unknown) => `INR ${(Number(value) / 100).toFixed(2)}`;
       const drawHeader = () => {
-        page.drawText("PrintBee Orders Report", { x: 40, y, size: 18, font: bold, color: rgb(0.08, 0.08, 0.1) });
-        y -= 22;
-        page.drawText(`${new Date(data.from).toLocaleString("en-IN")} to ${new Date(data.to).toLocaleString("en-IN")} | Visible orders only`, { x: 40, y, size: 8, font: regular });
-        y -= 18;
+        page.drawRectangle({ x: 0, y: 528, width: pageSize[0], height: 68, color: rgb(0.07, 0.08, 0.11) });
+        page.drawText("PRINTBEE", { x: 36, y: 566, size: 10, font: bold, color: rgb(0.96, 0.72, 0.02) });
+        page.drawText("Orders report", { x: 36, y: 542, size: 20, font: bold, color: rgb(1, 1, 1) });
+        page.drawText(`${new Date(data.from).toLocaleDateString("en-IN")} - ${new Date(data.to).toLocaleDateString("en-IN")}  |  Paid orders`, { x: 570, y: 545, size: 8, font: regular, color: rgb(.82, .84, .88) });
+        y = 508;
+        page.drawRectangle({ x: 32, y: y - 6, width: 778, height: 24, color: rgb(.94, .94, .92) });
+        ["ORDER / DATE", "CUSTOMER", "LOCATION / RIDER", "PRINTING", "FEES", "TOTAL", "PAYMENT / STATUS"].forEach((label, index) => page.drawText(label, { x: columns[index], y: y + 2, size: 7, font: bold, color: rgb(.25, .27, .3) }));
+        y -= 20;
       };
       drawHeader();
       let collected = 0;
       for (const order of data.orders as any[]) {
-        if (y < 105) {
+        if (y < 58) {
           page = pdf.addPage(pageSize);
-          y = 800;
           drawHeader();
         }
         collected += order.payment_status === "PAID" ? Number(order.total_paise) : 0;
-        page.drawText(`${order.order_number} | ${new Date(order.created_at).toLocaleString("en-IN")}`, { x: 40, y, size: 10, font: bold });
-        y -= 13;
-        page.drawText(`${order.customer_name} | ${order.mobile_number} | ${order.location_name}`.slice(0, 92), { x: 40, y, size: 8, font: regular });
-        y -= 12;
-        page.drawText(`Print INR ${(order.printing_subtotal_paise / 100).toFixed(2)} | Delivery INR ${(order.delivery_fee_paise / 100).toFixed(2)} | Platform INR ${(order.platform_fee_paise / 100).toFixed(2)} | Total INR ${(order.total_paise / 100).toFixed(2)}`, { x: 40, y, size: 8, font: regular });
-        y -= 12;
-        page.drawText(`${order.payment_status} | ${order.status} | Rider: ${order.rider_email || "Not assigned"}`.slice(0, 100), { x: 40, y, size: 8, font: regular });
-        y -= 18;
+        if ((data.orders.indexOf(order) % 2) === 0) page.drawRectangle({ x: 32, y: y - 30, width: 778, height: 44, color: rgb(.985, .982, .97) });
+        const feeLine1 = `D ${money(order.delivery_fee_paise)} | P ${money(order.platform_fee_paise)}`;
+        const extras = Number(order.packaging_fee_paise) + Number(order.payment_gateway_fee_paise) + Number(order.surge_fee_paise) + Number(order.late_night_fee_paise);
+        const cells = [
+          [clean(order.order_number, 18), new Date(order.created_at).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" })],
+          [clean(order.customer_name, 24), clean(`${order.mobile_number} | ${order.customer_email}`, 34)],
+          [clean(order.location_name, 22), clean(order.rider_email || "Not assigned", 24)],
+          [money(order.printing_subtotal_paise), `${JSON.parse(order.items_json || "[]").length} item(s)`],
+          [feeLine1, `Other ${money(extras)}`],
+          [money(order.total_paise), Number(order.points_discount_paise) ? `Discount ${money(order.points_discount_paise)}` : "No discount"],
+          [clean(order.payment_reference || order.payment_status, 26), clean(order.status, 24)],
+        ];
+        cells.forEach((lines, index) => { page.drawText(clean(lines[0], Math.floor(widths[index] / 4.2)), { x: columns[index], y, size: 7.4, font: bold }); page.drawText(clean(lines[1], Math.floor(widths[index] / 3.7)), { x: columns[index], y: y - 13, size: 6.5, font: regular, color: rgb(.38, .4, .44) }); });
+        page.drawLine({ start: { x: 32, y: y - 31 }, end: { x: 810, y: y - 31 }, thickness: .5, color: rgb(.86, .86, .83) });
+        y -= 44;
       }
-      if (!data.orders.length) page.drawText("No visible orders were found in this date range.", { x: 40, y, size: 11, font: regular });
-      const firstPage = pdf.getPages()[0];
-      firstPage.drawText(`Orders: ${data.orders.length}   Paid revenue: INR ${(collected / 100).toFixed(2)}`, { x: 40, y: 28, size: 9, font: bold });
+      if (!data.orders.length) page.drawText("No paid orders were found in this date range.", { x: 36, y, size: 11, font: regular });
+      pdf.getPages().forEach((reportPage, index) => { reportPage.drawText(`Paid orders: ${data.orders.length}   |   Collected: INR ${(collected / 100).toFixed(2)}`, { x: 36, y: 24, size: 8, font: bold }); reportPage.drawText(`Page ${index + 1} of ${pdf.getPageCount()}`, { x: 750, y: 24, size: 7, font: regular }); });
       const bytes = await pdf.save();
       const blob = new Blob([bytes as BlobPart], { type: "application/pdf" });
       const url = URL.createObjectURL(blob);
@@ -1331,6 +1350,11 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
     revenuePaise: paidDashboardOrdersForRange.reduce((sum: number, order: any) => sum + (Number(order.total_paise) || 0), 0),
   };
   const printTotalsForRange = printSummary(dashboardOrdersForRange.flatMap((order: any) => order.items || []));
+  const visibleAdminOrders = (dashboard?.orders ?? []).filter((order: any) => {
+    const term = adminOrderSearch.trim().toLowerCase();
+    const matchesSearch = !term || [order.order_number, order.customer_name, order.customer_email, order.mobile_number, order.location_name, order.rider_email].some((value) => String(value ?? "").toLowerCase().includes(term));
+    return matchesSearch && (adminOrderStatus === "ALL" || order.status === adminOrderStatus);
+  });
 
   if (viewer && !viewer.isAdmin && loginMode === "PARTNER") {
     const partnerApproved = role === "AGENT" && approvalStatus === "APPROVED";
@@ -1786,8 +1810,9 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                 <p>Review the UPI ID and move each request through the payout flow.</p>
                 <div className="withdrawal-admin">{dashboard.riderWithdrawals?.length ? dashboard.riderWithdrawals.map((withdrawal: any) => <article key={withdrawal.id}><span><strong>{withdrawal.rider_email}</strong><small>UPI: {withdrawal.upi_id}</small><small>Requested {new Date(withdrawal.requested_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}</small></span><strong>{inr.format(withdrawal.amount_paise / 100)}</strong><select value={withdrawal.status} onChange={(e) => updateWithdrawalStatus(withdrawal.id, e.target.value)}><option value="REQUESTED">Withdraw requested</option><option value="IN_PROGRESS">In progress</option><option value="SENT">Amount sent to bank</option></select></article>) : <p>No withdrawal requests yet.</p>}</div>
                 <h3 id="admin-orders">Live orders <small className="live-refresh">● Live · refreshes every 5 seconds</small></h3>
+                <div className="admin-order-toolbar"><label>Search orders<input value={adminOrderSearch} onChange={(event) => setAdminOrderSearch(event.target.value)} placeholder="Order, customer, phone, email, location or rider" /></label><label>Status<select value={adminOrderStatus} onChange={(event) => setAdminOrderStatus(event.target.value)}><option value="ALL">All statuses</option><option value="CONFIRMED">Confirmed</option><option value="PRINTING">Printing</option><option value="READY_FOR_PICKUP">Ready for pickup</option><option value="RIDER_ASSIGNED">Rider assigned</option><option value="DELIVERED">Delivered</option><option value="CANCELLED">Cancelled</option></select></label><span><strong>{visibleAdminOrders.length}</strong><small>matching orders</small></span></div>
                 <div className="orders-table-head"><span>Order &amp; documents</span><span>Payment QR</span><span>Status</span><span>Delivery partner</span><span>Earnings</span><span>Export</span></div>
-                <div className="admin-orders">{dashboard.orders?.length ? dashboard.orders.map((order: any) => (
+                <div className="admin-orders">{visibleAdminOrders.length ? visibleAdminOrders.map((order: any) => (
                   <article key={order.id}>
                     <div className="order-customer">
                       <strong>{order.order_number}</strong>
@@ -1833,7 +1858,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                     <div className="order-earnings"><span>Rider <b>{inr.format((order.delivery_fee_paise * .75) / 100)}</b></span><span>Admin <b>{inr.format((order.printing_subtotal_paise + order.platform_fee_paise + order.delivery_fee_paise * .2) / 100)}</b></span></div>
                     <div className="order-record-actions"><button className="hide-order-action" onClick={() => setOrderHidden(order.id, true)}>Hide from dashboard &amp; exports</button><button className="delete-order-action" onClick={() => deleteOrder(order)}>Delete this order</button></div>
                   </article>
-                )) : <p>No orders yet.</p>}</div>
+                )) : <p>No orders match the current filters.</p>}</div>
                 <h3>Hidden orders</h3>
                 <p>Archived orders are excluded from the dashboard, revenue/profit, location and rider totals, active users, and exports.</p>
                 <div className="hidden-orders">{dashboard.hiddenOrders?.length ? dashboard.hiddenOrders.map((order: any) => (
@@ -1858,7 +1883,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
             {orderResult ? (
               <div className="order-success">
                 <span>{orderResult.paid ? "✓" : "₹"}</span><h2>{orderResult.paid ? "Order placed" : "Complete payment"}</h2>
-                <p>Order <strong>{orderResult.orderNumber}</strong> · {orderResult.locationName}</p>
+                <p>{orderResult.paid ? <>Order <strong>{orderResult.orderNumber}</strong> · {orderResult.locationName}</> : <>Your order number will be created after successful payment · {orderResult.locationName}</>}</p>
                 <div className="payment-pending"><small>Payment status</small><strong>{orderResult.paid ? "PAID" : "PAYMENT REQUIRED"}</strong></div>
                 {(orderResult.lateNightFeePaise ?? 0) > 0 && <div className="payment-pending"><small>Late-night delivery fee</small><strong>{inr.format((orderResult.lateNightFeePaise ?? 0) / 100)}</strong></div>}
                 {orderResult.paid && orderResult.deliveryCode && <div><small>Your delivery code</small><strong>{orderResult.deliveryCode}</strong></div>}

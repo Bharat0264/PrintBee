@@ -5,6 +5,7 @@ import test from "node:test";
 const app = await readFile(new URL("../app/PrintBeeApp.tsx", import.meta.url), "utf8");
 const cart = await readFile(new URL("../app/api/cart/route.ts", import.meta.url), "utf8");
 const orders = await readFile(new URL("../app/api/orders/route.ts", import.meta.url), "utf8");
+const payments = await readFile(new URL("../app/api/payments/razorpay.ts", import.meta.url), "utf8");
 
 test("signed-in carts are restored from durable server storage", () => {
   assert.match(app, /fetch\("\/api\/cart", \{ cache: "no-store" \}\)/);
@@ -20,6 +21,9 @@ test("cart items persist when added and files are deleted when removed", () => {
   assert.match(cart, /DELETE FROM uploads/);
 });
 
-test("placing an order removes its saved cart records", () => {
-  assert.match(orders, /DELETE FROM cart_items WHERE upload_id/);
+test("only verified payment finalizes the cart and creates an order number", () => {
+  assert.match(orders, /CHECKOUT-\$\{id\}/);
+  assert.doesNotMatch(orders, /DELETE FROM cart_items WHERE upload_id/);
+  assert.match(payments, /DELETE FROM cart_items WHERE upload_id/);
+  assert.match(payments, /finalOrderNumber = `PB\$\{String\(sequence\.number\)/);
 });

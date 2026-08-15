@@ -11,6 +11,7 @@ export async function POST(request: Request) {
   if (!order?.razorpay_order_id || order.razorpay_order_id !== body.razorpay_order_id || !body.razorpay_payment_id || !body.razorpay_signature) return NextResponse.json({ error: "Invalid payment response" }, { status: 400 });
   const expected = await hmacHex(`${order.razorpay_order_id}|${body.razorpay_payment_id}`, razorpayConfig().keySecret);
   if (!safeEqualHex(expected, body.razorpay_signature)) return NextResponse.json({ error: "Payment verification failed" }, { status: 400 });
-  await markRazorpayOrderPaid(order.razorpay_order_id, body.razorpay_payment_id, "RAZORPAY_CHECKOUT");
-  return NextResponse.json({ paid: true, deliveryCode: order.delivery_code_encrypted ? await decryptDeliveryCode(order.delivery_code_encrypted) : null });
+  const paidOrder = await markRazorpayOrderPaid(order.razorpay_order_id, body.razorpay_payment_id, "RAZORPAY_CHECKOUT");
+  if (!paidOrder) return NextResponse.json({ error: "Payment was already processed or the checkout expired" }, { status: 409 });
+  return NextResponse.json({ paid: true, orderNumber: paidOrder.orderNumber, deliveryCode: order.delivery_code_encrypted ? await decryptDeliveryCode(order.delivery_code_encrypted) : null });
 }

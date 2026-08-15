@@ -20,6 +20,6 @@ export async function GET(request: Request) {
     to = new Date(`${toValue}T23:59:59.999`);
     if (!Number.isFinite(from.getTime()) || !Number.isFinite(to.getTime()) || from > to) return NextResponse.json({ error: "Invalid date range" }, { status: 400 });
   }
-  const rows = await database().prepare(`SELECT order_number, customer_name, mobile_number, location_name, printing_subtotal_paise, delivery_fee_paise, platform_fee_paise, total_paise, payment_status, status, rider_email, created_at FROM orders WHERE hidden_at IS NULL AND created_at BETWEEN ? AND ? ORDER BY created_at DESC`).bind(from.toISOString(), to.toISOString()).all();
+  const rows = await database().prepare(`SELECT order_number, customer_name, customer_email, mobile_number, location_name, items_json, printing_subtotal_paise, delivery_fee_paise, platform_fee_paise, packaging_fee_paise, payment_gateway_fee_paise, surge_fee_paise, late_night_fee_paise, points_discount_paise, total_paise, payment_status, payment_reference, status, rider_email, created_at FROM orders WHERE hidden_at IS NULL AND payment_status='PAID' AND created_at BETWEEN ? AND ? ORDER BY created_at DESC`).bind(from.toISOString(), to.toISOString()).all();
   return NextResponse.json({ from: from.toISOString(), to: to.toISOString(), orders: rows.results });
 }

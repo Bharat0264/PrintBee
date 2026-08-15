@@ -12,10 +12,11 @@ export async function POST(request: Request) {
   if (!order) return NextResponse.json({ error: "Order not found" }, { status: 404 });
   if (order.payment_status === "PAID") return NextResponse.json({ error: "Order is already paid" }, { status: 409 });
   const { keyId, keySecret } = razorpayConfig();
-  if (order.razorpay_order_id) return NextResponse.json({ keyId, razorpayOrderId: order.razorpay_order_id, amount: order.total_paise, currency: "INR", orderNumber: order.order_number });
+  const checkoutLabel = order.order_number.startsWith("CHECKOUT-") ? "PrintBee secure checkout" : order.order_number;
+  if (order.razorpay_order_id) return NextResponse.json({ keyId, razorpayOrderId: order.razorpay_order_id, amount: order.total_paise, currency: "INR", orderNumber: checkoutLabel });
   const response = await fetch("https://api.razorpay.com/v1/orders", { method: "POST", headers: { Authorization: `Basic ${btoa(`${keyId}:${keySecret}`)}`, "Content-Type": "application/json" }, body: JSON.stringify({ amount: order.total_paise, currency: "INR", receipt: order.order_number, notes: { printbee_order_id: order.id, printbee_order_number: order.order_number } }) });
   if (!response.ok) return NextResponse.json({ error: "Payment could not be started" }, { status: 502 });
   const created = await response.json() as { id: string };
   await db.prepare("UPDATE orders SET razorpay_order_id=? WHERE id=? AND razorpay_order_id IS NULL").bind(created.id, order.id).run();
-  return NextResponse.json({ keyId, razorpayOrderId: created.id, amount: order.total_paise, currency: "INR", orderNumber: order.order_number });
+  return NextResponse.json({ keyId, razorpayOrderId: created.id, amount: order.total_paise, currency: "INR", orderNumber: checkoutLabel });
 }
