@@ -1515,8 +1515,15 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
           </div>}
 
           <div className="quantities">
-            <label>Pages<input type="number" min="1" value={pages} onChange={(e) => setPages(Math.max(1, Number(e.target.value)))} /></label>
-            <label>Copies<input type="number" min="1" value={copies} onChange={(e) => setCopies(Math.max(1, Number(e.target.value)))} /></label>
+            <div className="detected-pages"><small>Pages</small><strong>{pages}</strong><span>Auto-detected</span></div>
+            <div className="copy-quantity">
+              <small>Copies</small>
+              <div className="quantity-stepper">
+                <button type="button" aria-label="Decrease copies" disabled={copies <= 1} onClick={() => setCopies((value) => Math.max(1, value - 1))}>−</button>
+                <output aria-live="polite" aria-label={`${copies} ${copies === 1 ? "copy" : "copies"}`}>{copies}</output>
+                <button type="button" aria-label="Increase copies" onClick={() => setCopies((value) => value + 1)}>+</button>
+              </div>
+            </div>
             <div className="paper"><small>Paper size</small><strong>A4</strong><span>210 × 297 mm</span></div>
           </div>
 
@@ -1616,7 +1623,13 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
       <footer>
         <div className="footer-brand"><img src="/printbee-logo.png" width={86} height={86} alt="" /><div><strong>Print<span>Bee</span></strong><p>Upload. Print. Delivered.</p></div></div>
         <nav className="footer-policy-links" aria-label="Policies"><a href="/terms">Terms</a><a href="/privacy-policy">Privacy</a><a href="/shipping-policy">Shipping</a><a href="/cancellation-refunds">Cancellation &amp; Refunds</a><a href="/contact">Contact</a></nav>
-        <p>© 2026 PrintBee · Local A4 printing made easy.</p>
+        <address className="footer-contact">
+          <strong>Contact us</strong>
+          <a href="mailto:printbee.co.in@gmail.com">printbee.co.in@gmail.com</a>
+          <a href="https://www.instagram.com/print.bee_?igsh=MTkwM3lsZWFraHZrNQ%3D%3D" target="_blank" rel="noreferrer">Instagram: @print.bee_</a>
+          <a href="https://wa.me/919347541419" target="_blank" rel="noreferrer">WhatsApp: 9347541419</a>
+        </address>
+        <p className="footer-copyright">© 2026 PrintBee · Local A4 printing made easy.</p>
       </footer>
 
       {adminOpen && (
