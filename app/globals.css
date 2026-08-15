@@ -333,6 +333,10 @@ footer { border-top: 1px solid var(--line); padding: 28px max(24px, calc((100% -
 .withdrawal-admin article { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 14px; padding: 13px 15px; border: 1px solid var(--line); border-radius: 11px; background: white; }
 .withdrawal-admin article span small { display: block; margin-top: 4px; color: var(--muted); font-size: 8px; }
 .withdrawal-admin select { border: 1px solid var(--line); border-radius: 8px; padding: 8px; background: white; font-size: 9px; }
+.withdrawal-admin article.payout-complete { border-color: #84c99f; background: #eaf8ef; }
+.payout-done { min-width: 135px; padding: 8px 10px; border-radius: 8px; background: #197947; color: white; text-align: center; }
+.payout-done b, .payout-done small { display: block; }
+.payout-done small { color: #d8f5e3 !important; }
 .payout-panel { margin-top: 24px; padding: 22px; border-radius: 16px; background: var(--ink); color: white; }
 .payout-panel h3 { margin: 0 0 4px; color: white; }
 .payout-panel p { margin: 0 0 16px; color: #aaa; font-size: 11px; }
@@ -505,6 +509,13 @@ footer { border-top: 1px solid var(--line); padding: 28px max(24px, calc((100% -
 .demo-reset-panel small { margin-top: 4px; color: #8d514b; font-size: 9px; }
 .demo-reset-panel button { border: 0; border-radius: 8px; padding: 9px 11px; background: #a6382d; color: white; font-size: 9px; font-weight: 900; white-space: nowrap; }
 .admin-orders article { display: grid; grid-template-columns: 1fr auto; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 11px; }
+.compact-order-actions { grid-column: 1 / -1; display: grid; grid-template-columns: auto minmax(150px, .7fr) minmax(190px, 1fr); align-items: end; gap: 8px; padding-top: 4px; }
+.compact-order-actions label { color: var(--muted); font-size: 8px; font-weight: 800; }
+.compact-order-actions select { width: 100%; display: block; margin-top: 4px; border: 1px solid var(--line); border-radius: 8px; padding: 9px; background: white; font-size: 9px; }
+.view-order-action { border: 0; border-radius: 8px; padding: 10px 14px; background: var(--ink); color: white; font-size: 9px; font-weight: 900; }
+.admin-orders article.is-compact > :is(.payment-review-details, .payment-cleared-note, .admin-payment-qr, .payment-review-actions, .cancelled-note, .document-details, .file-links, .delete-files-action, .files-cleared-note, .give-points-control, .order-earnings, .order-record-actions) { display: none; }
+.admin-orders article.is-compact > select { display: none; }
+.admin-orders article.is-expanded .compact-order-actions { padding-bottom: 8px; border-bottom: 1px solid var(--line); }
 .admin-orders article > div small { display: block; color: var(--muted); margin-top: 3px; font-size: 9px; }
 .order-customer small { overflow-wrap: anywhere; }
 .document-details { grid-column: 1 / -1; padding: 10px; border-radius: 8px; background: #faf9f5; }
