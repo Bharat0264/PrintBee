@@ -82,13 +82,14 @@ function finish(values: LedgerValues) {
   const packagingCostPaise = values.packagingCollectedPaise - packagingProfitPaise;
   const operationalCostPaise = printingOperationalCostPaise + values.riderCostPaise + packagingCostPaise + values.gatewayCollectedPaise;
   const netProfitPaise = values.amountCollectedPaise - operationalCostPaise;
-  const sharedProfitPaise = printingProfitPaise + serviceRevenuePaise + values.addonRevenuePaise + packagingProfitPaise;
+  const sharedProfitPaise = printingProfitPaise + serviceRevenuePaise + values.addonRevenuePaise;
   const bharatSharedProfitPaise = Math.round(sharedProfitPaise * 0.35);
   const ramyaSharedProfitPaise = sharedProfitPaise - bharatSharedProfitPaise;
   const adminDirectProfitPaise = deliveryProfitPaise + values.platformCollectedPaise + values.surgeCollectedPaise + values.lateNightCollectedPaise - values.pointsDiscountPaise;
-  const bharatTotalProfitPaise = bharatSharedProfitPaise + adminDirectProfitPaise;
+  const bharatPackingProfitPaise = packagingProfitPaise;
+  const bharatTotalProfitPaise = bharatSharedProfitPaise + bharatPackingProfitPaise + adminDirectProfitPaise;
   const ramyaTotalProfitPaise = ramyaSharedProfitPaise;
-  return { ...values, bwProfitPaise, colourProfitPaise, printingRevenuePaise, serviceRevenuePaise, printingOperationalCostPaise, printingProfitPaise, addonProfitPaise: values.addonRevenuePaise, deliveryProfitPaise, packagingCostPaise, packagingProfitPaise, operationalCostPaise, netProfitPaise, sharedProfitPaise, bharatSharedProfitPaise, ramyaSharedProfitPaise, adminDirectProfitPaise, bharatTotalProfitPaise, ramyaTotalProfitPaise, shareTallyPaise: bharatTotalProfitPaise + ramyaTotalProfitPaise };
+  return { ...values, bwProfitPaise, colourProfitPaise, printingRevenuePaise, serviceRevenuePaise, printingOperationalCostPaise, printingProfitPaise, addonProfitPaise: values.addonRevenuePaise, deliveryProfitPaise, packagingCostPaise, packagingProfitPaise, operationalCostPaise, netProfitPaise, sharedProfitPaise, bharatSharedProfitPaise, ramyaSharedProfitPaise, adminDirectProfitPaise, bharatPackingProfitPaise, bharatTotalProfitPaise, ramyaTotalProfitPaise, shareTallyPaise: bharatTotalProfitPaise + ramyaTotalProfitPaise };
 }
 
 function addValues(target: LedgerValues, source: LedgerValues) {
