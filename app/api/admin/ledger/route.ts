@@ -101,7 +101,7 @@ export async function POST(request: Request) {
   const { password } = await request.json() as { password?: string };
   if (await sha256(password || "") !== PASSWORD_HASH) return NextResponse.json({ error: "Incorrect ledger password" }, { status: 401 });
   const response = NextResponse.json({ authorized: true });
-  response.cookies.set(COOKIE_NAME, ACCESS_TOKEN, { httpOnly: true, secure: true, sameSite: "strict", path: "/", maxAge: 60 * 60 * 8 });
+  response.cookies.set(COOKIE_NAME, ACCESS_TOKEN, { httpOnly: true, secure: true, sameSite: "strict", path: "/" });
   return response;
 }
 

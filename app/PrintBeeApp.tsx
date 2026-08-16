@@ -1169,6 +1169,33 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
     window.setTimeout(() => document.getElementById("admin-ledger")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
   };
 
+  const lockLedger = async () => {
+    await fetch("/api/admin/ledger", { method: "DELETE", keepalive: true }).catch(() => {});
+    setLedger(null);
+    setLedgerPassword("");
+    setLedgerMessage("");
+  };
+
+  const selectAdminSection = async (section: typeof adminSection) => {
+    if (section === "ledger") { await openLedger(); return; }
+    if (ledger || adminSection === "ledger") await lockLedger();
+    setAdminSection(section);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const closeAdminDashboard = async () => {
+    if (ledger || adminSection === "ledger") await lockLedger();
+    setAdminSection("dashboard");
+    setAdminOpen(false);
+  };
+
+  useEffect(() => {
+    if (!ledger) return;
+    const lockOnExit = () => { void lockLedger(); };
+    window.addEventListener("pagehide", lockOnExit);
+    return () => window.removeEventListener("pagehide", lockOnExit);
+  }, [ledger]);
+
   const unlockLedger = async () => {
     setLedgerMessage("");
     const response = await fetch("/api/admin/ledger", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password: ledgerPassword }) });
@@ -1765,19 +1792,20 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
       </footer>
 
       {adminOpen && (
-        <div className="modal-backdrop" role="presentation" onMouseDown={() => setAdminOpen(false)}>
+        <div className="modal-backdrop" role="presentation" onMouseDown={() => { void closeAdminDashboard(); }}>
           <section className="admin-modal admin-portal" role="dialog" aria-modal="true" aria-labelledby="admin-title" onMouseDown={(e) => e.stopPropagation()}>
             <aside className="admin-sidebar">
               <div className="admin-sidebar-brand"><img src="/printbee-logo.png" alt="" /><strong>PrintBee Admin</strong></div>
-              {([["dashboard", "Dashboard", "⌂"], ["revenue", "Revenue", "₹"], ["ledger", "Ledger", "▦"], ["orders", "Orders", "▤"], ["locations", "Locations", "⌖"], ["riders", "Rider approvals", "♙"], ["services", "Print services", "＋"]] as const).map(([id, label, icon]) => <button key={id} className={adminSection === id ? "active" : ""} onClick={() => id === "ledger" ? openLedger() : (setAdminSection(id), window.setTimeout(() => document.getElementById(`admin-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" }), 0))}><span>{icon}</span>{label}{id === "orders" && <b>{dashboard?.orders?.length ?? 0}</b>}</button>)}
-              {notificationPermission !== "granted" && <button onClick={enableNotifications}><span>♬</span>Enable order alerts</button>}
-              {notificationPermission === "granted" && <button onClick={testNotifications}><span>♬</span>Test sound + banner</button>}
-              <button className="admin-sidebar-exit" onClick={() => setAdminOpen(false)}>← Back to website</button>
+              {([["dashboard", "Dashboard", "⌂"], ["revenue", "Revenue", "₹"], ["ledger", "Ledger", "▦"], ["orders", "Orders", "▤"], ["locations", "Locations", "⌖"], ["riders", "Rider approvals", "♙"], ["services", "Print services", "＋"]] as const).map(([id, label, icon]) => <button key={id} className={adminSection === id ? "active" : ""} onClick={() => { void selectAdminSection(id); }}><span>{icon}</span>{label}{id === "orders" && <b>{dashboard?.orders?.length ?? 0}</b>}</button>)}
+              {notificationPermission !== "granted" && <button onClick={() => { if (ledger) void lockLedger(); void enableNotifications(); }}><span>♬</span>Enable order alerts</button>}
+              {notificationPermission === "granted" && <button onClick={() => { if (ledger) void lockLedger(); void testNotifications(); }}><span>♬</span>Test sound + banner</button>}
+              <button className="admin-sidebar-exit" onClick={() => { void closeAdminDashboard(); }}>← Back to website</button>
             </aside>
             <div className="admin-main">
-            <button className="close" onClick={() => setAdminOpen(false)} aria-label="Close">×</button>
+            <button className="close" onClick={() => { void closeAdminDashboard(); }} aria-label="Close">×</button>
             <div className="admin-badge">ADMIN</div>
             {notificationMessage && <p className="panel-message">{notificationMessage}</p>}
+            {adminSection === "services" && <>
             <h2 id="admin-services">Print service controls</h2>
             <p>Update the customer price per printed page. Changes appear everywhere immediately.</p>
             <div className={`order-toggle-panel ${acceptingOrders ? "on" : "off"}`}>
@@ -1821,6 +1849,8 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
               <div className="service-admin-form"><input value={newAddon.name} onChange={(e) => setNewAddon({ ...newAddon, name: e.target.value })} placeholder="Example: File folder" /><input maxLength={125} value={newAddon.description} onChange={(e) => setNewAddon({ ...newAddon, description: e.target.value })} placeholder="Description" /><label className="service-price-field">Fixed price (₹)<input type="number" min="0" step=".01" value={newAddon.price} onChange={(e) => setNewAddon({ ...newAddon, price: Math.max(0, Number(e.target.value)) })} /></label><button onClick={saveAddon}>{newAddon.id ? "Save add-on" : "Add product"}</button>{newAddon.id && <button className="secondary-button" onClick={() => setNewAddon({ id: "", name: "", description: "", price: 0 })}>Cancel</button>}</div>
               <div className="service-chips">{addons.map((addon) => <span key={addon.id}><b>{addon.name} · {inr.format(addon.price_paise / 100)}</b><small>{addon.description}</small><button onClick={() => setNewAddon({ id: addon.id, name: addon.name, description: addon.description, price: addon.price_paise / 100 })}>Edit</button><button onClick={() => removeAddon(addon.id)}>Remove</button></span>)}</div>
             </div>
+            </>}
+            {adminSection === "locations" && <>
             <div className="admin-divider" />
             <h3 id="admin-locations">Delivery locations</h3>
             <p>Customers can select only locations added here.</p>
@@ -1828,9 +1858,11 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
             <h3>Delivery agents</h3>
             <p>Add the Google email used by each delivery agent.</p>
             <div className="inline-admin-form"><input value={agentEmail} onChange={(e) => setAgentEmail(e.target.value)} placeholder="agent@gmail.com" /><button onClick={addAgent}>Add</button></div>
+            </>}
             {adminMessage && <p className="panel-message">{adminMessage}</p>}
             {dashboard && (
               <div className="dashboard-block">
+                {adminSection === "dashboard" && <>
                 <div className="admin-divider" />
                 <h2 id="admin-dashboard">Operations dashboard</h2>
                 <div className="dashboard-range"><button className={dashboardRange === "today" ? "active" : ""} onClick={() => setDashboardRange("today")}>Today</button><button className={dashboardRange === "week" ? "active" : ""} onClick={() => setDashboardRange("week")}>This week</button><button className={dashboardRange === "month" ? "active" : ""} onClick={() => setDashboardRange("month")}>This month</button><button className={dashboardRange === "lifetime" ? "active" : ""} onClick={() => setDashboardRange("lifetime")}>Lifetime</button></div>
@@ -1844,10 +1876,12 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                   <div><small>B&amp;W pages</small><strong>{printTotalsForRange.bwSingle + printTotalsForRange.bwDouble}</strong></div><div><small>Colour pages</small><strong>{printTotalsForRange.colourSingle + printTotalsForRange.colourDouble}</strong></div>
                 </div>
                 {adminRole === "OWNER" && <section className="admin-team-panel"><div><h3>Admin team &amp; access</h3><p>Owners have full access. Operations manages orders and riders; accountants view revenue and exports; support handles customer order queries.</p></div><div className="admin-team-form"><input type="email" value={newAdminMember.email} onChange={(event) => setNewAdminMember({ ...newAdminMember, email: event.target.value })} placeholder="team@printbee.co.in" /><select value={newAdminMember.role} onChange={(event) => setNewAdminMember({ ...newAdminMember, role: event.target.value })}><option value="OPERATIONS">Operations manager</option><option value="ACCOUNTANT">Accountant</option><option value="SUPPORT">Support</option><option value="OWNER">Owner</option></select><button disabled={!newAdminMember.email.trim()} onClick={saveAdminMember}>Add or update</button></div><div className="admin-team-list">{dashboard.adminMembers?.map((member: any) => <span key={member.email}><span><strong>{member.email}</strong><small>{String(member.role).replaceAll("_", " ")}</small></span>{member.email !== viewer?.email && <button onClick={() => removeAdminMember(member.email)}>Remove</button>}</span>)}</div></section>}
+                {dashboard.dailySales?.length ? <section className="sales-chart" aria-label="Paid sales during the last 30 days"><div className="sales-chart-heading"><span><strong>30-day sales trend</strong><small>Daily paid revenue and order volume</small></span><strong>{inr.format(dashboard.dailySales.reduce((sum: number, day: any) => sum + Number(day.revenue_paise || 0), 0) / 100)}</strong></div><div className="sales-bars">{dashboard.dailySales.map((day: any) => { const peak = Math.max(...dashboard.dailySales.map((entry: any) => Number(entry.revenue_paise) || 0), 1); return <div key={day.day} title={`${new Date(`${day.day}T00:00:00`).toLocaleDateString("en-IN")}: ${inr.format(day.revenue_paise / 100)}, ${day.orders} orders`}><i style={{ height: `${Math.max(5, Number(day.revenue_paise) / peak * 100)}%` }} /><small>{new Date(`${day.day}T00:00:00`).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}</small></div>; })}</div></section> : null}
+                </>}
+                {adminSection === "revenue" && <>
                 <div className="admin-divider" />
                 <h2 id="admin-revenue">Revenue</h2>
                 <p>Paid printing and fee revenue for the selected period.</p>
-                {dashboard.dailySales?.length ? <section className="sales-chart" aria-label="Paid sales during the last 30 days"><div className="sales-chart-heading"><span><strong>30-day sales trend</strong><small>Daily paid revenue and order volume</small></span><strong>{inr.format(dashboard.dailySales.reduce((sum: number, day: any) => sum + Number(day.revenue_paise || 0), 0) / 100)}</strong></div><div className="sales-bars">{dashboard.dailySales.map((day: any) => { const peak = Math.max(...dashboard.dailySales.map((entry: any) => Number(entry.revenue_paise) || 0), 1); return <div key={day.day} title={`${new Date(`${day.day}T00:00:00`).toLocaleDateString("en-IN")}: ${inr.format(day.revenue_paise / 100)}, ${day.orders} orders`}><i style={{ height: `${Math.max(5, Number(day.revenue_paise) / peak * 100)}%` }} /><small>{new Date(`${day.day}T00:00:00`).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}</small></div>; })}</div></section> : null}
                 <div className="metric-grid revenue-summary-grid">
                   <div><small>Colour prints</small><strong>{revenueTotals.colourPrints}</strong></div>
                   <div><small>Colour pages</small><strong>{revenueTotals.colourPages}</strong></div>
@@ -1872,8 +1906,13 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                     </div>
                   )) : <p>No locations added yet.</p>}
                 </div>
-                <h3 id="admin-riders">Pending rider applications</h3>
+                </>}
+                {adminSection === "riders" && <>
+                <h2 id="admin-riders">Rider approvals</h2>
+                <h3>Pending rider applications</h3>
                 <div className="application-list">{dashboard.riderApplications?.length ? dashboard.riderApplications.map((application: any) => <article key={application.email}><span><strong>{application.name}</strong><small>{application.email} · {application.mobile_number}</small></span><div><button onClick={() => approveRider(application.email, true)}>Approve</button><button className="reject" onClick={() => approveRider(application.email, false)}>Reject</button></div></article>) : <p>No rider applications awaiting review.</p>}</div>
+                </>}
+                {adminSection === "revenue" && <>
                 <h3>Active users</h3>
                 <p>Customers who have placed orders, sorted by latest activity.</p>
                 <div className="active-users">
@@ -1888,8 +1927,10 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                     <div className="revenue-head"><span>Order</span><span>Revenue</span><span>Delivery partner</span><span>Rider fee</span><span>Admin revenue</span></div>
                   {dashboard.revenueOrders?.length ? dashboard.revenueOrders.map((entry: any) => <article key={entry.order_number}><span><strong>{entry.order_number}</strong><small>{new Date(entry.created_at).toLocaleDateString("en-IN")}</small></span><strong>{inr.format(entry.revenue_paise / 100)}</strong><span><strong>{entry.rider_name}</strong><small>{entry.rider_email || "Awaiting assignment"}</small></span><strong>{inr.format(entry.rider_fee_paise / 100)}</strong><span><strong>{inr.format(entry.admin_revenue_paise / 100)}</strong><small>Print {inr.format(entry.printing_subtotal_paise / 100)} + packaging {inr.format((entry.packaging_fee_paise ?? 0) / 100)} + platform {inr.format(entry.platform_fee_paise / 100)} + 25% delivery</small></span></article>) : <p>No paid-order revenue yet.</p>}
                 </div>
+                </>}
+                {adminSection === "ledger" && <>
                 <section className="ledger-section" id="admin-ledger">
-                  <div className="ledger-heading"><div><span className="admin-badge">PASSWORD PROTECTED</span><h2>Business ledger</h2><p>Excel-style daily accounts calculated from all paid, visible orders.</p></div>{ledger && <div className="ledger-actions"><button className="download-ledger" onClick={() => downloadLedgerCsv(ledger)}>Download ledger</button><button onClick={async () => { await fetch("/api/admin/ledger", { method: "DELETE" }); setLedger(null); }}>Lock ledger</button></div>}</div>
+                  <div className="ledger-heading"><div><span className="admin-badge">PASSWORD PROTECTED</span><h2>Business ledger</h2><p>Excel-style daily accounts calculated from all paid, visible orders.</p></div>{ledger && <div className="ledger-actions"><button className="download-ledger" onClick={() => downloadLedgerCsv(ledger)}>Download ledger</button><button onClick={() => { void lockLedger(); }}>Lock ledger</button></div>}</div>
                   {!ledger ? <form className="ledger-lock" onSubmit={(event) => { event.preventDefault(); unlockLedger(); }}><label>Ledger password<input type="password" autoComplete="current-password" value={ledgerPassword} onChange={(event) => setLedgerPassword(event.target.value)} placeholder="Enter password" /></label><button disabled={!ledgerPassword}>Unlock ledger</button>{ledgerMessage && <p>{ledgerMessage}</p>}</form> : <>
                     <div className="ledger-summary">
                       <div><small>Amount collected</small><strong>{inr.format(ledger.totals.amountCollectedPaise / 100)}</strong></div><div><small>Operational cost</small><strong>{inr.format(ledger.totals.operationalCostPaise / 100)}</strong></div><div><small>Total profit</small><strong>{inr.format(ledger.totals.netProfitPaise / 100)}</strong></div><div><small>Bharat total</small><strong>{inr.format(ledger.totals.bharatTotalProfitPaise / 100)}</strong></div><div><small>Ramya total</small><strong>{inr.format(ledger.totals.ramyaTotalProfitPaise / 100)}</strong></div><div><small>Shares tally to</small><strong>{inr.format(ledger.totals.shareTallyPaise / 100)}</strong></div>
@@ -1902,6 +1943,8 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                     <h3>Order data</h3><div className="ledger-sheet ledger-orders"><table><thead><tr><th>Order number</th><th>Name</th><th>Mobile number</th><th>Order value</th><th>Date &amp; time</th><th>Email</th><th>Location</th><th>Status</th></tr></thead><tbody>{ledger.orders.map((order: any) => <tr key={order.order_number}><td>{order.order_number}</td><td>{order.customer_name}</td><td>{order.mobile_number}</td><td>{inr.format(order.total_paise / 100)}</td><td>{new Date(order.created_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}</td><td>{order.customer_email}</td><td>{order.location_name}</td><td>{String(order.status).replaceAll("_", " ")}</td></tr>)}</tbody></table></div>
                   </>}
                 </section>
+                </>}
+                {adminSection === "orders" && <>
                 <div className="order-export-panel">
                   <div><h3>Export orders</h3><p>Download a PDF containing visible orders only. Hidden orders are excluded.</p></div>
                   <div className="export-actions">
@@ -1912,6 +1955,8 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                     <button disabled={exporting || !exportFrom || !exportTo} onClick={() => exportOrdersPdf("custom")}>{exporting ? "Creating PDF..." : "Export custom PDF"}</button>
                   </div>
                 </div>
+                </>}
+                {adminSection === "riders" && <>
                 <h3>Rider performance</h3>
                 <div className="rider-stats">{dashboard.riders?.length ? dashboard.riders.map((rider: any) => <div key={rider.email}><span><b>{rider.name || "Delivery partner"}</b><small>{rider.email} · {rider.mobile_number || "No mobile"}</small><small>{rider.delivered ?? 0} successful rides · {rider.assigned ?? 0} assigned</small></span><strong>{inr.format((rider.earned_paise ?? 0) / 100)}<small>Total earned</small></strong><button className="remove-rider" onClick={() => removeRider(rider.email)}>Remove partner</button></div>) : <p>No riders added yet.</p>}</div>
                 <div className="payout-panel">
@@ -1929,7 +1974,9 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                 <h3>Rider withdrawal requests</h3>
                 <p>Review the UPI ID and move each request through the payout flow.</p>
                 <div className="withdrawal-admin">{dashboard.riderWithdrawals?.length ? dashboard.riderWithdrawals.map((withdrawal: any) => <article className={withdrawal.status === "SENT" ? "payout-complete" : ""} key={withdrawal.id}><span><strong>{withdrawal.rider_email}</strong><small>UPI: {withdrawal.upi_id}</small><small>Requested {new Date(withdrawal.requested_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}</small></span><strong>{inr.format(withdrawal.amount_paise / 100)}</strong>{withdrawal.status === "SENT" ? <span className="payout-done"><b>✓ Action done</b><small>Money sent to bank</small></span> : <select value={withdrawal.status} onChange={(e) => updateWithdrawalStatus(withdrawal.id, e.target.value)}><option value="REQUESTED">Withdraw requested</option><option value="IN_PROGRESS">In progress</option><option value="SENT">Amount sent to bank</option></select>}</article>) : <p>No withdrawal requests yet.</p>}</div>
-                <h3 id="admin-orders">Live orders <small className="live-refresh">● Live · refreshes every 5 seconds</small></h3>
+                </>}
+                {adminSection === "orders" && <>
+                <h2 id="admin-orders">Live orders <small className="live-refresh">● Live · refreshes every 5 seconds</small></h2>
                 <div className="admin-order-toolbar"><label>Search orders<input value={adminOrderSearch} onChange={(event) => setAdminOrderSearch(event.target.value)} placeholder="Order, customer, phone, email, location or rider" /></label><label>Status<select value={adminOrderStatus} onChange={(event) => setAdminOrderStatus(event.target.value)}><option value="ALL">All statuses</option><option value="CONFIRMED">Confirmed</option><option value="PRINTING">Printing</option><option value="READY_FOR_PICKUP">Ready for pickup</option><option value="RIDER_ASSIGNED">Rider assigned</option><option value="DELIVERED">Delivered</option><option value="CANCELLED">Cancelled</option></select></label><span><strong>{visibleAdminOrders.length}</strong><small>matching orders</small></span></div>
                 <div className="orders-table-head"><span>Order &amp; documents</span><span>Payment QR</span><span>Status</span><span>Delivery partner</span><span>Earnings</span><span>Export</span></div>
                 <div className="admin-orders">{visibleAdminOrders.length ? visibleAdminOrders.map((order: any) => (
@@ -1994,6 +2041,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                     <span><small>Hidden {new Date(order.hidden_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}</small><button onClick={() => setOrderHidden(order.id, false)}>Restore order</button><button className="delete-order-action" onClick={() => deleteOrder(order)}>Delete this order</button></span>
                   </article>
                 )) : <p>No hidden orders.</p>}</div>
+                </>}
               </div>
             )}
             <small className="admin-note">Print services and A4 prices are shared with all customers.</small>
