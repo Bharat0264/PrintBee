@@ -207,6 +207,35 @@ function revenueSummary(orders: any[] = [], fallbackPrices: Prices) {
   return totals;
 }
 
+function downloadLedgerCsv(ledger: any) {
+  const safeCell = (value: unknown) => {
+    let text = String(value ?? "");
+    if (/^[=+\-@]/.test(text)) text = `'${text}`;
+    return `"${text.replaceAll('"', '""')}"`;
+  };
+  const rupees = (paise: unknown) => (Number(paise) / 100).toFixed(2);
+  const ledgerHeaders = ["Date", "No. of orders", "B/W pages printed", "B/W revenue (INR)", "B/W operational cost (INR)", "B/W profit (INR)", "Colour pages printed", "Colour revenue (INR)", "Colour operational cost (INR)", "Colour profit (INR)", "Total revenue (INR)", "Total profit (INR)", "Bharat printing share 35% (INR)", "Ramya printing share 65% (INR)", "Admin delivery profit 25% (INR)", "Platform fee revenue (INR)", "Packing profit (INR)", "Bharat total profit (INR)"];
+  const ledgerRow = (row: any, date: string) => [date, row.orders, row.bwPages, rupees(row.bwRevenuePaise), rupees(row.bwCostPaise), rupees(row.bwProfitPaise), row.colourPages, rupees(row.colourRevenuePaise), rupees(row.colourCostPaise), rupees(row.colourProfitPaise), rupees(row.totalRevenuePaise), rupees(row.totalProfitPaise), rupees(row.bharatPrintingSharePaise), rupees(row.ramyaPrintingSharePaise), rupees(row.deliveryProfitPaise), rupees(row.platformRevenuePaise), rupees(row.packingProfitPaise), rupees(row.bharatTotalProfitPaise)];
+  const rows: unknown[][] = [
+    ["PrintBee ledger — all paid orders through", new Date().toLocaleString("en-IN")],
+    [],
+    ledgerHeaders,
+    ...ledger.daily.map((row: any) => ledgerRow(row, row.date)),
+    ledgerRow(ledger.totals, "GRAND TOTAL"),
+    [],
+    ["ORDER DATA"],
+    ["Order number", "Name", "Mobile number", "Order value (INR)", "Date and time", "Email", "Location", "Status"],
+    ...ledger.orders.map((order: any) => [order.order_number, order.customer_name, order.mobile_number, rupees(order.total_paise), new Date(order.created_at).toLocaleString("en-IN"), order.customer_email, order.location_name, String(order.status).replaceAll("_", " ")]),
+  ];
+  const blob = new Blob(["\uFEFF", rows.map((row) => row.map(safeCell).join(",")).join("\r\n")], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `printbee-ledger-through-${new Date().toISOString().slice(0, 10)}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 type CartItem = {
   kind?: "PRINT" | "ADDON";
   addonId?: string;
@@ -1843,7 +1872,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                   {dashboard.revenueOrders?.length ? dashboard.revenueOrders.map((entry: any) => <article key={entry.order_number}><span><strong>{entry.order_number}</strong><small>{new Date(entry.created_at).toLocaleDateString("en-IN")}</small></span><strong>{inr.format(entry.revenue_paise / 100)}</strong><span><strong>{entry.rider_name}</strong><small>{entry.rider_email || "Awaiting assignment"}</small></span><strong>{inr.format(entry.rider_fee_paise / 100)}</strong><span><strong>{inr.format(entry.admin_revenue_paise / 100)}</strong><small>Print {inr.format(entry.printing_subtotal_paise / 100)} + packaging {inr.format((entry.packaging_fee_paise ?? 0) / 100)} + platform {inr.format(entry.platform_fee_paise / 100)} + 25% delivery</small></span></article>) : <p>No paid-order revenue yet.</p>}
                 </div>
                 <section className="ledger-section" id="admin-ledger">
-                  <div className="ledger-heading"><div><span className="admin-badge">PASSWORD PROTECTED</span><h2>Business ledger</h2><p>Excel-style daily accounts calculated from all paid, visible orders.</p></div>{ledger && <button onClick={async () => { await fetch("/api/admin/ledger", { method: "DELETE" }); setLedger(null); }}>Lock ledger</button>}</div>
+                  <div className="ledger-heading"><div><span className="admin-badge">PASSWORD PROTECTED</span><h2>Business ledger</h2><p>Excel-style daily accounts calculated from all paid, visible orders.</p></div>{ledger && <div className="ledger-actions"><button className="download-ledger" onClick={() => downloadLedgerCsv(ledger)}>Download ledger</button><button onClick={async () => { await fetch("/api/admin/ledger", { method: "DELETE" }); setLedger(null); }}>Lock ledger</button></div>}</div>
                   {!ledger ? <form className="ledger-lock" onSubmit={(event) => { event.preventDefault(); unlockLedger(); }}><label>Ledger password<input type="password" autoComplete="current-password" value={ledgerPassword} onChange={(event) => setLedgerPassword(event.target.value)} placeholder="Enter password" /></label><button disabled={!ledgerPassword}>Unlock ledger</button>{ledgerMessage && <p>{ledgerMessage}</p>}</form> : <>
                     <div className="ledger-summary">
                       <div><small>Total printing profit</small><strong>{inr.format(ledger.totals.printingProfitPaise / 100)}</strong></div><div><small>Admin delivery profit (25%)</small><strong>{inr.format(ledger.totals.deliveryProfitPaise / 100)}</strong></div><div><small>Platform fee revenue</small><strong>{inr.format(ledger.totals.platformRevenuePaise / 100)}</strong></div><div><small>Packing profit</small><strong>{inr.format(ledger.totals.packingProfitPaise / 100)}</strong></div><div><small>Bharat total profit</small><strong>{inr.format(ledger.totals.bharatTotalProfitPaise / 100)}</strong></div><div><small>Ramya printing share</small><strong>{inr.format(ledger.totals.ramyaPrintingSharePaise / 100)}</strong></div>

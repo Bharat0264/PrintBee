@@ -672,7 +672,9 @@ footer { border-top: 1px solid var(--line); padding: 28px max(24px, calc((100% -
 .ledger-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
 .ledger-heading h2 { margin: 8px 0 4px; }
 .ledger-heading p { margin: 0 0 18px; color: var(--muted); }
-.ledger-heading > button, .ledger-lock button { border: 0; border-radius: 9px; padding: 11px 15px; background: var(--ink); color: white; font-weight: 900; }
+.ledger-heading button, .ledger-lock button { border: 0; border-radius: 9px; padding: 11px 15px; background: var(--ink); color: white; font-weight: 900; }
+.ledger-actions { display: flex; gap: 8px; }
+.ledger-actions .download-ledger { background: var(--yellow); color: var(--ink); }
 .ledger-lock { max-width: 430px; display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 10px; padding: 20px; border-radius: 12px; background: white; }
 .ledger-lock label { color: var(--muted); font-size: 9px; font-weight: 900; }
 .ledger-lock input { width: 100%; display: block; margin-top: 6px; border: 1px solid var(--line); border-radius: 8px; padding: 11px; }
@@ -690,7 +692,7 @@ footer { border-top: 1px solid var(--line); padding: 28px max(24px, calc((100% -
 .ledger-sheet thead th { position: sticky; top: 0; background: #25282e; color: white; font-size: 8px; letter-spacing: .3px; text-transform: uppercase; }
 .ledger-sheet tbody tr:nth-child(even) { background: #faf9f6; }
 .ledger-sheet tfoot th { background: var(--yellow); color: var(--ink); }
-@media (max-width: 700px) { .ledger-section { padding: 14px; } .ledger-summary { grid-template-columns: 1fr 1fr; } .ledger-lock { grid-template-columns: 1fr; } }
+@media (max-width: 700px) { .ledger-section { padding: 14px; } .ledger-heading { flex-direction: column; } .ledger-actions { width: 100%; } .ledger-actions button { flex: 1; } .ledger-summary { grid-template-columns: 1fr 1fr; } .ledger-lock { grid-template-columns: 1fr; } }
 .document-details .print-summary { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; border: 0; padding: 0 0 9px; }
 .document-details .print-summary span { padding: 7px; border-radius: 6px; background: #eceae4; font-size: 9px; }
 .compact-order-details { padding: 8px; }
