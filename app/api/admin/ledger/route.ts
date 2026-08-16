@@ -82,14 +82,14 @@ function finish(values: LedgerValues) {
   const packagingCostPaise = values.packagingCollectedPaise - packagingProfitPaise;
   const operationalCostPaise = printingOperationalCostPaise + values.riderCostPaise + packagingCostPaise + values.gatewayCollectedPaise;
   const netProfitPaise = values.amountCollectedPaise - operationalCostPaise;
-  const sharedProfitPaise = printingProfitPaise + serviceRevenuePaise + values.addonRevenuePaise;
-  const bharatSharedProfitPaise = Math.round(sharedProfitPaise * 0.35);
-  const ramyaSharedProfitPaise = sharedProfitPaise - bharatSharedProfitPaise;
-  const adminDirectProfitPaise = deliveryProfitPaise + values.platformCollectedPaise + values.surgeCollectedPaise + values.lateNightCollectedPaise - values.pointsDiscountPaise;
-  const bharatPackingProfitPaise = packagingProfitPaise;
-  const bharatTotalProfitPaise = bharatSharedProfitPaise + bharatPackingProfitPaise + adminDirectProfitPaise;
-  const ramyaTotalProfitPaise = ramyaSharedProfitPaise;
-  return { ...values, bwProfitPaise, colourProfitPaise, printingRevenuePaise, serviceRevenuePaise, printingOperationalCostPaise, printingProfitPaise, addonProfitPaise: values.addonRevenuePaise, deliveryProfitPaise, packagingCostPaise, packagingProfitPaise, operationalCostPaise, netProfitPaise, sharedProfitPaise, bharatSharedProfitPaise, ramyaSharedProfitPaise, adminDirectProfitPaise, bharatPackingProfitPaise, bharatTotalProfitPaise, ramyaTotalProfitPaise, shareTallyPaise: bharatTotalProfitPaise + ramyaTotalProfitPaise };
+  // Ramya shares only the profit earned from printing. All other revenue belongs to Bharat.
+  const ramyaPrintingProfitPaise = Math.round(printingProfitPaise * 0.65);
+  const bharatPrintingProfitPaise = printingProfitPaise - ramyaPrintingProfitPaise;
+  // Delivery profit is exactly the 25% retained after the delivery partner receives 75%.
+  const bharatOtherProfitPaise = serviceRevenuePaise + values.addonRevenuePaise + deliveryProfitPaise + values.platformCollectedPaise + packagingProfitPaise + values.surgeCollectedPaise + values.lateNightCollectedPaise - values.pointsDiscountPaise;
+  const bharatTotalProfitPaise = bharatPrintingProfitPaise + bharatOtherProfitPaise;
+  const ramyaTotalProfitPaise = ramyaPrintingProfitPaise;
+  return { ...values, bwProfitPaise, colourProfitPaise, printingRevenuePaise, serviceRevenuePaise, printingOperationalCostPaise, printingProfitPaise, addonProfitPaise: values.addonRevenuePaise, deliveryProfitPaise, packagingCostPaise, packagingProfitPaise, operationalCostPaise, netProfitPaise, bharatPrintingProfitPaise, bharatOtherProfitPaise, ramyaPrintingProfitPaise, bharatTotalProfitPaise, ramyaTotalProfitPaise, shareTallyPaise: bharatTotalProfitPaise + ramyaTotalProfitPaise };
 }
 
 function addValues(target: LedgerValues, source: LedgerValues) {
