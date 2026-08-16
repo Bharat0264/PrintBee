@@ -315,7 +315,10 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   const [notificationMessage, setNotificationMessage] = useState("");
   const [notificationToast, setNotificationToast] = useState<{ title: string; body: string } | null>(null);
   const [notificationPromptOpen, setNotificationPromptOpen] = useState(false);
-  const [adminSection, setAdminSection] = useState<"dashboard" | "revenue" | "orders" | "locations" | "riders" | "services">("dashboard");
+  const [adminSection, setAdminSection] = useState<"dashboard" | "revenue" | "ledger" | "orders" | "locations" | "riders" | "services">("dashboard");
+  const [ledgerPassword, setLedgerPassword] = useState("");
+  const [ledger, setLedger] = useState<any>(null);
+  const [ledgerMessage, setLedgerMessage] = useState("");
   const [dashboardRange, setDashboardRange] = useState<"today" | "week" | "month" | "lifetime">("today");
   const [adminOrderSearch, setAdminOrderSearch] = useState("");
   const [adminOrderStatus, setAdminOrderStatus] = useState("ALL");
@@ -1108,6 +1111,28 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
     if (response.ok) { setDashboard(await response.json()); setAdminPage(page); }
   };
 
+  const openLedger = async () => {
+    setAdminSection("ledger");
+    setLedgerMessage("");
+    let response = await fetch("/api/admin/ledger", { cache: "no-store" });
+    if (response.ok) {
+      setLedger(await response.json());
+      window.setTimeout(() => document.getElementById("admin-ledger")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
+      return;
+    }
+    window.setTimeout(() => document.getElementById("admin-ledger")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
+  };
+
+  const unlockLedger = async () => {
+    setLedgerMessage("");
+    const response = await fetch("/api/admin/ledger", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password: ledgerPassword }) });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) { setLedgerMessage(result.error ?? "Ledger could not be unlocked"); return; }
+    setLedgerPassword("");
+    const dataResponse = await fetch("/api/admin/ledger", { cache: "no-store" });
+    if (dataResponse.ok) setLedger(await dataResponse.json());
+  };
+
   const updateOrderStatus = async (orderId: string, status: string) => {
     await fetch("/api/admin/orders/status", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ orderId, status }) });
     await openAdminDashboard();
@@ -1698,7 +1723,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
           <section className="admin-modal admin-portal" role="dialog" aria-modal="true" aria-labelledby="admin-title" onMouseDown={(e) => e.stopPropagation()}>
             <aside className="admin-sidebar">
               <div className="admin-sidebar-brand"><img src="/printbee-logo.png" alt="" /><strong>PrintBee Admin</strong></div>
-              {([["dashboard", "Dashboard", "⌂"], ["revenue", "Revenue", "₹"], ["orders", "Orders", "▤"], ["locations", "Locations", "⌖"], ["riders", "Rider approvals", "♙"], ["services", "Print services", "＋"]] as const).map(([id, label, icon]) => <button key={id} className={adminSection === id ? "active" : ""} onClick={() => { setAdminSection(id); window.setTimeout(() => document.getElementById(`admin-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" }), 0); }}><span>{icon}</span>{label}{id === "orders" && <b>{dashboard?.orders?.length ?? 0}</b>}</button>)}
+              {([["dashboard", "Dashboard", "⌂"], ["revenue", "Revenue", "₹"], ["ledger", "Ledger", "▦"], ["orders", "Orders", "▤"], ["locations", "Locations", "⌖"], ["riders", "Rider approvals", "♙"], ["services", "Print services", "＋"]] as const).map(([id, label, icon]) => <button key={id} className={adminSection === id ? "active" : ""} onClick={() => id === "ledger" ? openLedger() : (setAdminSection(id), window.setTimeout(() => document.getElementById(`admin-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" }), 0))}><span>{icon}</span>{label}{id === "orders" && <b>{dashboard?.orders?.length ?? 0}</b>}</button>)}
               {notificationPermission !== "granted" && <button onClick={enableNotifications}><span>♬</span>Enable order alerts</button>}
               {notificationPermission === "granted" && <button onClick={testNotifications}><span>♬</span>Test sound + banner</button>}
               <button className="admin-sidebar-exit" onClick={() => setAdminOpen(false)}>← Back to website</button>
@@ -1814,9 +1839,19 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                 <h3>Revenue by order</h3>
                 <p>Paid order revenue, rider earnings, and PrintBee revenue per order.</p>
                 <div className="revenue-table">
-                  <div className="revenue-head"><span>Order</span><span>Revenue</span><span>Delivery partner</span><span>Rider fee</span><span>Admin revenue</span></div>
-                  {dashboard.revenueOrders?.length ? dashboard.revenueOrders.map((entry: any) => <article key={entry.order_number}><span><strong>{entry.order_number}</strong><small>{new Date(entry.created_at).toLocaleDateString("en-IN")}</small></span><strong>{inr.format(entry.revenue_paise / 100)}</strong><span><strong>{entry.rider_name}</strong><small>{entry.rider_email || "Awaiting assignment"}</small></span><strong>{inr.format(entry.rider_fee_paise / 100)}</strong><span><strong>{inr.format(entry.admin_revenue_paise / 100)}</strong><small>Print {inr.format(entry.printing_subtotal_paise / 100)} + packaging {inr.format((entry.packaging_fee_paise ?? 0) / 100)} + platform {inr.format(entry.platform_fee_paise / 100)} + 20% delivery</small></span></article>) : <p>No paid-order revenue yet.</p>}
+                    <div className="revenue-head"><span>Order</span><span>Revenue</span><span>Delivery partner</span><span>Rider fee</span><span>Admin revenue</span></div>
+                  {dashboard.revenueOrders?.length ? dashboard.revenueOrders.map((entry: any) => <article key={entry.order_number}><span><strong>{entry.order_number}</strong><small>{new Date(entry.created_at).toLocaleDateString("en-IN")}</small></span><strong>{inr.format(entry.revenue_paise / 100)}</strong><span><strong>{entry.rider_name}</strong><small>{entry.rider_email || "Awaiting assignment"}</small></span><strong>{inr.format(entry.rider_fee_paise / 100)}</strong><span><strong>{inr.format(entry.admin_revenue_paise / 100)}</strong><small>Print {inr.format(entry.printing_subtotal_paise / 100)} + packaging {inr.format((entry.packaging_fee_paise ?? 0) / 100)} + platform {inr.format(entry.platform_fee_paise / 100)} + 25% delivery</small></span></article>) : <p>No paid-order revenue yet.</p>}
                 </div>
+                <section className="ledger-section" id="admin-ledger">
+                  <div className="ledger-heading"><div><span className="admin-badge">PASSWORD PROTECTED</span><h2>Business ledger</h2><p>Excel-style daily accounts calculated from all paid, visible orders.</p></div>{ledger && <button onClick={async () => { await fetch("/api/admin/ledger", { method: "DELETE" }); setLedger(null); }}>Lock ledger</button>}</div>
+                  {!ledger ? <form className="ledger-lock" onSubmit={(event) => { event.preventDefault(); unlockLedger(); }}><label>Ledger password<input type="password" autoComplete="current-password" value={ledgerPassword} onChange={(event) => setLedgerPassword(event.target.value)} placeholder="Enter password" /></label><button disabled={!ledgerPassword}>Unlock ledger</button>{ledgerMessage && <p>{ledgerMessage}</p>}</form> : <>
+                    <div className="ledger-summary">
+                      <div><small>Total printing profit</small><strong>{inr.format(ledger.totals.printingProfitPaise / 100)}</strong></div><div><small>Admin delivery profit (25%)</small><strong>{inr.format(ledger.totals.deliveryProfitPaise / 100)}</strong></div><div><small>Platform fee revenue</small><strong>{inr.format(ledger.totals.platformRevenuePaise / 100)}</strong></div><div><small>Packing profit</small><strong>{inr.format(ledger.totals.packingProfitPaise / 100)}</strong></div><div><small>Bharat total profit</small><strong>{inr.format(ledger.totals.bharatTotalProfitPaise / 100)}</strong></div><div><small>Ramya printing share</small><strong>{inr.format(ledger.totals.ramyaPrintingSharePaise / 100)}</strong></div>
+                    </div>
+                    <div className="ledger-sheet"><table><thead><tr><th>Date</th><th>Orders</th><th>B/W pages</th><th>B/W revenue</th><th>B/W op. cost</th><th>B/W profit</th><th>Colour pages</th><th>Colour revenue</th><th>Colour op. cost</th><th>Colour profit</th><th>Total revenue</th><th>Total profit</th><th>Bharat print 35%</th><th>Ramya print 65%</th><th>Admin delivery 25%</th><th>Platform fee</th><th>Packing profit</th><th>Bharat total</th></tr></thead><tbody>{ledger.daily.map((row: any) => <tr key={row.date}><td>{new Date(`${row.date}T00:00:00`).toLocaleDateString("en-IN")}</td><td>{row.orders}</td><td>{row.bwPages}</td><td>{inr.format(row.bwRevenuePaise / 100)}</td><td>{inr.format(row.bwCostPaise / 100)}</td><td>{inr.format(row.bwProfitPaise / 100)}</td><td>{row.colourPages}</td><td>{inr.format(row.colourRevenuePaise / 100)}</td><td>{inr.format(row.colourCostPaise / 100)}</td><td>{inr.format(row.colourProfitPaise / 100)}</td><td>{inr.format(row.totalRevenuePaise / 100)}</td><td>{inr.format(row.totalProfitPaise / 100)}</td><td>{inr.format(row.bharatPrintingSharePaise / 100)}</td><td>{inr.format(row.ramyaPrintingSharePaise / 100)}</td><td>{inr.format(row.deliveryProfitPaise / 100)}</td><td>{inr.format(row.platformRevenuePaise / 100)}</td><td>{inr.format(row.packingProfitPaise / 100)}</td><td>{inr.format(row.bharatTotalProfitPaise / 100)}</td></tr>)}</tbody><tfoot><tr><th>Grand total</th><th>{ledger.totals.orders}</th><th>{ledger.totals.bwPages}</th><th>{inr.format(ledger.totals.bwRevenuePaise / 100)}</th><th>{inr.format(ledger.totals.bwCostPaise / 100)}</th><th>{inr.format(ledger.totals.bwProfitPaise / 100)}</th><th>{ledger.totals.colourPages}</th><th>{inr.format(ledger.totals.colourRevenuePaise / 100)}</th><th>{inr.format(ledger.totals.colourCostPaise / 100)}</th><th>{inr.format(ledger.totals.colourProfitPaise / 100)}</th><th>{inr.format(ledger.totals.totalRevenuePaise / 100)}</th><th>{inr.format(ledger.totals.totalProfitPaise / 100)}</th><th>{inr.format(ledger.totals.bharatPrintingSharePaise / 100)}</th><th>{inr.format(ledger.totals.ramyaPrintingSharePaise / 100)}</th><th>{inr.format(ledger.totals.deliveryProfitPaise / 100)}</th><th>{inr.format(ledger.totals.platformRevenuePaise / 100)}</th><th>{inr.format(ledger.totals.packingProfitPaise / 100)}</th><th>{inr.format(ledger.totals.bharatTotalProfitPaise / 100)}</th></tr></tfoot></table></div>
+                    <h3>Order data</h3><div className="ledger-sheet ledger-orders"><table><thead><tr><th>Order number</th><th>Name</th><th>Mobile number</th><th>Order value</th><th>Date &amp; time</th><th>Email</th><th>Location</th><th>Status</th></tr></thead><tbody>{ledger.orders.map((order: any) => <tr key={order.order_number}><td>{order.order_number}</td><td>{order.customer_name}</td><td>{order.mobile_number}</td><td>{inr.format(order.total_paise / 100)}</td><td>{new Date(order.created_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}</td><td>{order.customer_email}</td><td>{order.location_name}</td><td>{String(order.status).replaceAll("_", " ")}</td></tr>)}</tbody></table></div>
+                  </>}
+                </section>
                 <div className="order-export-panel">
                   <div><h3>Export orders</h3><p>Download a PDF containing visible orders only. Hidden orders are excluded.</p></div>
                   <div className="export-actions">

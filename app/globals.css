@@ -668,6 +668,29 @@ footer { border-top: 1px solid var(--line); padding: 28px max(24px, calc((100% -
 .revenue-table article span strong, .revenue-table article span small { display: block; }
 .revenue-table article small { margin-top: 4px; color: var(--muted); font-size: 8px; line-height: 1.35; }
 .revenue-table article > strong:last-of-type, .revenue-table article > span:last-child > strong { color: #17633a; }
+.ledger-section { margin: 34px 0; padding: 22px; border: 1px solid #d8d5ca; border-radius: 16px; background: #f9f8f4; scroll-margin-top: 20px; }
+.ledger-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
+.ledger-heading h2 { margin: 8px 0 4px; }
+.ledger-heading p { margin: 0 0 18px; color: var(--muted); }
+.ledger-heading > button, .ledger-lock button { border: 0; border-radius: 9px; padding: 11px 15px; background: var(--ink); color: white; font-weight: 900; }
+.ledger-lock { max-width: 430px; display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 10px; padding: 20px; border-radius: 12px; background: white; }
+.ledger-lock label { color: var(--muted); font-size: 9px; font-weight: 900; }
+.ledger-lock input { width: 100%; display: block; margin-top: 6px; border: 1px solid var(--line); border-radius: 8px; padding: 11px; }
+.ledger-lock p { grid-column: 1 / -1; margin: 0; color: #a02020; font-size: 10px; font-weight: 800; }
+.ledger-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 9px; margin-bottom: 16px; }
+.ledger-summary div { padding: 15px; border: 1px solid var(--line); border-radius: 10px; background: white; }
+.ledger-summary small, .ledger-summary strong { display: block; }
+.ledger-summary small { color: var(--muted); font-size: 9px; }
+.ledger-summary strong { margin-top: 5px; font-size: 18px; }
+.ledger-sheet { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: white; }
+.ledger-sheet table { min-width: 2600px; border-collapse: collapse; font-size: 9px; white-space: nowrap; }
+.ledger-orders table { min-width: 1250px; }
+.ledger-sheet th, .ledger-sheet td { padding: 10px 12px; border-right: 1px solid #e6e4dd; border-bottom: 1px solid #e6e4dd; text-align: right; }
+.ledger-sheet th:first-child, .ledger-sheet td:first-child, .ledger-orders th, .ledger-orders td { text-align: left; }
+.ledger-sheet thead th { position: sticky; top: 0; background: #25282e; color: white; font-size: 8px; letter-spacing: .3px; text-transform: uppercase; }
+.ledger-sheet tbody tr:nth-child(even) { background: #faf9f6; }
+.ledger-sheet tfoot th { background: var(--yellow); color: var(--ink); }
+@media (max-width: 700px) { .ledger-section { padding: 14px; } .ledger-summary { grid-template-columns: 1fr 1fr; } .ledger-lock { grid-template-columns: 1fr; } }
 .document-details .print-summary { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; border: 0; padding: 0 0 9px; }
 .document-details .print-summary span { padding: 7px; border-radius: 6px; background: #eceae4; font-size: 9px; }
 .compact-order-details { padding: 8px; }
