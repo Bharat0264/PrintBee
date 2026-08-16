@@ -684,6 +684,7 @@ footer { border-top: 1px solid var(--line); padding: 28px max(24px, calc((100% -
 .ledger-summary small, .ledger-summary strong { display: block; }
 .ledger-summary small { color: var(--muted); font-size: 9px; }
 .ledger-summary strong { margin-top: 5px; font-size: 18px; }
+.ledger-note { margin: -6px 0 16px; color: var(--muted); font-size: 12px; }
 .ledger-sheet { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: white; }
 .ledger-sheet table { min-width: 2600px; border-collapse: collapse; font-size: 9px; white-space: nowrap; }
 .ledger-orders table { min-width: 1250px; }

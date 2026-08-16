@@ -214,14 +214,18 @@ function downloadLedgerCsv(ledger: any) {
     return `"${text.replaceAll('"', '""')}"`;
   };
   const rupees = (paise: unknown) => (Number(paise) / 100).toFixed(2);
-  const ledgerHeaders = ["Date", "No. of orders", "B/W pages printed", "B/W revenue (INR)", "B/W operational cost (INR)", "B/W profit (INR)", "Colour pages printed", "Colour revenue (INR)", "Colour operational cost (INR)", "Colour profit (INR)", "Total revenue (INR)", "Total profit (INR)", "Bharat printing share 35% (INR)", "Ramya printing share 65% (INR)", "Admin delivery profit 25% (INR)", "Platform fee revenue (INR)", "Packing profit (INR)", "Bharat total profit (INR)"];
-  const ledgerRow = (row: any, date: string) => [date, row.orders, row.bwPages, rupees(row.bwRevenuePaise), rupees(row.bwCostPaise), rupees(row.bwProfitPaise), row.colourPages, rupees(row.colourRevenuePaise), rupees(row.colourCostPaise), rupees(row.colourProfitPaise), rupees(row.totalRevenuePaise), rupees(row.totalProfitPaise), rupees(row.bharatPrintingSharePaise), rupees(row.ramyaPrintingSharePaise), rupees(row.deliveryProfitPaise), rupees(row.platformRevenuePaise), rupees(row.packingProfitPaise), rupees(row.bharatTotalProfitPaise)];
+  const ledgerHeaders = ["Date / order", "Orders", "Collected (INR)", "Printing revenue", "Printing operational cost", "Printing profit", "Service revenue", "Add-ons revenue", "Delivery collected", "Delivery partner fee", "Delivery profit", "Platform fee", "Packing revenue", "Packing cost", "Packing profit", "Gateway fee/cost", "Surge", "Late-night", "Points discount", "Total operational cost", "Total profit", "Bharat 35% shared profit", "Admin direct profit", "Bharat total", "Ramya 65% shared profit", "Share tally"];
+  const ledgerRow = (row: any, label: string) => [label, row.orders, rupees(row.amountCollectedPaise), rupees(row.printingRevenuePaise), rupees(row.printingOperationalCostPaise), rupees(row.printingProfitPaise), rupees(row.serviceRevenuePaise), rupees(row.addonRevenuePaise), rupees(row.deliveryCollectedPaise), rupees(row.riderCostPaise), rupees(row.deliveryProfitPaise), rupees(row.platformCollectedPaise), rupees(row.packagingCollectedPaise), rupees(row.packagingCostPaise), rupees(row.packagingProfitPaise), rupees(row.gatewayCollectedPaise), rupees(row.surgeCollectedPaise), rupees(row.lateNightCollectedPaise), rupees(row.pointsDiscountPaise), rupees(row.operationalCostPaise), rupees(row.netProfitPaise), rupees(row.bharatSharedProfitPaise), rupees(row.adminDirectProfitPaise), rupees(row.bharatTotalProfitPaise), rupees(row.ramyaTotalProfitPaise), rupees(row.shareTallyPaise)];
   const rows: unknown[][] = [
     ["PrintBee ledger — all paid orders through", new Date().toLocaleString("en-IN")],
     [],
     ledgerHeaders,
     ...ledger.daily.map((row: any) => ledgerRow(row, row.date)),
     ledgerRow(ledger.totals, "GRAND TOTAL"),
+    [],
+    ["ORDER-BY-ORDER FINANCIAL BREAKDOWN"],
+    ledgerHeaders,
+    ...ledger.orders.map((order: any) => ledgerRow(order, order.order_number)),
     [],
     ["ORDER DATA"],
     ["Order number", "Name", "Mobile number", "Order value (INR)", "Date and time", "Email", "Location", "Status"],
@@ -234,6 +238,19 @@ function downloadLedgerCsv(ledger: any) {
   link.download = `printbee-ledger-through-${new Date().toISOString().slice(0, 10)}.csv`;
   link.click();
   URL.revokeObjectURL(url);
+}
+
+const ledgerFinancialColumns = [
+  ["Collected", "amountCollectedPaise"], ["Printing revenue", "printingRevenuePaise"], ["Printing op. cost", "printingOperationalCostPaise"], ["Printing profit", "printingProfitPaise"],
+  ["Service/additional revenue", "serviceRevenuePaise"], ["Add-ons revenue / profit", "addonRevenuePaise"], ["Delivery collected", "deliveryCollectedPaise"], ["Delivery partner fee", "riderCostPaise"],
+  ["Delivery profit", "deliveryProfitPaise"], ["Platform fee", "platformCollectedPaise"], ["Packing revenue", "packagingCollectedPaise"], ["Packing cost", "packagingCostPaise"], ["Packing profit", "packagingProfitPaise"],
+  ["Gateway fee / cost", "gatewayCollectedPaise"], ["Surge", "surgeCollectedPaise"], ["Late-night", "lateNightCollectedPaise"], ["Points discount", "pointsDiscountPaise"], ["Total op. cost", "operationalCostPaise"],
+  ["Total profit", "netProfitPaise"], ["Bharat 35% shared", "bharatSharedProfitPaise"], ["Admin direct profit", "adminDirectProfitPaise"], ["Bharat total", "bharatTotalProfitPaise"], ["Ramya 65% shared", "ramyaTotalProfitPaise"], ["Share tally", "shareTallyPaise"],
+] as const;
+
+function LedgerFinancialTable({ rows, total, orderView = false }: { rows: any[]; total?: any; orderView?: boolean }) {
+  const label = (row: any) => orderView ? row.order_number : new Date(`${row.date}T00:00:00`).toLocaleDateString("en-IN");
+  return <div className="ledger-sheet"><table><thead><tr><th>{orderView ? "Order" : "Date"}</th>{!orderView && <th>Orders</th>}{ledgerFinancialColumns.map(([title]) => <th key={title}>{title}</th>)}</tr></thead><tbody>{rows.map((row) => <tr key={orderView ? row.order_number : row.date}><td>{label(row)}</td>{!orderView && <td>{row.orders}</td>}{ledgerFinancialColumns.map(([title, key]) => <td key={title}>{inr.format((Number(row[key]) || 0) / 100)}</td>)}</tr>)}</tbody>{total && <tfoot><tr><th>Grand total</th><th>{total.orders}</th>{ledgerFinancialColumns.map(([title, key]) => <th key={title}>{inr.format((Number(total[key]) || 0) / 100)}</th>)}</tr></tfoot>}</table></div>;
 }
 
 type CartItem = {
@@ -1425,7 +1442,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   const pointsDiscount = usePoints ? Math.floor(redeemablePoints * 100 / 15) / 100 : 0;
   const revenueNow = new Date();
   const revenueStart = dashboardRange === "today" ? new Date(revenueNow.getFullYear(), revenueNow.getMonth(), revenueNow.getDate()) : dashboardRange === "week" ? new Date(revenueNow.getFullYear(), revenueNow.getMonth(), revenueNow.getDate() - 6) : dashboardRange === "month" ? new Date(revenueNow.getFullYear(), revenueNow.getMonth(), 1) : null;
-  const dashboardOrdersForRange = (dashboard?.orders ?? []).filter((order: any) => !revenueStart || new Date(order.created_at) >= revenueStart);
+  const dashboardOrdersForRange = (dashboard?.summaryOrders ?? dashboard?.orders ?? []).filter((order: any) => !revenueStart || new Date(order.created_at) >= revenueStart);
   const paidDashboardOrdersForRange = dashboardOrdersForRange.filter((order: any) => order.payment_status === "PAID");
   const revenueTotals = revenueSummary(paidDashboardOrdersForRange, prices);
   const dashboardSummaryForRange = {
@@ -1875,9 +1892,13 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                   <div className="ledger-heading"><div><span className="admin-badge">PASSWORD PROTECTED</span><h2>Business ledger</h2><p>Excel-style daily accounts calculated from all paid, visible orders.</p></div>{ledger && <div className="ledger-actions"><button className="download-ledger" onClick={() => downloadLedgerCsv(ledger)}>Download ledger</button><button onClick={async () => { await fetch("/api/admin/ledger", { method: "DELETE" }); setLedger(null); }}>Lock ledger</button></div>}</div>
                   {!ledger ? <form className="ledger-lock" onSubmit={(event) => { event.preventDefault(); unlockLedger(); }}><label>Ledger password<input type="password" autoComplete="current-password" value={ledgerPassword} onChange={(event) => setLedgerPassword(event.target.value)} placeholder="Enter password" /></label><button disabled={!ledgerPassword}>Unlock ledger</button>{ledgerMessage && <p>{ledgerMessage}</p>}</form> : <>
                     <div className="ledger-summary">
-                      <div><small>Total printing profit</small><strong>{inr.format(ledger.totals.printingProfitPaise / 100)}</strong></div><div><small>Admin delivery profit (25%)</small><strong>{inr.format(ledger.totals.deliveryProfitPaise / 100)}</strong></div><div><small>Platform fee revenue</small><strong>{inr.format(ledger.totals.platformRevenuePaise / 100)}</strong></div><div><small>Packing profit</small><strong>{inr.format(ledger.totals.packingProfitPaise / 100)}</strong></div><div><small>Bharat total profit</small><strong>{inr.format(ledger.totals.bharatTotalProfitPaise / 100)}</strong></div><div><small>Ramya printing share</small><strong>{inr.format(ledger.totals.ramyaPrintingSharePaise / 100)}</strong></div>
+                      <div><small>Amount collected</small><strong>{inr.format(ledger.totals.amountCollectedPaise / 100)}</strong></div><div><small>Operational cost</small><strong>{inr.format(ledger.totals.operationalCostPaise / 100)}</strong></div><div><small>Total profit</small><strong>{inr.format(ledger.totals.netProfitPaise / 100)}</strong></div><div><small>Bharat total</small><strong>{inr.format(ledger.totals.bharatTotalProfitPaise / 100)}</strong></div><div><small>Ramya total</small><strong>{inr.format(ledger.totals.ramyaTotalProfitPaise / 100)}</strong></div><div><small>Shares tally to</small><strong>{inr.format(ledger.totals.shareTallyPaise / 100)}</strong></div>
                     </div>
-                    <div className="ledger-sheet"><table><thead><tr><th>Date</th><th>Orders</th><th>B/W pages</th><th>B/W revenue</th><th>B/W op. cost</th><th>B/W profit</th><th>Colour pages</th><th>Colour revenue</th><th>Colour op. cost</th><th>Colour profit</th><th>Total revenue</th><th>Total profit</th><th>Bharat print 35%</th><th>Ramya print 65%</th><th>Admin delivery 25%</th><th>Platform fee</th><th>Packing profit</th><th>Bharat total</th></tr></thead><tbody>{ledger.daily.map((row: any) => <tr key={row.date}><td>{new Date(`${row.date}T00:00:00`).toLocaleDateString("en-IN")}</td><td>{row.orders}</td><td>{row.bwPages}</td><td>{inr.format(row.bwRevenuePaise / 100)}</td><td>{inr.format(row.bwCostPaise / 100)}</td><td>{inr.format(row.bwProfitPaise / 100)}</td><td>{row.colourPages}</td><td>{inr.format(row.colourRevenuePaise / 100)}</td><td>{inr.format(row.colourCostPaise / 100)}</td><td>{inr.format(row.colourProfitPaise / 100)}</td><td>{inr.format(row.totalRevenuePaise / 100)}</td><td>{inr.format(row.totalProfitPaise / 100)}</td><td>{inr.format(row.bharatPrintingSharePaise / 100)}</td><td>{inr.format(row.ramyaPrintingSharePaise / 100)}</td><td>{inr.format(row.deliveryProfitPaise / 100)}</td><td>{inr.format(row.platformRevenuePaise / 100)}</td><td>{inr.format(row.packingProfitPaise / 100)}</td><td>{inr.format(row.bharatTotalProfitPaise / 100)}</td></tr>)}</tbody><tfoot><tr><th>Grand total</th><th>{ledger.totals.orders}</th><th>{ledger.totals.bwPages}</th><th>{inr.format(ledger.totals.bwRevenuePaise / 100)}</th><th>{inr.format(ledger.totals.bwCostPaise / 100)}</th><th>{inr.format(ledger.totals.bwProfitPaise / 100)}</th><th>{ledger.totals.colourPages}</th><th>{inr.format(ledger.totals.colourRevenuePaise / 100)}</th><th>{inr.format(ledger.totals.colourCostPaise / 100)}</th><th>{inr.format(ledger.totals.colourProfitPaise / 100)}</th><th>{inr.format(ledger.totals.totalRevenuePaise / 100)}</th><th>{inr.format(ledger.totals.totalProfitPaise / 100)}</th><th>{inr.format(ledger.totals.bharatPrintingSharePaise / 100)}</th><th>{inr.format(ledger.totals.ramyaPrintingSharePaise / 100)}</th><th>{inr.format(ledger.totals.deliveryProfitPaise / 100)}</th><th>{inr.format(ledger.totals.platformRevenuePaise / 100)}</th><th>{inr.format(ledger.totals.packingProfitPaise / 100)}</th><th>{inr.format(ledger.totals.bharatTotalProfitPaise / 100)}</th></tr></tfoot></table></div>
+                    <p className="ledger-note">Every row reconciles collected amount to costs and profit. Shared printing, service, add-on and packing profit is divided Bharat 35% / Ramya 65%; delivery profit, platform, surge and late-night profit remain with admin. Discounts reduce admin direct profit.</p>
+                    <h3>Daily financial breakdown</h3>
+                    <LedgerFinancialTable rows={ledger.daily} total={ledger.totals} />
+                    <h3>Order-by-order financial breakdown</h3>
+                    <LedgerFinancialTable rows={ledger.orders} orderView />
                     <h3>Order data</h3><div className="ledger-sheet ledger-orders"><table><thead><tr><th>Order number</th><th>Name</th><th>Mobile number</th><th>Order value</th><th>Date &amp; time</th><th>Email</th><th>Location</th><th>Status</th></tr></thead><tbody>{ledger.orders.map((order: any) => <tr key={order.order_number}><td>{order.order_number}</td><td>{order.customer_name}</td><td>{order.mobile_number}</td><td>{inr.format(order.total_paise / 100)}</td><td>{new Date(order.created_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}</td><td>{order.customer_email}</td><td>{order.location_name}</td><td>{String(order.status).replaceAll("_", " ")}</td></tr>)}</tbody></table></div>
                   </>}
                 </section>

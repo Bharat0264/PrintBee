@@ -26,17 +26,30 @@ type LedgerValues = {
   colourPages: number;
   colourRevenuePaise: number;
   colourCostPaise: number;
-  deliveryProfitPaise: number;
-  platformRevenuePaise: number;
-  packingProfitPaise: number;
+  addonRevenuePaise: number;
+  packagingOrders: number;
+  amountCollectedPaise: number;
+  printingCollectedPaise: number;
+  deliveryCollectedPaise: number;
+  platformCollectedPaise: number;
+  packagingCollectedPaise: number;
+  gatewayCollectedPaise: number;
+  surgeCollectedPaise: number;
+  lateNightCollectedPaise: number;
+  pointsDiscountPaise: number;
+  riderCostPaise: number;
 };
 
 function emptyValues(): LedgerValues {
-  return { orders: 0, bwPages: 0, bwRevenuePaise: 0, bwCostPaise: 0, colourPages: 0, colourRevenuePaise: 0, colourCostPaise: 0, deliveryProfitPaise: 0, platformRevenuePaise: 0, packingProfitPaise: 0 };
+  return { orders: 0, bwPages: 0, bwRevenuePaise: 0, bwCostPaise: 0, colourPages: 0, colourRevenuePaise: 0, colourCostPaise: 0, addonRevenuePaise: 0, packagingOrders: 0, amountCollectedPaise: 0, printingCollectedPaise: 0, deliveryCollectedPaise: 0, platformCollectedPaise: 0, packagingCollectedPaise: 0, gatewayCollectedPaise: 0, surgeCollectedPaise: 0, lateNightCollectedPaise: 0, pointsDiscountPaise: 0, riderCostPaise: 0 };
 }
 
 function addItem(values: LedgerValues, item: any) {
-  if (item?.kind === "ADDON") return;
+  if (item?.kind === "ADDON") {
+    values.addonRevenuePaise += Math.round((Number(item?.total ?? item?.addonsTotal) || 0) * 100);
+    return;
+  }
+  values.addonRevenuePaise += Math.round((Number(item?.addonsTotal) || 0) * 100);
   const pages = Math.max(1, Number(item?.pages) || 1);
   const copies = Math.max(1, Number(item?.copies) || 1);
   const isDouble = String(item?.mode || "").endsWith("double");
@@ -60,13 +73,26 @@ function addItem(values: LedgerValues, item: any) {
 function finish(values: LedgerValues) {
   const bwProfitPaise = values.bwRevenuePaise - values.bwCostPaise;
   const colourProfitPaise = values.colourRevenuePaise - values.colourCostPaise;
-  const printingProfitPaise = bwProfitPaise + colourProfitPaise;
-  const totalRevenuePaise = values.bwRevenuePaise + values.colourRevenuePaise + values.deliveryProfitPaise + values.platformRevenuePaise + values.packingProfitPaise;
-  const totalProfitPaise = printingProfitPaise + values.deliveryProfitPaise + values.platformRevenuePaise + values.packingProfitPaise;
-  const bharatPrintingSharePaise = Math.round(printingProfitPaise * 0.35);
-  const ramyaPrintingSharePaise = printingProfitPaise - bharatPrintingSharePaise;
-  const bharatPackingSharePaise = Math.round(values.packingProfitPaise * 0.35);
-  return { ...values, bwProfitPaise, colourProfitPaise, printingProfitPaise, totalRevenuePaise, totalProfitPaise, bharatPrintingSharePaise, ramyaPrintingSharePaise, bharatTotalProfitPaise: bharatPrintingSharePaise + values.deliveryProfitPaise + values.platformRevenuePaise + bharatPackingSharePaise };
+  const printingRevenuePaise = values.bwRevenuePaise + values.colourRevenuePaise;
+  const serviceRevenuePaise = values.printingCollectedPaise - printingRevenuePaise - values.addonRevenuePaise;
+  const printingOperationalCostPaise = values.bwCostPaise + values.colourCostPaise;
+  const printingProfitPaise = printingRevenuePaise - printingOperationalCostPaise;
+  const deliveryProfitPaise = values.deliveryCollectedPaise - values.riderCostPaise;
+  const packagingProfitPaise = Math.min(values.packagingCollectedPaise, values.packagingOrders * 170);
+  const packagingCostPaise = values.packagingCollectedPaise - packagingProfitPaise;
+  const operationalCostPaise = printingOperationalCostPaise + values.riderCostPaise + packagingCostPaise + values.gatewayCollectedPaise;
+  const netProfitPaise = values.amountCollectedPaise - operationalCostPaise;
+  const sharedProfitPaise = printingProfitPaise + serviceRevenuePaise + values.addonRevenuePaise + packagingProfitPaise;
+  const bharatSharedProfitPaise = Math.round(sharedProfitPaise * 0.35);
+  const ramyaSharedProfitPaise = sharedProfitPaise - bharatSharedProfitPaise;
+  const adminDirectProfitPaise = deliveryProfitPaise + values.platformCollectedPaise + values.surgeCollectedPaise + values.lateNightCollectedPaise - values.pointsDiscountPaise;
+  const bharatTotalProfitPaise = bharatSharedProfitPaise + adminDirectProfitPaise;
+  const ramyaTotalProfitPaise = ramyaSharedProfitPaise;
+  return { ...values, bwProfitPaise, colourProfitPaise, printingRevenuePaise, serviceRevenuePaise, printingOperationalCostPaise, printingProfitPaise, addonProfitPaise: values.addonRevenuePaise, deliveryProfitPaise, packagingCostPaise, packagingProfitPaise, operationalCostPaise, netProfitPaise, sharedProfitPaise, bharatSharedProfitPaise, ramyaSharedProfitPaise, adminDirectProfitPaise, bharatTotalProfitPaise, ramyaTotalProfitPaise, shareTallyPaise: bharatTotalProfitPaise + ramyaTotalProfitPaise };
+}
+
+function addValues(target: LedgerValues, source: LedgerValues) {
+  for (const key of Object.keys(target) as Array<keyof LedgerValues>) target[key] += source[key];
 }
 
 export async function POST(request: Request) {
@@ -87,30 +113,37 @@ export async function DELETE() {
 
 export async function GET() {
   if (!(await requireLedgerAccess())) return NextResponse.json({ error: "Ledger password required" }, { status: 401 });
-  const result = await database().prepare(`SELECT order_number,customer_name,mobile_number,customer_email,location_name,items_json,printing_subtotal_paise,delivery_fee_paise,platform_fee_paise,packaging_fee_paise,total_paise,status,created_at FROM orders WHERE payment_status='PAID' AND hidden_at IS NULL ORDER BY created_at DESC`).all<any>();
+  const result = await database().prepare(`SELECT order_number,customer_name,mobile_number,customer_email,location_name,items_json,printing_subtotal_paise,delivery_fee_paise,platform_fee_paise,packaging_fee_paise,payment_gateway_fee_paise,surge_fee_paise,late_night_fee_paise,points_discount_paise,total_paise,status,created_at FROM orders WHERE payment_status='PAID' AND hidden_at IS NULL ORDER BY created_at DESC`).all<any>();
   const days = new Map<string, LedgerValues>();
   const totals = emptyValues();
+  const orderBreakdowns: any[] = [];
   for (const order of result.results) {
     const day = String(order.created_at).slice(0, 10);
     const daily = days.get(day) ?? emptyValues();
-    daily.orders += 1;
-    totals.orders += 1;
-    const deliveryProfit = Math.round((Number(order.delivery_fee_paise) || 0) * 0.25);
-    const platformRevenue = Number(order.platform_fee_paise) || 0;
-    const packingProfit = Number(order.packaging_fee_paise) > 0 ? 170 : 0;
-    for (const bucket of [daily, totals]) {
-      bucket.deliveryProfitPaise += deliveryProfit;
-      bucket.platformRevenuePaise += platformRevenue;
-      bucket.packingProfitPaise += packingProfit;
-    }
+    const values = emptyValues();
+    values.orders = 1;
+    values.amountCollectedPaise = Number(order.total_paise) || 0;
+    values.printingCollectedPaise = Number(order.printing_subtotal_paise) || 0;
+    values.deliveryCollectedPaise = Number(order.delivery_fee_paise) || 0;
+    values.platformCollectedPaise = Number(order.platform_fee_paise) || 0;
+    values.packagingCollectedPaise = Number(order.packaging_fee_paise) || 0;
+    values.packagingOrders = values.packagingCollectedPaise > 0 ? 1 : 0;
+    values.gatewayCollectedPaise = Number(order.payment_gateway_fee_paise) || 0;
+    values.surgeCollectedPaise = Number(order.surge_fee_paise) || 0;
+    values.lateNightCollectedPaise = Number(order.late_night_fee_paise) || 0;
+    values.pointsDiscountPaise = Number(order.points_discount_paise) || 0;
+    values.riderCostPaise = Math.floor(values.deliveryCollectedPaise * 0.75);
     let items: any[] = [];
     try { const parsed = JSON.parse(order.items_json || "[]"); if (Array.isArray(parsed)) items = parsed; } catch {}
-    for (const item of items) { addItem(daily, item); addItem(totals, item); }
+    for (const item of items) addItem(values, item);
+    addValues(daily, values);
+    addValues(totals, values);
     days.set(day, daily);
+    orderBreakdowns.push({ ...order, ...finish(values) });
   }
   return NextResponse.json({
     totals: finish(totals),
     daily: Array.from(days, ([date, values]) => ({ date, ...finish(values) })).sort((a, b) => b.date.localeCompare(a.date)),
-    orders: result.results.map(({ items_json, ...order }) => order),
+    orders: orderBreakdowns.map(({ items_json, ...order }) => order),
   });
 }
