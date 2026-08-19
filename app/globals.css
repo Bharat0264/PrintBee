@@ -460,6 +460,7 @@ footer { border-top: 1px solid var(--line); padding: 28px max(24px, calc((100% -
 .skip-feedback { width: 100%; margin-top: 8px; border: 0; background: transparent; color: var(--muted); font-weight: 700; }
 .availability-control { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 .availability-control span { color: var(--muted); font-size: 10px; font-weight: 800; }
+.availability-control a { border: 1px solid #d8b33c; border-radius: 8px; padding: 9px 11px; background: var(--yellow); color: var(--ink); font-size: 10px; font-weight: 900; text-decoration: none; }
 .availability-control button.available { background: #168345; }
 .availability-control .availability-toggle { display: inline-flex; align-items: center; gap: 7px; min-width: 78px; padding: 5px 9px 5px 5px; border-radius: 999px; background: #9b3a2c; }
 .availability-control .availability-toggle i { display: block; width: 22px; height: 22px; border-radius: 50%; background: white; transition: transform .2s ease; }

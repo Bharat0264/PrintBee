@@ -354,6 +354,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   const [myOrders, setMyOrders] = useState<any[]>([]);
   const [appQr, setAppQr] = useState("");
   const [riderOrders, setRiderOrders] = useState<any[]>([]);
+  const [riderStoreLocation, setRiderStoreLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [riderEarnings, setRiderEarnings] = useState<any>(null);
   const [withdrawUpi, setWithdrawUpi] = useState("");
   const [saved, setSaved] = useState(false);
@@ -1449,7 +1450,11 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   };
 
   const loadRiderOrders = async () => {
-    const response = await fetch("/api/rider/orders");
+    const [response, storeResponse] = await Promise.all([fetch("/api/rider/orders"), fetch("/api/rider/store-location")]);
+    if (storeResponse.ok) {
+      const store = await storeResponse.json();
+      setRiderStoreLocation(store.latitude != null && store.longitude != null ? store : null);
+    }
     if (response.ok) {
       const orders = await response.json() as any[];
       setRiderOrders(orders);
@@ -1538,7 +1543,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
           </section>
         ) : (
           <div className="partner-dashboard">
-            <section className="partner-welcome"><div><div className="admin-badge">DELIVERY PARTNER</div><h1>Your delivery dashboard</h1><p>Only orders assigned to your account are shown here.</p></div><div className="availability-control"><span>Available for delivery</span><button role="switch" aria-checked={isRiderAvailable} className={`availability-toggle ${isRiderAvailable ? "available" : ""}`} onClick={() => setRiderAvailability(!isRiderAvailable)}><i /><b>{isRiderAvailable ? "YES" : "NO"}</b></button><button onClick={loadRiderOrders}>Refresh orders</button></div></section>
+            <section className="partner-welcome"><div><div className="admin-badge">DELIVERY PARTNER</div><h1>Your delivery dashboard</h1><p>Only orders assigned to your account are shown here.</p></div><div className="availability-control"><span>Available for delivery</span><button role="switch" aria-checked={isRiderAvailable} className={`availability-toggle ${isRiderAvailable ? "available" : ""}`} onClick={() => setRiderAvailability(!isRiderAvailable)}><i /><b>{isRiderAvailable ? "YES" : "NO"}</b></button>{riderStoreLocation && <a href={`https://www.google.com/maps/dir/?api=1&destination=${riderStoreLocation.latitude},${riderStoreLocation.longitude}`} target="_blank" rel="noreferrer">Navigate to store</a>}<button onClick={loadRiderOrders}>Refresh orders</button></div></section>
             {riderEarnings && <section className="partner-earnings">
               <div><small>Successful rides</small><strong>{riderEarnings.totalRides}</strong></div><div><small>Total earnings</small><strong>{inr.format(riderEarnings.earnedPaise / 100)}</strong></div><div><small>Available balance</small><strong>{inr.format(riderEarnings.availablePaise / 100)}</strong></div>
               <p>You earn 75% of the delivery fee for each OTP-verified delivery.</p>
