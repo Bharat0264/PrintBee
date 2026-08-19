@@ -847,11 +847,12 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
     navigator.geolocation.getCurrentPosition(async (position) => {
       const coordinates = { latitude: position.coords.latitude, longitude: position.coords.longitude, accuracy: position.coords.accuracy };
       setCustomerCoordinates(coordinates);
-      if (coordinates.accuracy > 100) setLocationMessage("Your location may not be very accurate. Please enable precise location or move to an open area and try again.");
+      if (coordinates.accuracy > 500) setLocationMessage("Your location may not be very accurate. Please enable precise location or move to an open area and try again.");
       const response = await fetch("/api/delivery/calculate-fee", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(coordinates) });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) return setLocationMessage(data.error ?? "We could not calculate the delivery fee.");
       setCalculatedDeliveryFee(Number(data.deliveryFee));
+      if (coordinates.accuracy <= 500) setLocationMessage("");
     }, () => setLocationMessage("We need your current location to prepare delivery."), { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
   };
 
