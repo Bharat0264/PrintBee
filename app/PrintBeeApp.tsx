@@ -330,7 +330,8 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   const [locations, setLocations] = useState<LocationOption[]>([]);
   const [customerName, setCustomerName] = useState("");
   const [mobileNumber, setMobileNumber] = useState("");
-  const [locationId, setLocationId] = useState("");
+  const [deliveryAddress, setDeliveryAddress] = useState("");
+  const [deliveryLandmark, setDeliveryLandmark] = useState("");
   const [customerCoordinates, setCustomerCoordinates] = useState<{ latitude: number; longitude: number; accuracy: number } | null>(null);
   const [calculatedDeliveryFee, setCalculatedDeliveryFee] = useState<number | null>(null);
   const [locationMessage, setLocationMessage] = useState("");
@@ -365,7 +366,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   const [notificationMessage, setNotificationMessage] = useState("");
   const [notificationToast, setNotificationToast] = useState<{ title: string; body: string } | null>(null);
   const [notificationPromptOpen, setNotificationPromptOpen] = useState(false);
-  const [adminSection, setAdminSection] = useState<"dashboard" | "revenue" | "ledger" | "orders" | "locations" | "riders" | "services">("dashboard");
+  const [adminSection, setAdminSection] = useState<"dashboard" | "revenue" | "ledger" | "orders" | "riders" | "services">("dashboard");
   const [ledgerPassword, setLedgerPassword] = useState("");
   const [ledger, setLedger] = useState<any>(null);
   const [ledgerMessage, setLedgerMessage] = useState("");
@@ -828,16 +829,8 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
     setLoginOpen(false);
   };
 
-  const loadLocations = async () => {
-    const response = await fetch("/api/locations");
-    const data = await response.json() as LocationOption[];
-    setLocations(data);
-    if (data.length && !locationId) setLocationId(data[0].id);
-  };
-
   const openCheckout = async () => {
     if (!viewer) return setLoginOpen(true);
-    await loadLocations();
     setCheckoutOpen(true);
   };
 
@@ -852,7 +845,10 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
       const data = await response.json().catch(() => ({}));
       if (!response.ok) return setLocationMessage(data.error ?? "We could not calculate the delivery fee.");
       setCalculatedDeliveryFee(Number(data.deliveryFee));
-      if (coordinates.accuracy <= 500) setLocationMessage("");
+      const addressResponse = await fetch(`/api/delivery/reverse-geocode?latitude=${encodeURIComponent(String(coordinates.latitude))}&longitude=${encodeURIComponent(String(coordinates.longitude))}`);
+      const addressData = await addressResponse.json().catch(() => ({}));
+      if (addressResponse.ok && addressData.address) setDeliveryAddress(addressData.address);
+      setLocationMessage(coordinates.accuracy > 500 ? "Your location may not be very accurate. Please enable precise location or move to an open area and try again." : addressResponse.ok ? "Address found. Please add or confirm your building / house number." : "Location found. Please enter your complete delivery address.");
     }, () => setLocationMessage("We need your current location to prepare delivery."), { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
   };
 
@@ -874,7 +870,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
       const response = await fetch("/api/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ customerName, mobileNumber, locationId, items: cart, totalPaise: Math.round(cartTotal * 100), usePoints, needsPackaging, ...customerCoordinates }),
+        body: JSON.stringify({ customerName, mobileNumber, deliveryAddress, deliveryLandmark, items: cart, totalPaise: Math.round(cartTotal * 100), usePoints, needsPackaging, ...customerCoordinates }),
       });
       const data = await response.json();
       if (!response.ok) return setOrderError(data.error ?? "Payment checkout could not be prepared");
@@ -1486,9 +1482,8 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
     setDeliveryOpen(true);
   };
 
-  const checkoutLocation = locations.find((location) => location.id === locationId);
   const checkoutDeliveryFee = calculatedDeliveryFee ?? 0;
-  const checkoutPlatformFee = (checkoutLocation?.platform_fee_paise ?? 350) / 100;
+  const checkoutPlatformFee = 3.5;
   const surgeBase = cartTotal + checkoutDeliveryFee + checkoutPlatformFee;
   const checkoutSurgeFee = surgeEnabled ? surgeType === "FIXED" ? surgeValue : surgeBase * surgeValue / 100 : 0;
   const checkoutLateNightFee = lateNightEnabled ? lateNightType === "FIXED" ? lateNightValue : surgeBase * lateNightValue / 100 : 0;
@@ -1549,7 +1544,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
               <div className="rider-order-earnings"><h3>Earnings by delivered order</h3>{riderEarnings.deliveredOrders?.length ? riderEarnings.deliveredOrders.map((order: any) => <article key={order.id}><span><b>{order.order_number}</b><small>{order.location_name} · {new Date(order.delivered_at).toLocaleDateString("en-IN")}</small></span><strong>{inr.format(order.earned_paise / 100)}<small>75% of {inr.format(order.delivery_fee_paise / 100)}</small></strong></article>) : <p>No completed delivery earnings yet.</p>}</div>
             </section>}
             <section className="assigned-orders"><div className="section-title"><div><h2>Assigned orders</h2><p>One rider can receive multiple orders, including several orders at the same location.</p></div><span>{riderOrders.length} active</span></div>
-              {riderOrders.length ? riderOrders.map((order) => <article key={order.order_number} className={deliveryOrderNumber === order.order_number ? "selected" : ""}><div><strong>{order.order_number}</strong><small>{order.location_name}</small></div><div><strong>{order.customer_name}</strong><small className="customer-phone">{order.mobile_number}</small></div><span className="status-chip">{order.payment_status === "PAID" ? "PAYMENT VERIFIED" : order.status}</span><div className="delivery-actions"><a href={`tel:${order.mobile_number}`} aria-label={`Call ${order.customer_name} at ${order.mobile_number}`}>Call customer</a><button onClick={() => { setDeliveryOrderNumber(order.order_number); setDeliveryCode(""); }}>{order.payment_status === "PAID" ? "Enter delivery OTP" : "Deliver & verify OTP"}</button><button className="reject-assignment" onClick={() => rejectRiderOrder(order.id)}>Reject assignment</button></div>{Boolean(order.has_payment_qr) && order.payment_status !== "PAID" && <div className="order-payment-qr"><div><strong>Collect {inr.format(order.total_paise / 100)}</strong><small>Show this scanner to the customer for pay on delivery. Tap the scanner to enlarge.</small></div><button className="scanner-expand-button" onClick={() => setExpandedScanner({ src: `/api/orders/${order.id}/payment-qr`, alt: `Payment scanner for ${order.order_number}` })}><img src={`/api/orders/${order.id}/payment-qr`} alt={`Payment scanner for ${order.order_number}`} /></button></div>}{order.payment_status === "PAID" && <div className="payment-cleared-note"><strong>Payment received and verified</strong><small>No payment scanner is required. Collect the customer OTP after handing over the order.</small></div>}</article>) : <div className="empty-partner-orders">No active orders are assigned to you.</div>}
+              {riderOrders.length ? riderOrders.map((order) => <article key={order.order_number} className={deliveryOrderNumber === order.order_number ? "selected" : ""}><div><strong>{order.order_number}</strong><small>{order.location_name}</small></div><div><strong>{order.customer_name}</strong><small className="customer-phone">{order.mobile_number}</small></div><span className="status-chip">{order.payment_status === "PAID" ? "PAYMENT VERIFIED" : order.status}</span><div className="delivery-actions"><a href={`tel:${order.mobile_number}`} aria-label={`Call ${order.customer_name} at ${order.mobile_number}`}>Call customer</a>{order.delivery_latitude != null && order.delivery_longitude != null && <a href={`https://www.google.com/maps/dir/?api=1&destination=${order.delivery_latitude},${order.delivery_longitude}`} target="_blank" rel="noreferrer">Navigate</a>}<button onClick={() => { setDeliveryOrderNumber(order.order_number); setDeliveryCode(""); }}>{order.payment_status === "PAID" ? "Enter delivery OTP" : "Deliver & verify OTP"}</button><button className="reject-assignment" onClick={() => rejectRiderOrder(order.id)}>Reject assignment</button></div>{Boolean(order.has_payment_qr) && order.payment_status !== "PAID" && <div className="order-payment-qr"><div><strong>Collect {inr.format(order.total_paise / 100)}</strong><small>Show this scanner to the customer for pay on delivery. Tap the scanner to enlarge.</small></div><button className="scanner-expand-button" onClick={() => setExpandedScanner({ src: `/api/orders/${order.id}/payment-qr`, alt: `Payment scanner for ${order.order_number}` })}><img src={`/api/orders/${order.id}/payment-qr`} alt={`Payment scanner for ${order.order_number}`} /></button></div>}{order.payment_status === "PAID" && <div className="payment-cleared-note"><strong>Payment received and verified</strong><small>No payment scanner is required. Collect the customer OTP after handing over the order.</small></div>}</article>) : <div className="empty-partner-orders">No active orders are assigned to you.</div>}
             </section>
             {deliveryOrderNumber && <section className="otp-verification"><div><div className="admin-badge">FINAL DELIVERY STEP</div><h2>Verify customer OTP</h2><p>Order <strong>{deliveryOrderNumber}</strong>. Hand over the prints first, then ask the customer for the six-digit OTP.</p></div><label>Customer OTP<input className="code-input" value={deliveryCode} onChange={(e) => setDeliveryCode(e.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="000000" inputMode="numeric" /></label><button disabled={deliveryCode.length !== 6} onClick={verifyDelivery}>Verify OTP & mark delivered</button></section>}
             {deliveryMessage && <p className="partner-message">{deliveryMessage}</p>}
@@ -1826,7 +1821,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
           <section className="admin-modal admin-portal" role="dialog" aria-modal="true" aria-labelledby="admin-title" onMouseDown={(e) => e.stopPropagation()}>
             <aside className="admin-sidebar">
               <div className="admin-sidebar-brand"><img src="/printbee-logo.png" alt="" /><strong>PrintBee Admin</strong></div>
-              {([["dashboard", "Dashboard", "⌂"], ["revenue", "Revenue", "₹"], ["ledger", "Ledger", "▦"], ["orders", "Orders", "▤"], ["locations", "Locations", "⌖"], ["riders", "Rider approvals", "♙"], ["services", "Print services", "＋"]] as const).map(([id, label, icon]) => <button key={id} className={adminSection === id ? "active" : ""} onClick={() => { void selectAdminSection(id); }}><span>{icon}</span>{label}{id === "orders" && <b>{dashboard?.orders?.length ?? 0}</b>}</button>)}
+              {([["dashboard", "Dashboard", "⌂"], ["revenue", "Revenue", "₹"], ["ledger", "Ledger", "▦"], ["orders", "Orders", "▤"], ["riders", "Rider approvals", "♙"], ["services", "Print services", "＋"]] as const).map(([id, label, icon]) => <button key={id} className={adminSection === id ? "active" : ""} onClick={() => { void selectAdminSection(id); }}><span>{icon}</span>{label}{id === "orders" && <b>{dashboard?.orders?.length ?? 0}</b>}</button>)}
               {notificationPermission !== "granted" && <button onClick={() => { if (ledger) void lockLedger(); void enableNotifications(); }}><span>♬</span>Enable order alerts</button>}
               {notificationPermission === "granted" && <button onClick={() => { if (ledger) void lockLedger(); void testNotifications(); }}><span>♬</span>Test sound + banner</button>}
               <button className="admin-sidebar-exit" onClick={() => { void closeAdminDashboard(); }}>← Back to website</button>
@@ -1880,16 +1875,6 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
               <div className="service-admin-form"><input value={newAddon.name} onChange={(e) => setNewAddon({ ...newAddon, name: e.target.value })} placeholder="Example: File folder" /><input maxLength={125} value={newAddon.description} onChange={(e) => setNewAddon({ ...newAddon, description: e.target.value })} placeholder="Description" /><label className="service-price-field">Fixed price (₹)<input type="number" min="0" step=".01" value={newAddon.price} onChange={(e) => setNewAddon({ ...newAddon, price: Math.max(0, Number(e.target.value)) })} /></label><button onClick={saveAddon}>{newAddon.id ? "Save add-on" : "Add product"}</button>{newAddon.id && <button className="secondary-button" onClick={() => setNewAddon({ id: "", name: "", description: "", price: 0 })}>Cancel</button>}</div>
               <div className="service-chips">{addons.map((addon) => <span key={addon.id}><b>{addon.name} · {inr.format(addon.price_paise / 100)}</b><small>{addon.description}</small><button onClick={() => setNewAddon({ id: addon.id, name: addon.name, description: addon.description, price: addon.price_paise / 100 })}>Edit</button><button onClick={() => removeAddon(addon.id)}>Remove</button></span>)}</div>
             </div>
-            </>}
-            {adminSection === "locations" && <>
-            <div className="admin-divider" />
-            <h3 id="admin-locations">Delivery locations</h3>
-            <div className="payment-instruction"><strong>Store location</strong><span>{storeLocation?.latitude != null ? "Store location configured" : "Store location must be configured before delivery orders can be accepted."}</span><button type="button" onClick={setCurrentStoreLocation}>{storeLocation?.latitude != null ? "Update Store Location" : "Set Current Store Location"}</button></div>
-            <p>Customers can select only locations added here.</p>
-            <div className="inline-admin-form"><input value={newLocation} onChange={(e) => setNewLocation(e.target.value)} placeholder="Example: Madhapur" /><button onClick={addLocation}>Add</button></div>
-            <h3>Delivery agents</h3>
-            <p>Add the Google email used by each delivery agent.</p>
-            <div className="inline-admin-form"><input value={agentEmail} onChange={(e) => setAgentEmail(e.target.value)} placeholder="agent@gmail.com" /><button onClick={addAgent}>Add</button></div>
             </>}
             {adminMessage && <p className="panel-message">{adminMessage}</p>}
             {dashboard && (
@@ -2104,14 +2089,13 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
               <>
                 <div className="admin-badge">CHECKOUT</div>
                 <h2 id="checkout-title">Delivery details</h2>
-                <p>Enter your details and select an admin-approved delivery location.</p>
-                <p className="delivery-location-note"><strong>Select the nearest delivery location and share your exact delivery location after a delivery partner is assigned.</strong></p>
+                <p>Share your current location, then confirm the delivery address below.</p>
                 <label className="checkout-field">Full name<input value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="Your full name" /></label>
                 <label className="checkout-field">Mobile number<input value={mobileNumber} onChange={(e) => setMobileNumber(e.target.value.replace(/\D/g, "").slice(0, 10))} placeholder="10-digit mobile number" inputMode="numeric" /></label>
-                <label className="checkout-field">Delivery location<select value={locationId} onChange={(e) => setLocationId(e.target.value)}><option value="">Select a location</option>{locations.map((location) => <option value={location.id} key={location.id}>{location.name}</option>)}</select></label>
                 <button type="button" className="save-button" onClick={useCurrentLocation}>Use My Current Location</button>
                 {locationMessage && <p className="panel-message">{locationMessage}</p>}
-                {!locations.length && <p className="panel-message">No delivery locations are available yet. The admin must add one first.</p>}
+                <label className="checkout-field">Building / house number and delivery address<textarea value={deliveryAddress} onChange={(e) => setDeliveryAddress(e.target.value)} placeholder="House / flat number, building, street and area" rows={3} /></label>
+                <label className="checkout-field">Landmark (optional)<input value={deliveryLandmark} onChange={(e) => setDeliveryLandmark(e.target.value)} placeholder="Near a shop, gate or landmark" /></label>
                 {packagingEnabled && <button type="button" className={`packaging-choice ${needsPackaging ? "selected" : ""}`} aria-pressed={needsPackaging} onClick={() => setNeedsPackaging((current) => !current)}><span><strong>Need packaging for this order?</strong><small>Add protective packaging for {inr.format(packagingFee)}.</small></span><b>{needsPackaging ? "✓ Added" : "Add"}</b></button>}
                 <div className="fee-breakdown"><div><span>Printing subtotal</span><strong>{inr.format(cartPrintingTotal)}</strong></div>{cartServiceCharges > 0 && <div className="binding-charge-row"><span>Service charges</span><strong>{inr.format(cartServiceCharges)}</strong></div>}{cartAddonCharges > 0 && <div className="binding-charge-row"><span>Add-ons</span><strong>{inr.format(cartAddonCharges)}</strong></div>}<div><span>Delivery fee</span><strong>{inr.format(checkoutDeliveryFee)}</strong></div><div><span>Platform fee</span><strong>{inr.format(checkoutPlatformFee)}</strong></div>{needsPackaging && packagingEnabled && <div className="packaging-charge-row"><span>Packaging fee</span><strong>{inr.format(checkoutPackagingFee)}</strong></div>}{surgeEnabled && <div className="surge-charge-row"><span>High-demand surge charge</span><strong>{inr.format(checkoutSurgeFee)}</strong></div>}{lateNightEnabled && <div className="surge-charge-row"><span>Late-night delivery fee</span><strong>{inr.format(checkoutLateNightFee)}</strong></div>}{gatewayEnabled && <div><span>Payment gateway fee</span><strong>{inr.format(checkoutGatewayFee)}</strong></div>}{pointsDiscount > 0 && <div className="points-discount-row"><span>Points discount ({redeemablePoints} points)</span><strong>−{inr.format(pointsDiscount)}</strong></div>}</div>
                 <button type="button" className={`wallet-balance-button ${usePoints ? "selected" : ""}`} disabled={redeemablePoints < 1} onClick={() => setUsePoints((current) => !current)}><span className="wallet-icon">₹</span><span><strong>{usePoints ? "Wallet applied" : "Use wallet balance"}</strong><small>{pointsBalance} points · worth {inr.format(pointsBalance / 15)} · every point is redeemable</small></span><b>{usePoints ? "✓" : "Use"}</b></button>
@@ -2119,7 +2103,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                 <div className="points-earned-preview"><span>◉</span><div><strong>You’ll earn {Math.floor(Math.max(0, checkoutBeforePoints - pointsDiscount) / 10)} wallet points</strong><small>Credited after this order is successfully delivered.</small></div></div>
                 <div className="pay-on-delivery-note"><strong>Secure online payment:</strong> After creating the order, complete payment through Razorpay. Printing begins only after verified payment.</div>
                 {orderError && <p className="form-error">{orderError}</p>}
-                <button className="save-button" disabled={!locations.length || !customerCoordinates || calculatedDeliveryFee === null || paymentProcessing} onClick={placeOrder}>{paymentProcessing ? "Starting Razorpay..." : "Pay now"}</button>
+                <button className="save-button" disabled={!deliveryAddress.trim() || !customerCoordinates || calculatedDeliveryFee === null || paymentProcessing} onClick={placeOrder}>{paymentProcessing ? "Starting Razorpay..." : "Pay now"}</button>
               </>
             )}
           </section>

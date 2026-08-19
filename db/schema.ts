@@ -89,6 +89,8 @@ export const orders = sqliteTable("orders", {
   deliveryLatitude: real("delivery_latitude"),
   deliveryLongitude: real("delivery_longitude"),
   deliveryAccuracy: real("delivery_accuracy"),
+  deliveryAddress: text("delivery_address"),
+  deliveryLandmark: text("delivery_landmark"),
   deliveryCapturedAt: text("delivery_captured_at"),
   deliveryDistanceMeters: integer("delivery_distance_meters"),
   storeLatitude: real("store_latitude"),
