@@ -328,6 +328,8 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   const [lateNightType, setLateNightType] = useState<"PERCENT" | "FIXED">("PERCENT");
   const [lateNightValue, setLateNightValue] = useState(0);
   const [platformFee, setPlatformFee] = useState(3.5);
+  const [baseDeliveryFee, setBaseDeliveryFee] = useState(10);
+  const [deliveryFeePer100Meters, setDeliveryFeePer100Meters] = useState(1);
   const [locations, setLocations] = useState<LocationOption[]>([]);
   const [customerName, setCustomerName] = useState("");
   const [mobileNumber, setMobileNumber] = useState("");
@@ -414,7 +416,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
     return () => { window.clearInterval(refresh); window.removeEventListener("focus", refreshOnFocus); };
   }, []);
 
-  useEffect(() => { fetch("/api/fee-settings", { cache: "no-store" }).then((r) => r.ok ? r.json() : {}).then((data) => { if (typeof data.gatewayEnabled === "boolean") setGatewayEnabled(data.gatewayEnabled); setSurgeEnabled(Boolean(data.surgeEnabled)); setSurgeType(data.surgeType === "FIXED" ? "FIXED" : "PERCENT"); setSurgeValue(Number(data.surgeValue) || 0); setLateNightEnabled(Boolean(data.lateNightEnabled)); setLateNightType(data.lateNightType === "FIXED" ? "FIXED" : "PERCENT"); setLateNightValue(Number(data.lateNightValue) || 0); setPlatformFee(Math.max(0, Number(data.platformFee) || 0)); setPackagingEnabled(Boolean(data.packagingEnabled)); setPackagingFee(Math.max(0, Number(data.packagingFee) || 0)); }).catch(() => {}); }, []);
+  useEffect(() => { fetch("/api/fee-settings", { cache: "no-store" }).then((r) => r.ok ? r.json() : {}).then((data) => { if (typeof data.gatewayEnabled === "boolean") setGatewayEnabled(data.gatewayEnabled); setSurgeEnabled(Boolean(data.surgeEnabled)); setSurgeType(data.surgeType === "FIXED" ? "FIXED" : "PERCENT"); setSurgeValue(Number(data.surgeValue) || 0); setLateNightEnabled(Boolean(data.lateNightEnabled)); setLateNightType(data.lateNightType === "FIXED" ? "FIXED" : "PERCENT"); setLateNightValue(Number(data.lateNightValue) || 0); setPlatformFee(Math.max(0, Number(data.platformFee) || 0)); setBaseDeliveryFee(Math.max(0, Number(data.baseDeliveryFee) || 0)); setDeliveryFeePer100Meters(Math.max(0, Number(data.deliveryFeePer100Meters) || 0)); setPackagingEnabled(Boolean(data.packagingEnabled)); setPackagingFee(Math.max(0, Number(data.packagingFee) || 0)); }).catch(() => {}); }, []);
 
   useEffect(() => {
     const loadAvailability = async () => {
@@ -781,12 +783,12 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
     seconds: Math.floor((countdownMs % 60000) / 1000),
   };
 
-  const saveFeeSettings = async (updates: Partial<{ gatewayEnabled: boolean; surgeEnabled: boolean; surgeType: "PERCENT" | "FIXED"; surgeValue: number; lateNightEnabled: boolean; lateNightType: "PERCENT" | "FIXED"; lateNightValue: number; platformFee: number; packagingEnabled: boolean; packagingFee: number }> = {}) => {
-    const settings = { gatewayEnabled, surgeEnabled, surgeType, surgeValue, lateNightEnabled, lateNightType, lateNightValue, platformFee, packagingEnabled, packagingFee, ...updates };
+  const saveFeeSettings = async (updates: Partial<{ gatewayEnabled: boolean; surgeEnabled: boolean; surgeType: "PERCENT" | "FIXED"; surgeValue: number; lateNightEnabled: boolean; lateNightType: "PERCENT" | "FIXED"; lateNightValue: number; platformFee: number; baseDeliveryFee: number; deliveryFeePer100Meters: number; packagingEnabled: boolean; packagingFee: number }> = {}) => {
+    const settings = { gatewayEnabled, surgeEnabled, surgeType, surgeValue, lateNightEnabled, lateNightType, lateNightValue, platformFee, baseDeliveryFee, deliveryFeePer100Meters, packagingEnabled, packagingFee, ...updates };
     const response = await fetch("/api/fee-settings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(settings) });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) { setNotificationMessage(data.error ?? "Fee settings could not be saved."); return; }
-    setGatewayEnabled(data.gatewayEnabled); setSurgeEnabled(data.surgeEnabled); setSurgeType(data.surgeType); setSurgeValue(data.surgeValue); setLateNightEnabled(data.lateNightEnabled); setLateNightType(data.lateNightType); setLateNightValue(data.lateNightValue); setPlatformFee(data.platformFee); setPackagingEnabled(data.packagingEnabled); setPackagingFee(data.packagingFee); if (!data.packagingEnabled) setNeedsPackaging(false); setNotificationMessage("Checkout fee settings saved.");
+    setGatewayEnabled(data.gatewayEnabled); setSurgeEnabled(data.surgeEnabled); setSurgeType(data.surgeType); setSurgeValue(data.surgeValue); setLateNightEnabled(data.lateNightEnabled); setLateNightType(data.lateNightType); setLateNightValue(data.lateNightValue); setPlatformFee(data.platformFee); setBaseDeliveryFee(data.baseDeliveryFee); setDeliveryFeePer100Meters(data.deliveryFeePer100Meters); setPackagingEnabled(data.packagingEnabled); setPackagingFee(data.packagingFee); if (!data.packagingEnabled) setNeedsPackaging(false); setNotificationMessage("Checkout fee settings saved.");
   };
 
   const supabase = supabaseConfig
@@ -1849,6 +1851,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
               <h3>Checkout fee controls</h3>
               <div className="order-toggle-panel"><span><strong>Store location</strong><small>{storeLocation?.latitude ? "Store location configured" : "Set the store location before accepting delivery orders."}</small></span><button type="button" onClick={setCurrentStoreLocation}>{storeLocation?.latitude ? "Update" : "Set current"}</button></div>
               <div className="service-admin-form"><label>Platform fee for every delivery (₹)<input aria-label="Platform fee" type="number" min="0" step="0.01" value={platformFee} onChange={(e) => setPlatformFee(Math.max(0, Number(e.target.value)))} /></label><button onClick={() => saveFeeSettings()}>Save platform fee</button></div>
+              <div className="service-admin-form"><label>Delivery fee for first 1.5 km (₹)<input aria-label="Base delivery fee" type="number" min="0" step="0.01" value={baseDeliveryFee} onChange={(e) => setBaseDeliveryFee(Math.max(0, Number(e.target.value)))} /></label><label>Extra delivery fee per 100 m (₹)<input aria-label="Delivery fee per 100 metres" type="number" min="0" step="0.01" value={deliveryFeePer100Meters} onChange={(e) => setDeliveryFeePer100Meters(Math.max(0, Number(e.target.value)))} /></label><button onClick={() => saveFeeSettings()}>Save delivery fees</button></div>
               <div className={`order-toggle-panel ${gatewayEnabled ? "on" : "off"}`}><span><strong>Payment gateway fee (1%)</strong><small>Calculated on printing + delivery + platform. Hidden from customer breakdown.</small></span><button role="switch" aria-checked={gatewayEnabled} onClick={() => saveFeeSettings({ gatewayEnabled: !gatewayEnabled })}><i />{gatewayEnabled ? "ON" : "OFF"}</button></div>
               <div className={`order-toggle-panel ${packagingEnabled ? "on" : "off"}`}><span><strong>Optional packaging</strong><small>When enabled, customers can add packaging to their order for the price below.</small></span><button role="switch" aria-checked={packagingEnabled} onClick={() => saveFeeSettings({ packagingEnabled: !packagingEnabled })}><i />{packagingEnabled ? "ON" : "OFF"}</button></div>
               <div className="service-admin-form"><label>Packaging price (₹)<input aria-label="Packaging price" type="number" min="0" step="0.01" value={packagingFee} onChange={(e) => setPackagingFee(Math.max(0, Number(e.target.value)))} /></label><button onClick={() => saveFeeSettings()}>Save packaging price</button></div>

@@ -9,5 +9,8 @@ export async function POST(request: Request) {
   const storeCoordinates = readCoordinates(store);
   if (!storeCoordinates) return NextResponse.json({ error: "Delivery is temporarily unavailable" }, { status: 503 });
   const distanceMeters = calculateDistanceMeters(storeCoordinates, customer);
-  return NextResponse.json({ deliveryFee: calculateDeliveryFeePaise(distanceMeters) / 100 });
+  const settings = await database().prepare("SELECT delivery_base_fee_paise,delivery_fee_per_100m_paise FROM checkout_fee_settings WHERE id='main'").first<any>();
+  const baseFee = Number(settings?.delivery_base_fee_paise);
+  const per100MetersFee = Number(settings?.delivery_fee_per_100m_paise);
+  return NextResponse.json({ deliveryFee: calculateDeliveryFeePaise(distanceMeters, Number.isFinite(baseFee) ? baseFee : 1000, Number.isFinite(per100MetersFee) ? per100MetersFee : 100) / 100 });
 }

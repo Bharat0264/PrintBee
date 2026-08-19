@@ -218,6 +218,13 @@
       "when": 1787141000000,
       "tag": "0031_global_platform_fee",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "6",
+      "when": 1787142000000,
+      "tag": "0032_distance_delivery_fee",
+      "breakpoints": true
     }
   ]
 }

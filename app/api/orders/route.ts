@@ -28,7 +28,6 @@ export async function POST(request: Request) {
   const deliveryCode = code.toString().padStart(6, "0");
   const printingSubtotalPaise = Math.max(0, Math.round(Number(body.totalPaise) || 0));
   const deliveryDistanceMeters = Math.round(calculateDistanceMeters(storeLocation, customerLocation));
-  const deliveryFeePaise = calculateDeliveryFeePaise(deliveryDistanceMeters);
   const deliveryAccuracy = typeof body.accuracy === "number" && Number.isFinite(body.accuracy) && body.accuracy >= 0 ? body.accuracy : null;
   const uploadIds = body.items.filter((item: any) => item.kind !== "ADDON").map((item: any) => item.uploadId).filter(Boolean);
   if (uploadIds.length !== body.items.filter((item: any) => item.kind !== "ADDON").length) return NextResponse.json({ error: "Every print item must finish uploading" }, { status: 400 });
@@ -43,9 +42,12 @@ export async function POST(request: Request) {
     const service = await database().prepare("SELECT id FROM print_services WHERE id=? AND active=1").bind(item.serviceId || "document-printing").first<{ id: string }>();
     if (!service) return NextResponse.json({ error: "One or more selected services are unavailable" }, { status: 400 });
   }
-  const feeSettings = await database().prepare("SELECT gateway_enabled,surge_enabled,surge_type,surge_value,late_night_enabled,late_night_type,late_night_value,platform_fee_paise,packaging_enabled,packaging_fee_paise FROM checkout_fee_settings WHERE id='main'").first<any>();
+  const feeSettings = await database().prepare("SELECT gateway_enabled,surge_enabled,surge_type,surge_value,late_night_enabled,late_night_type,late_night_value,platform_fee_paise,delivery_base_fee_paise,delivery_fee_per_100m_paise,packaging_enabled,packaging_fee_paise FROM checkout_fee_settings WHERE id='main'").first<any>();
   const storedPlatformFee = Number(feeSettings?.platform_fee_paise);
   const platformFeePaise = Number.isFinite(storedPlatformFee) ? Math.max(0, storedPlatformFee) : 350;
+  const baseDeliveryFeePaise = Number(feeSettings?.delivery_base_fee_paise);
+  const deliveryFeePer100MetersPaise = Number(feeSettings?.delivery_fee_per_100m_paise);
+  const deliveryFeePaise = calculateDeliveryFeePaise(deliveryDistanceMeters, Number.isFinite(baseDeliveryFeePaise) ? baseDeliveryFeePaise : 1000, Number.isFinite(deliveryFeePer100MetersPaise) ? deliveryFeePer100MetersPaise : 100);
   const packagingFeePaise = body.needsPackaging && feeSettings?.packaging_enabled ? Math.max(0, Number(feeSettings.packaging_fee_paise) || 0) : 0;
   const feeBasePaise = printingSubtotalPaise + deliveryFeePaise + platformFeePaise;
   const surgeFeePaise = feeSettings?.surge_enabled ? feeSettings.surge_type === "FIXED" ? Math.round(Number(feeSettings.surge_value) * 100) : Math.round(feeBasePaise * Number(feeSettings.surge_value) / 100) : 0;

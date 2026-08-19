@@ -16,7 +16,7 @@ export function calculateDistanceMeters(from: Coordinates, to: Coordinates) {
   return 6_371_000 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-export function calculateDeliveryFeePaise(distanceMeters: number) {
-  const rupees = distanceMeters <= 1500 ? 10 : 10 + Math.ceil((distanceMeters - 1500) / 100);
-  return rupees * 100;
+export function calculateDeliveryFeePaise(distanceMeters: number, baseFeePaise = 1000, per100MetersPaise = 100) {
+  const extraBlocks = Math.max(0, Math.ceil((distanceMeters - 1500) / 100));
+  return Math.max(0, baseFeePaise) + extraBlocks * Math.max(0, per100MetersPaise);
 }
