@@ -1181,8 +1181,9 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
 
   const openAdminDashboard = async (page = adminPage) => {
     setAdminOpen(true);
-    const response = await fetch(`/api/admin/dashboard?page=${page}&pageSize=25`);
+    const [response, storeResponse] = await Promise.all([fetch(`/api/admin/dashboard?page=${page}&pageSize=25`), fetch("/api/admin/store-location")]);
     if (response.ok) { setDashboard(await response.json()); setAdminPage(page); }
+    if (storeResponse.ok) { const store = await storeResponse.json(); if (store.latitude != null) setStoreLocation(store); }
   };
 
   const openLedger = async () => {
@@ -1882,6 +1883,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
             {adminSection === "locations" && <>
             <div className="admin-divider" />
             <h3 id="admin-locations">Delivery locations</h3>
+            <div className="payment-instruction"><strong>Store location</strong><span>{storeLocation?.latitude != null ? "Store location configured" : "Store location must be configured before delivery orders can be accepted."}</span><button type="button" onClick={setCurrentStoreLocation}>{storeLocation?.latitude != null ? "Update Store Location" : "Set Current Store Location"}</button></div>
             <p>Customers can select only locations added here.</p>
             <div className="inline-admin-form"><input value={newLocation} onChange={(e) => setNewLocation(e.target.value)} placeholder="Example: Madhapur" /><button onClick={addLocation}>Add</button></div>
             <h3>Delivery agents</h3>
@@ -1894,6 +1896,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                 {adminSection === "dashboard" && <>
                 <div className="admin-divider" />
                 <h2 id="admin-dashboard">Operations dashboard</h2>
+                <div className="payment-instruction"><strong>Store location</strong><span>{storeLocation?.latitude != null ? "Store location configured" : "Action required: configure the store location before delivery orders can be accepted."}</span><button type="button" onClick={setCurrentStoreLocation}>{storeLocation?.latitude != null ? "Update Store Location" : "Set Current Store Location"}</button></div>
                 <div className="dashboard-range"><button className={dashboardRange === "today" ? "active" : ""} onClick={() => setDashboardRange("today")}>Today</button><button className={dashboardRange === "week" ? "active" : ""} onClick={() => setDashboardRange("week")}>This week</button><button className={dashboardRange === "month" ? "active" : ""} onClick={() => setDashboardRange("month")}>This month</button><button className={dashboardRange === "lifetime" ? "active" : ""} onClick={() => setDashboardRange("lifetime")}>Lifetime</button></div>
                 <div className="metric-grid">
                   <div><small>Total orders</small><strong>{dashboardSummaryForRange.total}</strong></div>
