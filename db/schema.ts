@@ -86,6 +86,13 @@ export const orders = sqliteTable("orders", {
   itemsJson: text("items_json").notNull(),
   printingSubtotalPaise: integer("printing_subtotal_paise").notNull().default(0),
   deliveryFeePaise: integer("delivery_fee_paise").notNull().default(1500),
+  deliveryLatitude: real("delivery_latitude"),
+  deliveryLongitude: real("delivery_longitude"),
+  deliveryAccuracy: real("delivery_accuracy"),
+  deliveryCapturedAt: text("delivery_captured_at"),
+  deliveryDistanceMeters: integer("delivery_distance_meters"),
+  storeLatitude: real("store_latitude"),
+  storeLongitude: real("store_longitude"),
   platformFeePaise: integer("platform_fee_paise").notNull().default(350),
   packagingFeePaise: integer("packaging_fee_paise").notNull().default(0),
   totalPaise: integer("total_paise").notNull(),
@@ -118,6 +125,10 @@ export const orders = sqliteTable("orders", {
   pointsDiscountPaise: integer("points_discount_paise").notNull().default(0),
   referralRewardedAt: text("referral_rewarded_at"),
   spendPointsAwarded: integer("spend_points_awarded").notNull().default(0),
+});
+
+export const storeLocation = sqliteTable("store_location", {
+  id: text("id").primaryKey(), latitude: real("latitude").notNull(), longitude: real("longitude").notNull(), accuracy: real("accuracy"), updatedAt: text("updated_at").notNull(), updatedBy: text("updated_by"),
 });
 
 export const orderFeedback = sqliteTable("order_feedback", {

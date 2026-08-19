@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { database, encryptDeliveryCode, hashDeliveryCode } from "../db";
 import { getViewer } from "../../supabase/server";
 import { cleanupAbandonedCheckouts } from "../maintenance";
+import { calculateDeliveryFeePaise, calculateDistanceMeters, readCoordinates } from "../delivery/fees";
 
 export async function POST(request: Request) {
   const viewer = await getViewer();
@@ -9,7 +10,7 @@ export async function POST(request: Request) {
   await cleanupAbandonedCheckouts();
   const availability = await database().prepare("SELECT accepting_orders FROM order_availability WHERE id='main'").first<{ accepting_orders: number }>();
   if (availability?.accepting_orders === 0) return NextResponse.json({ error: "Service will be live soon. We are not accepting orders right now." }, { status: 503 });
-  const body = await request.json() as { customerName?: string; mobileNumber?: string; locationId?: string; items?: unknown[]; totalPaise?: number; usePoints?: boolean; needsPackaging?: boolean };
+  const body = await request.json() as { customerName?: string; mobileNumber?: string; locationId?: string; items?: unknown[]; totalPaise?: number; usePoints?: boolean; needsPackaging?: boolean; latitude?: unknown; longitude?: unknown; accuracy?: unknown };
   const name = body.customerName?.trim();
   const mobile = body.mobileNumber?.replace(/\D/g, "");
   if (!name || !mobile || mobile.length !== 10 || !body.locationId || !body.items?.length) {
@@ -17,11 +18,18 @@ export async function POST(request: Request) {
   }
   const location = await database().prepare("SELECT id, name, delivery_fee_paise, platform_fee_paise FROM locations WHERE id = ? AND active = 1").bind(body.locationId).first<{ id: string; name: string; delivery_fee_paise: number; platform_fee_paise: number }>();
   if (!location) return NextResponse.json({ error: "Choose an available delivery location" }, { status: 400 });
+  const customerLocation = readCoordinates(body);
+  if (!customerLocation) return NextResponse.json({ error: "Use your current location before checkout" }, { status: 400 });
+  const store = await database().prepare("SELECT latitude,longitude FROM store_location WHERE id='main'").first<{ latitude: number; longitude: number }>();
+  const storeLocation = readCoordinates(store);
+  if (!storeLocation) return NextResponse.json({ error: "Delivery is temporarily unavailable" }, { status: 503 });
   const id = crypto.randomUUID();
   const code = crypto.getRandomValues(new Uint32Array(1))[0] % 1_000_000;
   const deliveryCode = code.toString().padStart(6, "0");
   const printingSubtotalPaise = Math.max(0, Math.round(Number(body.totalPaise) || 0));
-  const deliveryFeePaise = location.delivery_fee_paise ?? 1500;
+  const deliveryDistanceMeters = Math.round(calculateDistanceMeters(storeLocation, customerLocation));
+  const deliveryFeePaise = calculateDeliveryFeePaise(deliveryDistanceMeters);
+  const deliveryAccuracy = typeof body.accuracy === "number" && Number.isFinite(body.accuracy) && body.accuracy >= 0 ? body.accuracy : null;
   const platformFeePaise = location.platform_fee_paise ?? 350;
   const uploadIds = body.items.filter((item: any) => item.kind !== "ADDON").map((item: any) => item.uploadId).filter(Boolean);
   if (uploadIds.length !== body.items.filter((item: any) => item.kind !== "ADDON").length) return NextResponse.json({ error: "Every print item must finish uploading" }, { status: 400 });
@@ -57,8 +65,8 @@ export async function POST(request: Request) {
   const orderNumber = `CHECKOUT-${id}`;
   const now = new Date().toISOString();
   await db.batch([
-    db.prepare(`INSERT INTO orders (id, order_number, customer_email, customer_name, mobile_number, location_id, location_name, items_json, printing_subtotal_paise, delivery_fee_paise, platform_fee_paise, packaging_fee_paise, payment_gateway_fee_paise, surge_fee_paise, late_night_fee_paise, total_paise, points_redeemed, points_discount_paise, referral_rewarded_at, delivery_code_hash, delivery_code_encrypted, status, payment_status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PAYMENT_PENDING', 'PENDING', ?)`)
-      .bind(id, orderNumber, viewer.email, name, mobile, location.id, location.name, JSON.stringify(body.items), printingSubtotalPaise, deliveryFeePaise, platformFeePaise, packagingFeePaise, paymentGatewayFeePaise, surgeFeePaise, lateNightFeePaise, totalPaise, pointsRedeemed, pointsDiscountPaise, null, hash, encryptedCode, now),
+    db.prepare(`INSERT INTO orders (id, order_number, customer_email, customer_name, mobile_number, location_id, location_name, items_json, printing_subtotal_paise, delivery_fee_paise, delivery_latitude, delivery_longitude, delivery_accuracy, delivery_captured_at, delivery_distance_meters, store_latitude, store_longitude, platform_fee_paise, packaging_fee_paise, payment_gateway_fee_paise, surge_fee_paise, late_night_fee_paise, total_paise, points_redeemed, points_discount_paise, referral_rewarded_at, delivery_code_hash, delivery_code_encrypted, status, payment_status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PAYMENT_PENDING', 'PENDING', ?)`)
+      .bind(id, orderNumber, viewer.email, name, mobile, location.id, location.name, JSON.stringify(body.items), printingSubtotalPaise, deliveryFeePaise, customerLocation.latitude, customerLocation.longitude, deliveryAccuracy, now, deliveryDistanceMeters, storeLocation.latitude, storeLocation.longitude, platformFeePaise, packagingFeePaise, paymentGatewayFeePaise, surgeFeePaise, lateNightFeePaise, totalPaise, pointsRedeemed, pointsDiscountPaise, null, hash, encryptedCode, now),
   ]);
   return NextResponse.json({ id, orderNumber: null, locationName: location.name, totalPaise, lateNightFeePaise, pointsRedeemed, pointsDiscountPaise, paymentMode: "RAZORPAY" });
 }

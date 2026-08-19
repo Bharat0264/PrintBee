@@ -331,6 +331,10 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   const [customerName, setCustomerName] = useState("");
   const [mobileNumber, setMobileNumber] = useState("");
   const [locationId, setLocationId] = useState("");
+  const [customerCoordinates, setCustomerCoordinates] = useState<{ latitude: number; longitude: number; accuracy: number } | null>(null);
+  const [calculatedDeliveryFee, setCalculatedDeliveryFee] = useState<number | null>(null);
+  const [locationMessage, setLocationMessage] = useState("");
+  const [storeLocation, setStoreLocation] = useState<any>(null);
   const [orderError, setOrderError] = useState("");
   const [orderResult, setOrderResult] = useState<{ id: string; orderNumber: string; deliveryCode?: string | null; locationName: string; totalPaise: number; lateNightFeePaise?: number; paid: boolean; paymentMode?: string } | null>(null);
   const [paymentProcessing, setPaymentProcessing] = useState(false);
@@ -837,6 +841,30 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
     setCheckoutOpen(true);
   };
 
+  const useCurrentLocation = () => {
+    setLocationMessage("");
+    if (!navigator.geolocation) return setLocationMessage("Location is not available in this browser.");
+    navigator.geolocation.getCurrentPosition(async (position) => {
+      const coordinates = { latitude: position.coords.latitude, longitude: position.coords.longitude, accuracy: position.coords.accuracy };
+      setCustomerCoordinates(coordinates);
+      if (coordinates.accuracy > 100) setLocationMessage("Your location may not be very accurate. Please enable precise location or move to an open area and try again.");
+      const response = await fetch("/api/delivery/calculate-fee", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(coordinates) });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) return setLocationMessage(data.error ?? "We could not calculate the delivery fee.");
+      setCalculatedDeliveryFee(Number(data.deliveryFee));
+    }, () => setLocationMessage("We need your current location to prepare delivery."), { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
+  };
+
+  const setCurrentStoreLocation = () => {
+    if (!navigator.geolocation) return setAdminMessage("Location is not available in this browser.");
+    navigator.geolocation.getCurrentPosition(async (position) => {
+      const response = await fetch("/api/admin/store-location", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ latitude: position.coords.latitude, longitude: position.coords.longitude, accuracy: position.coords.accuracy }) });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) return setAdminMessage(data.error ?? "Store location could not be saved.");
+      setStoreLocation(data); setAdminMessage("Store location configured.");
+    }, () => setAdminMessage("Location permission is required to set the store location."), { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
+  };
+
   const placeOrder = async () => {
     if (paymentProcessing) return;
     setPaymentProcessing(true);
@@ -845,7 +873,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
       const response = await fetch("/api/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ customerName, mobileNumber, locationId, items: cart, totalPaise: Math.round(cartTotal * 100), usePoints, needsPackaging }),
+        body: JSON.stringify({ customerName, mobileNumber, locationId, items: cart, totalPaise: Math.round(cartTotal * 100), usePoints, needsPackaging, ...customerCoordinates }),
       });
       const data = await response.json();
       if (!response.ok) return setOrderError(data.error ?? "Payment checkout could not be prepared");
@@ -1457,7 +1485,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   };
 
   const checkoutLocation = locations.find((location) => location.id === locationId);
-  const checkoutDeliveryFee = (checkoutLocation?.delivery_fee_paise ?? 1500) / 100;
+  const checkoutDeliveryFee = calculatedDeliveryFee ?? 0;
   const checkoutPlatformFee = (checkoutLocation?.platform_fee_paise ?? 350) / 100;
   const surgeBase = cartTotal + checkoutDeliveryFee + checkoutPlatformFee;
   const checkoutSurgeFee = surgeEnabled ? surgeType === "FIXED" ? surgeValue : surgeBase * surgeValue / 100 : 0;
@@ -1821,6 +1849,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
             </div>
             <div className="service-admin fee-controls">
               <h3>Checkout fee controls</h3>
+              <div className="order-toggle-panel"><span><strong>Store location</strong><small>{storeLocation?.latitude ? "Store location configured" : "Set the store location before accepting delivery orders."}</small></span><button type="button" onClick={setCurrentStoreLocation}>{storeLocation?.latitude ? "Update" : "Set current"}</button></div>
               <div className={`order-toggle-panel ${gatewayEnabled ? "on" : "off"}`}><span><strong>Payment gateway fee (1%)</strong><small>Calculated on printing + delivery + platform. Hidden from customer breakdown.</small></span><button role="switch" aria-checked={gatewayEnabled} onClick={() => saveFeeSettings({ gatewayEnabled: !gatewayEnabled })}><i />{gatewayEnabled ? "ON" : "OFF"}</button></div>
               <div className={`order-toggle-panel ${packagingEnabled ? "on" : "off"}`}><span><strong>Optional packaging</strong><small>When enabled, customers can add packaging to their order for the price below.</small></span><button role="switch" aria-checked={packagingEnabled} onClick={() => saveFeeSettings({ packagingEnabled: !packagingEnabled })}><i />{packagingEnabled ? "ON" : "OFF"}</button></div>
               <div className="service-admin-form"><label>Packaging price (₹)<input aria-label="Packaging price" type="number" min="0" step="0.01" value={packagingFee} onChange={(e) => setPackagingFee(Math.max(0, Number(e.target.value)))} /></label><button onClick={() => saveFeeSettings()}>Save packaging price</button></div>
@@ -2076,6 +2105,8 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                 <label className="checkout-field">Full name<input value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="Your full name" /></label>
                 <label className="checkout-field">Mobile number<input value={mobileNumber} onChange={(e) => setMobileNumber(e.target.value.replace(/\D/g, "").slice(0, 10))} placeholder="10-digit mobile number" inputMode="numeric" /></label>
                 <label className="checkout-field">Delivery location<select value={locationId} onChange={(e) => setLocationId(e.target.value)}><option value="">Select a location</option>{locations.map((location) => <option value={location.id} key={location.id}>{location.name}</option>)}</select></label>
+                <button type="button" className="save-button" onClick={useCurrentLocation}>Use My Current Location</button>
+                {locationMessage && <p className="panel-message">{locationMessage}</p>}
                 {!locations.length && <p className="panel-message">No delivery locations are available yet. The admin must add one first.</p>}
                 {packagingEnabled && <button type="button" className={`packaging-choice ${needsPackaging ? "selected" : ""}`} aria-pressed={needsPackaging} onClick={() => setNeedsPackaging((current) => !current)}><span><strong>Need packaging for this order?</strong><small>Add protective packaging for {inr.format(packagingFee)}.</small></span><b>{needsPackaging ? "✓ Added" : "Add"}</b></button>}
                 <div className="fee-breakdown"><div><span>Printing subtotal</span><strong>{inr.format(cartPrintingTotal)}</strong></div>{cartServiceCharges > 0 && <div className="binding-charge-row"><span>Service charges</span><strong>{inr.format(cartServiceCharges)}</strong></div>}{cartAddonCharges > 0 && <div className="binding-charge-row"><span>Add-ons</span><strong>{inr.format(cartAddonCharges)}</strong></div>}<div><span>Delivery fee</span><strong>{inr.format(checkoutDeliveryFee)}</strong></div><div><span>Platform fee</span><strong>{inr.format(checkoutPlatformFee)}</strong></div>{needsPackaging && packagingEnabled && <div className="packaging-charge-row"><span>Packaging fee</span><strong>{inr.format(checkoutPackagingFee)}</strong></div>}{surgeEnabled && <div className="surge-charge-row"><span>High-demand surge charge</span><strong>{inr.format(checkoutSurgeFee)}</strong></div>}{lateNightEnabled && <div className="surge-charge-row"><span>Late-night delivery fee</span><strong>{inr.format(checkoutLateNightFee)}</strong></div>}{gatewayEnabled && <div><span>Payment gateway fee</span><strong>{inr.format(checkoutGatewayFee)}</strong></div>}{pointsDiscount > 0 && <div className="points-discount-row"><span>Points discount ({redeemablePoints} points)</span><strong>−{inr.format(pointsDiscount)}</strong></div>}</div>
@@ -2084,7 +2115,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                 <div className="points-earned-preview"><span>◉</span><div><strong>You’ll earn {Math.floor(Math.max(0, checkoutBeforePoints - pointsDiscount) / 10)} wallet points</strong><small>Credited after this order is successfully delivered.</small></div></div>
                 <div className="pay-on-delivery-note"><strong>Secure online payment:</strong> After creating the order, complete payment through Razorpay. Printing begins only after verified payment.</div>
                 {orderError && <p className="form-error">{orderError}</p>}
-                <button className="save-button" disabled={!locations.length || paymentProcessing} onClick={placeOrder}>{paymentProcessing ? "Starting Razorpay..." : "Pay now"}</button>
+                <button className="save-button" disabled={!locations.length || !customerCoordinates || calculatedDeliveryFee === null || paymentProcessing} onClick={placeOrder}>{paymentProcessing ? "Starting Razorpay..." : "Pay now"}</button>
               </>
             )}
           </section>

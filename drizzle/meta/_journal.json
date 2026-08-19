@@ -197,6 +197,13 @@
       "when": 1786703400000,
       "tag": "0028_addons",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "6",
+      "when": 1787132165310,
+      "tag": "0029_store_location_delivery_fee",
+      "breakpoints": true
     }
   ]
 }
