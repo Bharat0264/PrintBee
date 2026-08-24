@@ -36,12 +36,13 @@ type LedgerValues = {
   gatewayCollectedPaise: number;
   surgeCollectedPaise: number;
   lateNightCollectedPaise: number;
+  couponDeliveryDiscountPaise: number;
   pointsDiscountPaise: number;
   riderCostPaise: number;
 };
 
 function emptyValues(): LedgerValues {
-  return { orders: 0, bwPages: 0, bwRevenuePaise: 0, bwCostPaise: 0, colourPages: 0, colourRevenuePaise: 0, colourCostPaise: 0, addonRevenuePaise: 0, packagingOrders: 0, amountCollectedPaise: 0, printingCollectedPaise: 0, deliveryCollectedPaise: 0, platformCollectedPaise: 0, packagingCollectedPaise: 0, gatewayCollectedPaise: 0, surgeCollectedPaise: 0, lateNightCollectedPaise: 0, pointsDiscountPaise: 0, riderCostPaise: 0 };
+  return { orders: 0, bwPages: 0, bwRevenuePaise: 0, bwCostPaise: 0, colourPages: 0, colourRevenuePaise: 0, colourCostPaise: 0, addonRevenuePaise: 0, packagingOrders: 0, amountCollectedPaise: 0, printingCollectedPaise: 0, deliveryCollectedPaise: 0, platformCollectedPaise: 0, packagingCollectedPaise: 0, gatewayCollectedPaise: 0, surgeCollectedPaise: 0, lateNightCollectedPaise: 0, couponDeliveryDiscountPaise: 0, pointsDiscountPaise: 0, riderCostPaise: 0 };
 }
 
 function addItem(values: LedgerValues, item: any) {
@@ -114,7 +115,7 @@ export async function DELETE() {
 
 export async function GET() {
   if (!(await requireLedgerAccess())) return NextResponse.json({ error: "Ledger password required" }, { status: 401 });
-  const result = await database().prepare(`SELECT order_number,customer_name,mobile_number,customer_email,location_name,items_json,printing_subtotal_paise,delivery_fee_paise,platform_fee_paise,packaging_fee_paise,payment_gateway_fee_paise,surge_fee_paise,late_night_fee_paise,points_discount_paise,total_paise,status,created_at FROM orders WHERE payment_status='PAID' AND hidden_at IS NULL ORDER BY created_at DESC`).all<any>();
+  const result = await database().prepare(`SELECT order_number,customer_name,mobile_number,customer_email,location_name,items_json,printing_subtotal_paise,delivery_fee_paise,coupon_code,coupon_delivery_discount_paise,platform_fee_paise,packaging_fee_paise,payment_gateway_fee_paise,surge_fee_paise,late_night_fee_paise,points_discount_paise,total_paise,status,created_at FROM orders WHERE payment_status='PAID' AND hidden_at IS NULL ORDER BY created_at DESC`).all<any>();
   const days = new Map<string, LedgerValues>();
   const totals = emptyValues();
   const orderBreakdowns: any[] = [];
@@ -125,7 +126,8 @@ export async function GET() {
     values.orders = 1;
     values.amountCollectedPaise = Number(order.total_paise) || 0;
     values.printingCollectedPaise = Number(order.printing_subtotal_paise) || 0;
-    values.deliveryCollectedPaise = Number(order.delivery_fee_paise) || 0;
+    values.couponDeliveryDiscountPaise = Number(order.coupon_delivery_discount_paise) || 0;
+    values.deliveryCollectedPaise = Math.max(0, (Number(order.delivery_fee_paise) || 0) - values.couponDeliveryDiscountPaise);
     values.platformCollectedPaise = Number(order.platform_fee_paise) || 0;
     values.packagingCollectedPaise = Number(order.packaging_fee_paise) || 0;
     values.packagingOrders = values.packagingCollectedPaise > 0 ? 1 : 0;
