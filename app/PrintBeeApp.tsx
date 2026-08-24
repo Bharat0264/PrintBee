@@ -1605,10 +1605,10 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
 
       <section className="hero" id="top">
         <div className="hero-copy">
+          <div className="campus-delivery-banner" role="status"><span>NEW</span><strong>Classroom &amp; hostel delivery is now available</strong><small>Fast in-campus delivery for university students</small></div>
           <div className="eyebrow"><span>●</span> A4 printing, delivered locally</div>
           <h1>Your documents.<br /><em>Printed right.</em></h1>
           <p>Upload a PDF or image, choose your A4 print style, and get crisp prints delivered to your door.</p>
-          <p className="delivery-location-note"><strong>Classroom and hostel delivery is now available.</strong></p>
           <div className="trust-row">
             <span>✓ Secure files</span><span>✓ Clear pricing</span><span>✓ Doorstep delivery</span>
           </div>
