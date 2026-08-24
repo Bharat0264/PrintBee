@@ -6,6 +6,11 @@ export const locations = sqliteTable("locations", {
   active: integer("active", { mode: "boolean" }).notNull().default(true),
   createdAt: text("created_at").notNull(),
   deliveryFeePaise: integer("delivery_fee_paise").notNull().default(1500),
+  incampusDelivery: integer("incampus_delivery", { mode: "boolean" }).notNull().default(false),
+  incampusType: text("incampus_type"),
+  campusBuilding: text("campus_building"),
+  classroomNumber: text("classroom_number"),
+  incampusFeePaise: integer("incampus_fee_paise").notNull().default(0),
   platformFeePaise: integer("platform_fee_paise").notNull().default(350),
 });
 
