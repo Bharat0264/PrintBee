@@ -5,7 +5,7 @@ import { getViewer } from "../../supabase/server";
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 
 function isPrintableFile(file: File) {
-  return /\.(pdf|heic|jpe?g|png)$/i.test(file.name);
+  return /\.(pdf|heic|jpe?g|png|webp)$/i.test(file.name);
 }
 
 export async function POST(request: Request) {
@@ -15,7 +15,7 @@ export async function POST(request: Request) {
   const file = form.get("file");
   const pageCount = Number(form.get("pageCount"));
   if (!(file instanceof File)) return NextResponse.json({ error: "Choose a PDF or image to upload" }, { status: 400 });
-  if (!isPrintableFile(file)) return NextResponse.json({ error: "Only PDF, JPG/JPEG, PNG and HEIC files are accepted" }, { status: 400 });
+  if (!isPrintableFile(file)) return NextResponse.json({ error: "Only PDF, JPG/JPEG, PNG, WEBP and HEIC files are accepted" }, { status: 400 });
   if (file.size > MAX_UPLOAD_BYTES) return NextResponse.json({ error: `This file is ${(file.size / 1024 / 1024).toFixed(2)} MB. The maximum upload size is 50 MB.` }, { status: 413 });
   if (!Number.isInteger(pageCount) || pageCount < 1) return NextResponse.json({ error: "The document page count could not be verified" }, { status: 400 });
   const id = crypto.randomUUID();

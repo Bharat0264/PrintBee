@@ -7,7 +7,7 @@ const MAX_CHUNK_BYTES = 5 * 1024 * 1024;
 const MAX_CHUNKS = Math.ceil(MAX_UPLOAD_BYTES / MAX_CHUNK_BYTES);
 
 function validFileName(name: string) {
-  return /\.(pdf|heic|jpe?g|png)$/i.test(name);
+  return /\.(pdf|heic|jpe?g|png|webp)$/i.test(name);
 }
 
 function safeName(name: string) {
