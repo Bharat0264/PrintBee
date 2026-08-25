@@ -4,7 +4,7 @@ import { getViewer } from "../../supabase/server";
 import { cleanupAbandonedCheckouts } from "../maintenance";
 import { calculateDeliveryFeePaise, calculateDistanceMeters, readCoordinates } from "../delivery/fees";
 
-export async function POST(request: Request) {
+async function createOrder(request: Request) {
   const viewer = await getViewer();
   if (!viewer) return NextResponse.json({ error: "Sign in required" }, { status: 401 });
   await cleanupAbandonedCheckouts();
@@ -89,4 +89,13 @@ export async function POST(request: Request) {
       .bind(id, orderNumber, viewer.email, name, mobile, "CURRENT_GPS", incampusDelivery ? `In-campus ${incampusType === "CLASSROOM" ? "classroom" : "hostel"}: ${campusBuilding}${classroomNumber ? ` · Room ${classroomNumber}` : ""}` : deliveryAddress, JSON.stringify(body.items), printingSubtotalPaise, deliveryFeePaise, couponCode, couponDeliveryDiscountPaise, incampusDelivery ? 1 : 0, incampusDelivery ? incampusType : null, campusBuilding, classroomNumber, incampusFeePaise, customerLocation.latitude, customerLocation.longitude, deliveryAccuracy, deliveryAddress, deliveryLandmark, now, deliveryDistanceMeters, storeLocation.latitude, storeLocation.longitude, platformFeePaise, packagingFeePaise, paymentGatewayFeePaise, surgeFeePaise, lateNightFeePaise, totalPaise, pointsRedeemed, pointsDiscountPaise, null, hash, encryptedCode, now),
   ]);
   return NextResponse.json({ id, orderNumber: null, locationName: incampusDelivery ? `In-campus ${incampusType === "CLASSROOM" ? "classroom" : "hostel"}: ${campusBuilding}${classroomNumber ? ` · Room ${classroomNumber}` : ""}` : deliveryAddress, totalPaise, lateNightFeePaise, pointsRedeemed, pointsDiscountPaise, paymentMode: "RAZORPAY" });
+}
+
+export async function POST(request: Request) {
+  try {
+    return await createOrder(request);
+  } catch (error) {
+    console.error("[orders] checkout creation failed", error);
+    return NextResponse.json({ error: "We could not create your order. Please try again in a moment." }, { status: 500 });
+  }
 }
