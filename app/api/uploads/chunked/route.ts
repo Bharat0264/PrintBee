@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { database, fileBucket } from "../../db";
+import { mongoDb } from "../../../../lib/mongodb";
+import { r2 } from "../../../../lib/r2";
 import { getViewer } from "../../../supabase/server";
 
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
@@ -34,8 +35,9 @@ export async function POST(request: Request) {
     if (!Number.isInteger(pageCount) || pageCount < 1) return NextResponse.json({ error: "The document page count could not be verified" }, { status: 400 });
     const uploadId = crypto.randomUUID();
     const contentType = body.contentType || (fileName.toLowerCase().endsWith(".pdf") ? "application/pdf" : "application/octet-stream");
-    const multipart = await fileBucket().createMultipartUpload(storageKey(viewer.email, uploadId, fileName), { httpMetadata: { contentType } });
-    return NextResponse.json({ sessionId: multipart.uploadId, uploadId, chunkSize: MAX_CHUNK_BYTES });
+    const multipart = await r2.createMultipartUpload(storageKey(viewer.email, uploadId, fileName), contentType);
+    if (!multipart.UploadId) return NextResponse.json({ error: "Could not start the upload" }, { status: 502 });
+    return NextResponse.json({ sessionId: multipart.UploadId, uploadId, chunkSize: MAX_CHUNK_BYTES });
   }
 
   if (action === "part") {
@@ -46,9 +48,9 @@ export async function POST(request: Request) {
     if (!sessionId || sessionId.length > 1024 || !/^[0-9a-f-]{36}$/i.test(uploadId) || !validFileName(fileName) || !Number.isInteger(index) || index < 0 || index >= MAX_CHUNKS) return NextResponse.json({ error: "Invalid upload part" }, { status: 400 });
     const bytes = await request.arrayBuffer();
     if (!bytes.byteLength || bytes.byteLength > MAX_CHUNK_BYTES) return NextResponse.json({ error: "Invalid upload part size" }, { status: 400 });
-    const multipart = fileBucket().resumeMultipartUpload(storageKey(viewer.email, uploadId, fileName), sessionId);
-    const uploadedPart = await multipart.uploadPart(index + 1, bytes);
-    return NextResponse.json({ uploaded: true, partNumber: uploadedPart.partNumber, etag: uploadedPart.etag });
+    const uploadedPart = await r2.uploadPart(storageKey(viewer.email, uploadId, fileName), sessionId, index + 1, new Uint8Array(bytes));
+    if (!uploadedPart.ETag) return NextResponse.json({ error: "Could not save upload part" }, { status: 502 });
+    return NextResponse.json({ uploaded: true, partNumber: index + 1, etag: uploadedPart.ETag });
   }
 
   if (action === "complete") {
@@ -63,14 +65,13 @@ export async function POST(request: Request) {
 
     const key = storageKey(viewer.email, uploadId, fileName);
     const contentType = body.contentType || (fileName.toLowerCase().endsWith(".pdf") ? "application/pdf" : "application/octet-stream");
-    const multipart = fileBucket().resumeMultipartUpload(key, sessionId);
-    const object = await multipart.complete(parts);
-    if (object.size !== fileSize) {
-      await fileBucket().delete(key);
+    const object = await r2.completeMultipartUpload(key, sessionId, parts);
+    const stored = await r2.head(key);
+    if (Number(stored.ContentLength) !== fileSize) {
+      await r2.delete(key);
       return NextResponse.json({ error: "The uploaded file was incomplete. Please try again." }, { status: 400 });
     }
-    await database().prepare("INSERT INTO uploads (id, customer_email, original_name, content_type, storage_key, size_bytes, page_count, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
-      .bind(uploadId, viewer.email, fileName, contentType, key, fileSize, pageCount, new Date().toISOString()).run();
+    await mongoDb().collection("uploads").insertOne({ id: uploadId, customer_email: viewer.email, original_name: fileName, content_type: contentType, storage_key: key, size_bytes: fileSize, page_count: pageCount, created_at: new Date().toISOString() });
     return NextResponse.json({ uploadId });
   }
 

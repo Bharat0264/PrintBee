@@ -1,13 +1,22 @@
-import { env } from "cloudflare:workers";
+import { mongoDb } from "../../lib/mongodb";
+import { r2 } from "../../lib/r2";
 
-export function database() {
-  if (!env.DB) throw new Error("Database is unavailable");
-  return env.DB;
+type LegacyStatement = {
+  bind(...values: unknown[]): LegacyStatement;
+  first<T = unknown>(): Promise<T | null>;
+  all<T = unknown>(): Promise<{ results: T[] }>;
+  run(): Promise<{ meta: { changes: number } }>;
+};
+type LegacyDb = { prepare(sql: string): LegacyStatement; batch(statements: LegacyStatement[]): Promise<Array<{ meta: { changes: number } }>>; };
+
+/** @deprecated Routes must use mongoDb() collections directly. */
+export function database(): LegacyDb {
+  return mongoDb() as unknown as LegacyDb;
 }
 
-export function fileBucket() {
-  if (!env.FILES) throw new Error("Private file storage is unavailable");
-  return env.FILES;
+/** @deprecated Routes must use the R2 S3 client directly. */
+export function fileBucket(): any {
+  return r2;
 }
 
 export async function hashDeliveryCode(orderId: string, code: string) {

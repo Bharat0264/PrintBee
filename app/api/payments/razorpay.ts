@@ -1,4 +1,4 @@
-import { database } from "../db";
+import { mongoDb } from "../../../lib/mongodb";
 import { sendPushToAdmins, sendPushToEmail } from "../push/send";
 
 export function razorpayConfig() {
@@ -23,25 +23,25 @@ export function safeEqualHex(a: string, b: string) {
 
 export async function markRazorpayOrderPaid(razorpayOrderId: string, paymentId: string, actor: string) {
   const now = new Date().toISOString();
-  const db = database();
-  const order = await db.prepare("SELECT id,order_number,customer_email,items_json,points_redeemed FROM orders WHERE razorpay_order_id=? AND payment_status!='PAID' AND status!='CANCELLED'").bind(razorpayOrderId).first<any>();
+  const db = mongoDb();
+  const order = await db.collection<any>("orders").findOne({ razorpay_order_id: razorpayOrderId, payment_status: { $ne: "PAID" }, status: { $ne: "CANCELLED" } });
   if (!order) return null;
   let items: any[] = [];
   try { items = JSON.parse(order.items_json); } catch {}
   let finalOrderNumber = order.order_number;
   const stagedCheckout = String(order.order_number).startsWith("CHECKOUT-");
   if (stagedCheckout) {
-    const sequence = await db.prepare("UPDATE order_sequences SET next_value=next_value+1 WHERE id='orders' RETURNING next_value-1 number").first<{ number: number }>();
-    if (!sequence) throw new Error("Order numbering is temporarily unavailable");
-    finalOrderNumber = `PB${String(sequence.number).padStart(3, "0")}`;
+    const sequence = await db.collection<{ next_value: number }>("order_sequences").findOneAndUpdate({ id: "orders" }, { $inc: { next_value: 1 } }, { returnDocument: "before" });
+    if (!sequence?.next_value) throw new Error("Order numbering is temporarily unavailable");
+    finalOrderNumber = `PB${String(sequence.next_value).padStart(3, "0")}`;
   }
   const uploadIds = items.filter((item) => item.kind !== "ADDON").map((item) => item.uploadId).filter(Boolean);
-  await db.batch([
-    db.prepare("UPDATE orders SET order_number=?,payment_status='PAID',status=CASE WHEN status='PAYMENT_PENDING' THEN 'CONFIRMED' ELSE status END,razorpay_payment_id=?,payment_verified_at=?,payment_verified_by=?,payment_qr_storage_key=NULL,payment_qr_file_name=NULL,payment_qr_deleted_at=? WHERE id=? AND payment_status!='PAID'").bind(finalOrderNumber, paymentId, now, actor, now, order.id),
-    ...(stagedCheckout && order.points_redeemed ? [db.prepare("UPDATE customer_profiles SET points_balance=points_balance-? WHERE email=? AND points_balance>=?").bind(order.points_redeemed, order.customer_email, order.points_redeemed)] : []),
-    ...uploadIds.map((uploadId) => db.prepare("UPDATE uploads SET order_id=? WHERE id=? AND customer_email=? AND order_id IS NULL").bind(order.id, uploadId, order.customer_email)),
-    ...uploadIds.map((uploadId) => db.prepare("DELETE FROM cart_items WHERE upload_id=? AND customer_email=?").bind(uploadId, order.customer_email)),
-    ...items.filter((item) => item.kind === "ADDON").map((item) => db.prepare("DELETE FROM cart_items WHERE id=? AND customer_email=?").bind(item.id, order.customer_email)),
+  const paid = await db.collection("orders").updateOne({ id: order.id, payment_status: { $ne: "PAID" } }, { $set: { order_number: finalOrderNumber, payment_status: "PAID", status: order.status === "PAYMENT_PENDING" ? "CONFIRMED" : order.status, razorpay_payment_id: paymentId, payment_verified_at: now, payment_verified_by: actor, payment_qr_storage_key: null, payment_qr_file_name: null, payment_qr_deleted_at: now } });
+  if (!paid.modifiedCount) return null;
+  await Promise.all([
+    ...(stagedCheckout && order.points_redeemed ? [db.collection("customer_profiles").updateOne({ email: order.customer_email, points_balance: { $gte: order.points_redeemed } }, { $inc: { points_balance: -order.points_redeemed } })] : []),
+    db.collection("uploads").updateMany({ id: { $in: uploadIds }, customer_email: order.customer_email, order_id: { $in: [null, undefined] } }, { $set: { order_id: order.id } }),
+    db.collection("cart_items").deleteMany({ customer_email: order.customer_email, $or: [{ upload_id: { $in: uploadIds } }, { id: { $in: items.filter((item) => item.kind === "ADDON").map((item) => item.id) } }] }),
   ]);
   await Promise.all([
     sendPushToEmail(order.customer_email, { title: "Order placed", body: `${finalOrderNumber} was created after payment verification.`, tag: `${order.id}-paid`, url: "/" }),

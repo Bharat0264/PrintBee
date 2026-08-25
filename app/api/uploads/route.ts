@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { database, fileBucket } from "../db";
+import { mongoDb } from "../../../lib/mongodb";
+import { r2 } from "../../../lib/r2";
 import { getViewer } from "../../supabase/server";
 
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
@@ -22,8 +23,7 @@ export async function POST(request: Request) {
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
   const key = `customers/${viewer.email}/${id}/${safeName}`;
   const contentType = file.type || "application/octet-stream";
-  await fileBucket().put(key, file.stream(), { httpMetadata: { contentType } });
-  await database().prepare("INSERT INTO uploads (id, customer_email, original_name, content_type, storage_key, size_bytes, page_count, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
-    .bind(id, viewer.email, file.name, contentType, key, file.size, pageCount, new Date().toISOString()).run();
+  await r2.put(key, file, contentType);
+  await mongoDb().collection("uploads").insertOne({ id, customer_email: viewer.email, original_name: file.name, content_type: contentType, storage_key: key, size_bytes: file.size, page_count: pageCount, created_at: new Date().toISOString() });
   return NextResponse.json({ uploadId: id });
 }

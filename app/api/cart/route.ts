@@ -1,13 +1,19 @@
 import { NextResponse } from "next/server";
-import { database, fileBucket } from "../db";
+import { mongoDb } from "../../../lib/mongodb";
+import { r2 } from "../../../lib/r2";
 import { getViewer } from "../../supabase/server";
 
 export async function GET() {
   const viewer = await getViewer();
   if (!viewer) return NextResponse.json([]);
-  const rows = await database().prepare("SELECT c.item_json FROM cart_items c LEFT JOIN uploads u ON u.id=c.upload_id WHERE c.customer_email=? AND (c.upload_id LIKE 'addon:%' OR (u.customer_email=? AND u.order_id IS NULL AND u.deleted_at IS NULL)) ORDER BY c.created_at")
-    .bind(viewer.email, viewer.email).all<{ item_json: string }>();
-  return NextResponse.json(rows.results.flatMap((row) => { try { return [JSON.parse(row.item_json)]; } catch { return []; } }));
+  const db = mongoDb();
+  const items = await db.collection<{ upload_id: string; item_json: string; created_at: string }>("cart_items").find({ customer_email: viewer.email }).sort({ created_at: 1 }).toArray();
+  const uploadIds = items.filter((item) => !item.upload_id.startsWith("addon:")).map((item) => item.upload_id);
+  const uploads = new Set((await db.collection<{ id: string }>("uploads").find({ id: { $in: uploadIds }, customer_email: viewer.email, order_id: { $exists: false }, deleted_at: { $exists: false } }, { projection: { id: 1 } }).toArray()).map((upload) => upload.id));
+  return NextResponse.json(items.flatMap((item) => {
+    if (!item.upload_id.startsWith("addon:") && !uploads.has(item.upload_id)) return [];
+    try { return [JSON.parse(item.item_json)]; } catch { return []; }
+  }));
 }
 
 export async function POST(request: Request) {
@@ -16,7 +22,7 @@ export async function POST(request: Request) {
   const item = await request.json() as any;
   if (!item.id || !item.uploadId) return NextResponse.json({ error: "Invalid cart item" }, { status: 400 });
   if (item.kind === "ADDON") {
-    const addon = await database().prepare("SELECT id,name,description,price_paise FROM addons WHERE id=? AND active=1").bind(item.addonId).first<{ id: string; name: string; description: string; price_paise: number }>();
+    const addon = await mongoDb().collection<{ id: string; name: string; description: string; price_paise: number }>("addons").findOne({ id: item.addonId, active: { $in: [true, 1] } });
     if (!addon || item.uploadId !== `addon:${addon.id}`) return NextResponse.json({ error: "This add-on is unavailable" }, { status: 400 });
     const price = addon.price_paise / 100;
     Object.assign(item, { fileName: addon.name, total: price, addonsTotal: price, addons: [{ id: addon.id, name: addon.name, description: addon.description, price }] });
@@ -24,11 +30,10 @@ export async function POST(request: Request) {
   const itemJson = JSON.stringify(item);
   if (itemJson.length > 20_000) return NextResponse.json({ error: "Invalid cart item" }, { status: 400 });
   if (item.kind !== "ADDON") {
-    const upload = await database().prepare("SELECT id FROM uploads WHERE id=? AND customer_email=? AND order_id IS NULL AND deleted_at IS NULL").bind(item.uploadId, viewer.email).first();
+    const upload = await mongoDb().collection("uploads").findOne({ id: item.uploadId, customer_email: viewer.email, order_id: { $exists: false }, deleted_at: { $exists: false } }, { projection: { id: 1 } });
     if (!upload) return NextResponse.json({ error: "The uploaded file is unavailable" }, { status: 400 });
   }
-  await database().prepare("INSERT INTO cart_items (id,customer_email,upload_id,item_json,created_at) VALUES (?,?,?,?,?) ON CONFLICT(upload_id) DO UPDATE SET item_json=excluded.item_json")
-    .bind(item.id, viewer.email, item.uploadId, itemJson, new Date().toISOString()).run();
+  await mongoDb().collection("cart_items").updateOne({ upload_id: item.uploadId }, { $set: { id: item.id, customer_email: viewer.email, upload_id: item.uploadId, item_json: itemJson, created_at: new Date().toISOString() } }, { upsert: true });
   return NextResponse.json({ saved: true });
 }
 
@@ -37,16 +42,16 @@ export async function DELETE(request: Request) {
   if (!viewer) return NextResponse.json({ error: "Sign in required" }, { status: 401 });
   const uploadId = new URL(request.url).searchParams.get("uploadId") ?? "";
   if (uploadId.startsWith("addon:")) {
-    await database().prepare("DELETE FROM cart_items WHERE upload_id=? AND customer_email=?").bind(uploadId, viewer.email).run();
+    await mongoDb().collection("cart_items").deleteOne({ upload_id: uploadId, customer_email: viewer.email });
     return NextResponse.json({ removed: true });
   }
-  const upload = await database().prepare("SELECT storage_key FROM uploads WHERE id=? AND customer_email=? AND order_id IS NULL").bind(uploadId, viewer.email).first<{ storage_key: string }>();
+  const upload = await mongoDb().collection<{ storage_key: string }>("uploads").findOne({ id: uploadId, customer_email: viewer.email, order_id: { $exists: false } }, { projection: { storage_key: 1 } });
   if (!upload) return NextResponse.json({ removed: true });
-  await fileBucket().delete(upload.storage_key);
-  const db = database();
-  await db.batch([
-    db.prepare("DELETE FROM cart_items WHERE upload_id=? AND customer_email=?").bind(uploadId, viewer.email),
-    db.prepare("DELETE FROM uploads WHERE id=? AND customer_email=? AND order_id IS NULL").bind(uploadId, viewer.email),
+  await r2.delete(upload.storage_key);
+  const db = mongoDb();
+  await Promise.all([
+    db.collection("cart_items").deleteOne({ upload_id: uploadId, customer_email: viewer.email }),
+    db.collection("uploads").deleteOne({ id: uploadId, customer_email: viewer.email, order_id: { $exists: false } }),
   ]);
   return NextResponse.json({ removed: true });
 }
