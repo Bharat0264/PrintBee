@@ -232,13 +232,6 @@
       "when": 1787143000000,
       "tag": "0033_incampus_delivery",
       "breakpoints": true
-    },
-    {
-      "idx": 33,
-      "version": "6",
-      "when": 1787144000000,
-      "tag": "0034_admin50_coupon",
-      "breakpoints": true
     }
   ]
 }
