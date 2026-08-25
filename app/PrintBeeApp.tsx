@@ -339,6 +339,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   const [incampusType, setIncampusType] = useState<"CLASSROOM" | "HOSTEL">("CLASSROOM");
   const [campusBuilding, setCampusBuilding] = useState("");
   const [classroomNumber, setClassroomNumber] = useState("");
+  const [couponCode, setCouponCode] = useState("");
   const [customerCoordinates, setCustomerCoordinates] = useState<{ latitude: number; longitude: number; accuracy: number } | null>(null);
   const [calculatedDeliveryFee, setCalculatedDeliveryFee] = useState<number | null>(null);
   const [locationMessage, setLocationMessage] = useState("");
@@ -878,7 +879,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
       const response = await fetch("/api/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ customerName, mobileNumber, deliveryAddress, deliveryLandmark, incampusDelivery, incampusType, campusBuilding, classroomNumber, items: cart, totalPaise: Math.round(cartTotal * 100), usePoints, needsPackaging, ...customerCoordinates }),
+        body: JSON.stringify({ customerName, mobileNumber, deliveryAddress, deliveryLandmark, incampusDelivery, incampusType, campusBuilding, classroomNumber, couponCode, items: cart, totalPaise: Math.round(cartTotal * 100), usePoints, needsPackaging, ...customerCoordinates }),
       });
       const data = await response.json();
       if (!response.ok) return setOrderError(data.error ?? "Payment checkout could not be prepared");
@@ -1496,7 +1497,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
 
   const checkoutDeliveryFee = calculatedDeliveryFee ?? 0;
   const checkoutIncampusFee = incampusDelivery ? 10 : 0;
-  const checkoutCouponDeliveryDiscount = 0;
+  const checkoutCouponDeliveryDiscount = couponCode.trim().toUpperCase() === "ADMIN50" ? checkoutDeliveryFee / 2 : 0;
   const checkoutPlatformFee = platformFee;
   const surgeBase = cartTotal + checkoutDeliveryFee - checkoutCouponDeliveryDiscount + checkoutIncampusFee + checkoutPlatformFee;
   const checkoutSurgeFee = surgeEnabled ? surgeType === "FIXED" ? surgeValue : surgeBase * surgeValue / 100 : 0;
@@ -2114,6 +2115,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                 {locationMessage && <p className="panel-message">{locationMessage}</p>}
                 <label className="checkout-field">Building / house number and delivery address<textarea value={deliveryAddress} onChange={(e) => setDeliveryAddress(e.target.value)} placeholder="House / flat number, building, street and area" rows={3} /></label>
                 <label className="checkout-field">Landmark (optional)<input value={deliveryLandmark} onChange={(e) => setDeliveryLandmark(e.target.value)} placeholder="Near a shop, gate or landmark" /></label>
+                <label className="checkout-field">Coupon code<input value={couponCode} onChange={(e) => setCouponCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 20))} placeholder="Enter coupon code" autoCapitalize="characters" /></label>
                 {incampusDelivery && <div className="binding-fields"><strong>In-campus delivery details</strong><p><b>Please enter class room number and building name for university classrooms, enter only building name for hostels.</b></p><div className="service-option-grid" role="radiogroup" aria-label="In-campus destination type"><button type="button" role="radio" aria-checked={incampusType === "CLASSROOM"} className={incampusType === "CLASSROOM" ? "selected" : ""} onClick={() => setIncampusType("CLASSROOM")}><span><strong>University classroom</strong><small>Building name and classroom number required.</small></span></button><button type="button" role="radio" aria-checked={incampusType === "HOSTEL"} className={incampusType === "HOSTEL" ? "selected" : ""} onClick={() => setIncampusType("HOSTEL")}><span><strong>Hostel</strong><small>Building name required.</small></span></button></div><label>Building name<input value={campusBuilding} onChange={(e) => setCampusBuilding(e.target.value)} placeholder="Example: Academic Block A or Krishna Hostel" /></label>{incampusType === "CLASSROOM" && <label>Classroom number<input value={classroomNumber} onChange={(e) => setClassroomNumber(e.target.value)} placeholder="Example: A-204" /></label>}</div>}
                 {packagingEnabled && <button type="button" className={`packaging-choice ${needsPackaging ? "selected" : ""}`} aria-pressed={needsPackaging} onClick={() => setNeedsPackaging((current) => !current)}><span><strong>Need packaging for this order?</strong><small>Add protective packaging for {inr.format(packagingFee)}.</small></span><b>{needsPackaging ? "✓ Added" : "Add"}</b></button>}
                 <div className="fee-breakdown"><div><span>Printing subtotal</span><strong>{inr.format(cartPrintingTotal)}</strong></div>{cartServiceCharges > 0 && <div className="binding-charge-row"><span>Service charges</span><strong>{inr.format(cartServiceCharges)}</strong></div>}{cartAddonCharges > 0 && <div className="binding-charge-row"><span>Add-ons</span><strong>{inr.format(cartAddonCharges)}</strong></div>}<div><span>Delivery fee</span><strong>{inr.format(checkoutDeliveryFee)}</strong></div>{checkoutCouponDeliveryDiscount > 0 && <div className="points-discount-row"><span>ADMIN50 delivery discount</span><strong>−{inr.format(checkoutCouponDeliveryDiscount)}</strong></div>}{incampusDelivery && <div className="binding-charge-row"><span>In-campus delivery</span><strong>{inr.format(checkoutIncampusFee)}</strong></div>}<div><span>Platform fee</span><strong>{inr.format(checkoutPlatformFee)}</strong></div>{needsPackaging && packagingEnabled && <div className="packaging-charge-row"><span>Packaging fee</span><strong>{inr.format(checkoutPackagingFee)}</strong></div>}{surgeEnabled && <div className="surge-charge-row"><span>High-demand surge charge</span><strong>{inr.format(checkoutSurgeFee)}</strong></div>}{lateNightEnabled && <div className="surge-charge-row"><span>Late-night delivery fee</span><strong>{inr.format(checkoutLateNightFee)}</strong></div>}{gatewayEnabled && <div><span>Payment gateway fee</span><strong>{inr.format(checkoutGatewayFee)}</strong></div>}{pointsDiscount > 0 && <div className="points-discount-row"><span>Points discount ({redeemablePoints} points)</span><strong>−{inr.format(pointsDiscount)}</strong></div>}</div>
