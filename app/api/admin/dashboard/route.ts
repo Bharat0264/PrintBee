@@ -12,7 +12,7 @@ export async function GET(request: Request) {
   const page = Math.max(1, Number(params.get("page")) || 1);
   const pageSize = Math.min(100, Math.max(10, Number(params.get("pageSize")) || 25));
   const offset = (page - 1) * pageSize;
-  const [summary, orders, orderCount, hiddenOrders, revenueOrders, activeUsers, walletUsers, riders, riderApplications, locations, locationStats, files, riderPayments, riderWithdrawals, dailySales, summaryOrders, adminMembers] = await Promise.all([
+  const [summary, orders, orderCount, hiddenOrders, revenueOrders, activeUsers, walletUsers, riders, riderApplications, locations, locationStats, files, riderPayments, riderWithdrawals, dailySales, summaryOrders, adminMembers, trafficSummary, trafficDaily, launchOrders] = await Promise.all([
     db.prepare(`SELECT COUNT(*) total, SUM(CASE WHEN status='DELIVERED' THEN 1 ELSE 0 END) delivered, COUNT(*) paid, 0 unpaid, SUM(total_paise) revenue_paise, SUM(CASE WHEN status='READY_FOR_PICKUP' THEN 1 ELSE 0 END) ready FROM orders WHERE hidden_at IS NULL AND payment_status='PAID'`).first(),
     db.prepare(`SELECT id, order_number, customer_email, customer_name, mobile_number, location_name, incampus_delivery, incampus_type, campus_building, classroom_number, incampus_fee_paise, items_json, printing_subtotal_paise, delivery_fee_paise, platform_fee_paise, packaging_fee_paise, payment_gateway_fee_paise, surge_fee_paise, late_night_fee_paise, total_paise, payment_status, payment_reference, payment_rejection_reason, payment_verified_at, payment_verified_by, payment_qr_storage_key IS NOT NULL has_payment_qr, payment_qr_file_name, payment_qr_deleted_at, status, rider_email, cancellation_reason, cancelled_at, cancelled_by, delivered_at, created_at FROM orders WHERE hidden_at IS NULL AND payment_status='PAID' ORDER BY created_at DESC LIMIT ? OFFSET ?`).bind(pageSize, offset).all(),
     db.prepare("SELECT COUNT(*) count FROM orders WHERE hidden_at IS NULL AND payment_status='PAID'").first<{ count: number }>(),
@@ -30,6 +30,9 @@ export async function GET(request: Request) {
     db.prepare("SELECT substr(created_at,1,10) day,COUNT(*) orders,SUM(total_paise) revenue_paise FROM orders WHERE payment_status='PAID' AND hidden_at IS NULL AND created_at>=datetime('now','-29 days') GROUP BY substr(created_at,1,10) ORDER BY day").all(),
     db.prepare(`SELECT order_number, items_json, printing_subtotal_paise, delivery_fee_paise, platform_fee_paise, packaging_fee_paise, payment_gateway_fee_paise, surge_fee_paise, late_night_fee_paise, total_paise, payment_status, status, created_at FROM orders WHERE hidden_at IS NULL AND payment_status='PAID' ORDER BY created_at DESC`).all(),
     db.prepare("SELECT email,role,created_at,created_by,updated_at FROM admin_members ORDER BY CASE role WHEN 'OWNER' THEN 1 WHEN 'OPERATIONS' THEN 2 WHEN 'ACCOUNTANT' THEN 3 ELSE 4 END,email").all(),
+    db.prepare("SELECT COUNT(DISTINCT CASE WHEN event='PAGE_VIEW' THEN visitor_id END) visitors, SUM(CASE WHEN event='PAGE_VIEW' THEN 1 ELSE 0 END) page_views, SUM(CASE WHEN event='CHECKOUT_STARTED' THEN 1 ELSE 0 END) checkout_starts FROM traffic_events").first<any>(),
+    db.prepare("SELECT substr(created_at,1,10) day, COUNT(DISTINCT CASE WHEN event='PAGE_VIEW' THEN visitor_id END) visitors, SUM(CASE WHEN event='PAGE_VIEW' THEN 1 ELSE 0 END) page_views, SUM(CASE WHEN event='CHECKOUT_STARTED' THEN 1 ELSE 0 END) checkout_starts FROM traffic_events GROUP BY substr(created_at,1,10) ORDER BY day DESC LIMIT 60").all(),
+    db.prepare("SELECT COUNT(*) paid_orders, COALESCE(SUM(total_paise),0) revenue_paise FROM orders WHERE payment_status='PAID' AND hidden_at IS NULL AND created_at >= '2026-08-10T00:00:00.000Z'").first<any>(),
   ]);
   const filesByOrder = new Map<string, unknown[]>();
   for (const file of files.results as Array<{ id: string; order_id: string; original_name: string; deleted_at: string | null }>) {
@@ -68,5 +71,6 @@ export async function GET(request: Request) {
     locationStats: locationStats.results,
     riderPayments: riderPayments.results,
     riderWithdrawals: riderWithdrawals.results,
+    traffic: { visitors: Number(trafficSummary?.visitors) || 0, pageViews: Number(trafficSummary?.page_views) || 0, checkoutStarts: Number(trafficSummary?.checkout_starts) || 0, paidOrders: Number(launchOrders?.paid_orders) || 0, revenuePaise: Number(launchOrders?.revenue_paise) || 0, daily: trafficDaily.results },
   });
 }

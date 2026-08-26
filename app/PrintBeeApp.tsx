@@ -331,6 +331,15 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   const [baseDeliveryFee, setBaseDeliveryFee] = useState(10);
   const [deliveryFeePer100Meters, setDeliveryFeePer100Meters] = useState(1);
   const [locations, setLocations] = useState<LocationOption[]>([]);
+  const trackTraffic = (event: "PAGE_VIEW" | "CHECKOUT_STARTED") => {
+    try {
+      const key = "printbee-traffic-visitor";
+      let visitorId = localStorage.getItem(key);
+      if (!visitorId) { visitorId = crypto.randomUUID(); localStorage.setItem(key, visitorId); }
+      void fetch("/api/traffic", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ event, visitorId, path: window.location.pathname }) });
+    } catch {}
+  };
+  useEffect(() => { trackTraffic("PAGE_VIEW"); }, []);
   const [customerName, setCustomerName] = useState("");
   const [mobileNumber, setMobileNumber] = useState("");
   const [deliveryAddress, setDeliveryAddress] = useState("");
@@ -374,7 +383,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   const [notificationMessage, setNotificationMessage] = useState("");
   const [notificationToast, setNotificationToast] = useState<{ title: string; body: string } | null>(null);
   const [notificationPromptOpen, setNotificationPromptOpen] = useState(false);
-  const [adminSection, setAdminSection] = useState<"dashboard" | "revenue" | "ledger" | "orders" | "riders" | "services">("dashboard");
+  const [adminSection, setAdminSection] = useState<"dashboard" | "traffic" | "revenue" | "ledger" | "orders" | "riders" | "services">("dashboard");
   const [ledgerPassword, setLedgerPassword] = useState("");
   const [ledger, setLedger] = useState<any>(null);
   const [ledgerMessage, setLedgerMessage] = useState("");
@@ -875,6 +884,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
     setPaymentProcessing(true);
     setOrderError("");
     try {
+      trackTraffic("CHECKOUT_STARTED");
       const response = await fetch("/api/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1834,7 +1844,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
           <section className="admin-modal admin-portal" role="dialog" aria-modal="true" aria-labelledby="admin-title" onMouseDown={(e) => e.stopPropagation()}>
             <aside className="admin-sidebar">
               <div className="admin-sidebar-brand"><img src="/printbee-logo.png" alt="" /><strong>PrintBee Admin</strong></div>
-              {([["dashboard", "Dashboard", "⌂"], ["revenue", "Revenue", "₹"], ["ledger", "Ledger", "▦"], ["orders", "Orders", "▤"], ["riders", "Rider approvals", "♙"], ["services", "Print services", "＋"]] as const).map(([id, label, icon]) => <button key={id} className={adminSection === id ? "active" : ""} onClick={() => { void selectAdminSection(id); }}><span>{icon}</span>{label}{id === "orders" && <b>{dashboard?.orders?.length ?? 0}</b>}</button>)}
+              {([["dashboard", "Dashboard", "⌂"], ["traffic", "Traffic", "↗"], ["revenue", "Revenue", "₹"], ["ledger", "Ledger", "▦"], ["orders", "Orders", "▤"], ["riders", "Rider approvals", "♙"], ["services", "Print services", "＋"]] as const).map(([id, label, icon]) => <button key={id} className={adminSection === id ? "active" : ""} onClick={() => { void selectAdminSection(id); }}><span>{icon}</span>{label}{id === "orders" && <b>{dashboard?.orders?.length ?? 0}</b>}</button>)}
               {notificationPermission !== "granted" && <button onClick={() => { if (ledger) void lockLedger(); void enableNotifications(); }}><span>♬</span>Enable order alerts</button>}
               {notificationPermission === "granted" && <button onClick={() => { if (ledger) void lockLedger(); void testNotifications(); }}><span>♬</span>Test sound + banner</button>}
               <button className="admin-sidebar-exit" onClick={() => { void closeAdminDashboard(); }}>← Back to website</button>
@@ -1911,6 +1921,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                 {adminRole === "OWNER" && <section className="admin-team-panel"><div><h3>Admin team &amp; access</h3><p>Owners have full access. Operations manages orders and riders; accountants view revenue and exports; support handles customer order queries.</p></div><div className="admin-team-form"><input type="email" value={newAdminMember.email} onChange={(event) => setNewAdminMember({ ...newAdminMember, email: event.target.value })} placeholder="team@printbee.co.in" /><select value={newAdminMember.role} onChange={(event) => setNewAdminMember({ ...newAdminMember, role: event.target.value })}><option value="OPERATIONS">Operations manager</option><option value="ACCOUNTANT">Accountant</option><option value="SUPPORT">Support</option><option value="OWNER">Owner</option></select><button disabled={!newAdminMember.email.trim()} onClick={saveAdminMember}>Add or update</button></div><div className="admin-team-list">{dashboard.adminMembers?.map((member: any) => <span key={member.email}><span><strong>{member.email}</strong><small>{String(member.role).replaceAll("_", " ")}</small></span>{member.email !== viewer?.email && <button onClick={() => removeAdminMember(member.email)}>Remove</button>}</span>)}</div></section>}
                 {dashboard.dailySales?.length ? <section className="sales-chart" aria-label="Paid sales during the last 30 days"><div className="sales-chart-heading"><span><strong>30-day sales trend</strong><small>Daily paid revenue and order volume</small></span><strong>{inr.format(dashboard.dailySales.reduce((sum: number, day: any) => sum + Number(day.revenue_paise || 0), 0) / 100)}</strong></div><div className="sales-bars">{dashboard.dailySales.map((day: any) => { const peak = Math.max(...dashboard.dailySales.map((entry: any) => Number(entry.revenue_paise) || 0), 1); return <div key={day.day} title={`${new Date(`${day.day}T00:00:00`).toLocaleDateString("en-IN")}: ${inr.format(day.revenue_paise / 100)}, ${day.orders} orders`}><i style={{ height: `${Math.max(5, Number(day.revenue_paise) / peak * 100)}%` }} /><small>{new Date(`${day.day}T00:00:00`).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}</small></div>; })}</div></section> : null}
                 </>}
+                {adminSection === "traffic" && <><div className="admin-divider" /><h2>Traffic &amp; conversions</h2><p>Anonymous visitor tracking begins with this release. Paid orders and revenue include site history from 10 Aug 2026.</p><div className="metric-grid"><div><small>Unique visitors</small><strong>{dashboard.traffic?.visitors ?? 0}</strong></div><div><small>Page views</small><strong>{dashboard.traffic?.pageViews ?? 0}</strong></div><div><small>Checkout starts</small><strong>{dashboard.traffic?.checkoutStarts ?? 0}</strong></div><div><small>Visitor → checkout</small><strong>{dashboard.traffic?.visitors ? `${((dashboard.traffic.checkoutStarts / dashboard.traffic.visitors) * 100).toFixed(1)}%` : "—"}</strong></div><div><small>Paid orders since launch</small><strong>{dashboard.traffic?.paidOrders ?? 0}</strong></div><div><small>Checkout → paid</small><strong>{dashboard.traffic?.checkoutStarts ? `${((dashboard.traffic.paidOrders / dashboard.traffic.checkoutStarts) * 100).toFixed(1)}%` : "—"}</strong></div><div><small>Launch-to-date revenue</small><strong>{inr.format((dashboard.traffic?.revenuePaise ?? 0) / 100)}</strong></div></div><div className="location-table"><div className="table-head"><span>Date</span><span>Visitors</span><span>Views</span><span>Checkout starts</span></div>{dashboard.traffic?.daily?.length ? dashboard.traffic.daily.map((day: any) => <div key={day.day}><span>{day.day}</span><strong>{day.visitors}</strong><strong>{day.page_views}</strong><strong>{day.checkout_starts}</strong></div>) : <p>No visitor events recorded yet.</p>}</div></>}
                 {adminSection === "revenue" && <>
                 <div className="admin-divider" />
                 <h2 id="admin-revenue">Revenue</h2>
