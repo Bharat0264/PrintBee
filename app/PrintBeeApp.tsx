@@ -327,7 +327,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   const [lateNightEnabled, setLateNightEnabled] = useState(false);
   const [lateNightType, setLateNightType] = useState<"PERCENT" | "FIXED">("PERCENT");
   const [lateNightValue, setLateNightValue] = useState(0);
-  const [platformFee, setPlatformFee] = useState(3.5);
+  const [platformFee, setPlatformFee] = useState(1.5);
   const [baseDeliveryFee, setBaseDeliveryFee] = useState(10);
   const [deliveryFeePer100Meters, setDeliveryFeePer100Meters] = useState(1);
   const [locations, setLocations] = useState<LocationOption[]>([]);

@@ -11,7 +11,7 @@ export const locations = sqliteTable("locations", {
   campusBuilding: text("campus_building"),
   classroomNumber: text("classroom_number"),
   incampusFeePaise: integer("incampus_fee_paise").notNull().default(0),
-  platformFeePaise: integer("platform_fee_paise").notNull().default(350),
+  platformFeePaise: integer("platform_fee_paise").notNull().default(150),
 });
 
 export const appUsers = sqliteTable("app_users", {
@@ -100,7 +100,7 @@ export const orders = sqliteTable("orders", {
   deliveryDistanceMeters: integer("delivery_distance_meters"),
   storeLatitude: real("store_latitude"),
   storeLongitude: real("store_longitude"),
-  platformFeePaise: integer("platform_fee_paise").notNull().default(350),
+  platformFeePaise: integer("platform_fee_paise").notNull().default(150),
   packagingFeePaise: integer("packaging_fee_paise").notNull().default(0),
   totalPaise: integer("total_paise").notNull(),
   paymentGatewayFeePaise: integer("payment_gateway_fee_paise").notNull().default(0),
@@ -212,7 +212,7 @@ export const orderAvailability = sqliteTable("order_availability", {
 });
 
 export const checkoutFeeSettings = sqliteTable("checkout_fee_settings", {
-  id: text("id").primaryKey(), gatewayEnabled: integer("gateway_enabled", { mode: "boolean" }).notNull().default(true), surgeEnabled: integer("surge_enabled", { mode: "boolean" }).notNull().default(false), surgeType: text("surge_type").notNull().default("PERCENT"), surgeValue: real("surge_value").notNull().default(0), lateNightEnabled: integer("late_night_enabled", { mode: "boolean" }).notNull().default(false), lateNightType: text("late_night_type").notNull().default("PERCENT"), lateNightValue: real("late_night_value").notNull().default(0), platformFeePaise: integer("platform_fee_paise").notNull().default(350), deliveryBaseFeePaise: integer("delivery_base_fee_paise").notNull().default(1000), deliveryFeePer100mPaise: integer("delivery_fee_per_100m_paise").notNull().default(100), packagingEnabled: integer("packaging_enabled", { mode: "boolean" }).notNull().default(false), packagingFeePaise: integer("packaging_fee_paise").notNull().default(0), updatedAt: text("updated_at").notNull(), updatedBy: text("updated_by"),
+  id: text("id").primaryKey(), gatewayEnabled: integer("gateway_enabled", { mode: "boolean" }).notNull().default(true), surgeEnabled: integer("surge_enabled", { mode: "boolean" }).notNull().default(false), surgeType: text("surge_type").notNull().default("PERCENT"), surgeValue: real("surge_value").notNull().default(0), lateNightEnabled: integer("late_night_enabled", { mode: "boolean" }).notNull().default(false), lateNightType: text("late_night_type").notNull().default("PERCENT"), lateNightValue: real("late_night_value").notNull().default(0), platformFeePaise: integer("platform_fee_paise").notNull().default(150), deliveryBaseFeePaise: integer("delivery_base_fee_paise").notNull().default(1000), deliveryFeePer100mPaise: integer("delivery_fee_per_100m_paise").notNull().default(100), packagingEnabled: integer("packaging_enabled", { mode: "boolean" }).notNull().default(false), packagingFeePaise: integer("packaging_fee_paise").notNull().default(0), updatedAt: text("updated_at").notNull(), updatedBy: text("updated_by"),
 });
 
 export const packagingChargeRules = sqliteTable("packaging_charge_rules", {
