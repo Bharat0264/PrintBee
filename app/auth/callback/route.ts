@@ -1,24 +1,21 @@
-import { createServerClient } from "@supabase/ssr";
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { createAppwriteAdminAccount } from "../../appwrite/server";
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
-  const code = url.searchParams.get("code");
+  const userId = url.searchParams.get("userId");
+  const secret = url.searchParams.get("secret");
   const response = NextResponse.redirect(new URL("/", url.origin));
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!code || !supabaseUrl || !supabaseKey) return response;
-
-  const cookieStore = await cookies();
-  const supabase = createServerClient(supabaseUrl, supabaseKey, {
-    cookies: {
-      getAll: () => cookieStore.getAll(),
-      setAll(items) {
-        items.forEach(({ name, value, options }) => response.cookies.set(name, value, options));
-      },
-    },
-  });
-  await supabase.auth.exchangeCodeForSession(code);
+  if (!userId || !secret) return response;
+  try {
+    const session = await createAppwriteAdminAccount().createSession({ userId, secret });
+    response.cookies.set("printbee_appwrite_session", session.secret, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: true,
+      path: "/",
+      expires: new Date(session.expire),
+    });
+  } catch { return NextResponse.redirect(new URL("/?login=failed", url.origin)); }
   return response;
 }

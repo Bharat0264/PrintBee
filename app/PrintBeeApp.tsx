@@ -1,7 +1,6 @@
 "use client";
 
 import { ChangeEvent, useEffect, useMemo, useState } from "react";
-import { createBrowserClient } from "@supabase/ssr";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import QRCode from "qrcode";
 
@@ -160,7 +159,6 @@ type Viewer = { email: string; isAdmin: boolean } | null;
 type LocationOption = { id: string; name: string; delivery_fee_paise?: number; platform_fee_paise?: number };
 type PrintService = { id: string; name: string; description: string; active: number; is_binding: number; price_paise: number; counts_for_packaging: number };
 type Addon = { id: string; name: string; description: string; active: number; price_paise: number };
-type SupabaseConfig = { url: string; anonKey: string } | null;
 type RazorpayResult = { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string };
 type ColourChoice = "" | "bw" | "colour" | "mixed";
 
@@ -280,7 +278,7 @@ type CartItem = {
   addonsTotal?: number;
 };
 
-export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer; supabaseConfig: SupabaseConfig }) {
+export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Viewer; appwriteConfigured: boolean }) {
   const [prices, setPrices] = useState<Prices>(defaultPrices);
   const [draftPrices, setDraftPrices] = useState<Prices>(defaultPrices);
   const [mode, setMode] = useState<PrintMode>("bw-single");
@@ -805,38 +803,28 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
     setGatewayEnabled(data.gatewayEnabled); setSurgeEnabled(data.surgeEnabled); setSurgeType(data.surgeType); setSurgeValue(data.surgeValue); setLateNightEnabled(data.lateNightEnabled); setLateNightType(data.lateNightType); setLateNightValue(data.lateNightValue); setPlatformFee(data.platformFee); setBaseDeliveryFee(data.baseDeliveryFee); setDeliveryFeePer100Meters(data.deliveryFeePer100Meters); setPackagingEnabled(data.packagingEnabled); setPackagingFee(data.packagingFee); if (!data.packagingEnabled) setNeedsPackaging(false); setNotificationMessage("Checkout fee settings saved.");
   };
 
-  const supabase = supabaseConfig
-    ? createBrowserClient(
-        supabaseConfig.url,
-        supabaseConfig.anonKey,
-      )
-    : null;
-
   const signInWithGoogle = async (mode: "CUSTOMER" | "PARTNER" = "CUSTOMER") => {
     window.localStorage.setItem("printbee-login-mode", mode);
     setLoginMode(mode);
     if (referralCode.trim()) window.localStorage.setItem("printbee-referral-code", referralCode.trim().toUpperCase());
-    if (!supabase) return setAuthMessage("Authentication is awaiting Supabase configuration.");
-    await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: { redirectTo: `${window.location.origin}/auth/callback` },
-    });
+    if (!appwriteConfigured) return setAuthMessage("Authentication is awaiting Appwrite configuration.");
+    window.location.assign("/auth/login");
   };
 
   const signInWithPassword = async () => {
     setAuthMessage("");
-    if (!supabase) return setAuthMessage("Authentication is awaiting configuration.");
+    if (!appwriteConfigured) return setAuthMessage("Authentication is awaiting Appwrite configuration.");
     if (!reviewerEmail.trim() || !reviewerPassword) return setAuthMessage("Enter the reviewer email and password.");
     window.localStorage.setItem("printbee-login-mode", "CUSTOMER");
-    const { error } = await supabase.auth.signInWithPassword({ email: reviewerEmail.trim(), password: reviewerPassword });
-    if (error) return setAuthMessage("The email or password is incorrect.");
+    const response = await fetch("/auth/password", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: reviewerEmail.trim(), password: reviewerPassword }) });
+    if (!response.ok) return setAuthMessage("The email or password is incorrect.");
     if (referralCode.trim()) window.localStorage.setItem("printbee-referral-code", referralCode.trim().toUpperCase());
     window.location.reload();
   };
 
   const signOut = async () => {
     window.localStorage.removeItem("printbee-login-mode");
-    await supabase?.auth.signOut();
+    await fetch("/auth/signout", { method: "POST" });
     window.location.reload();
   };
 

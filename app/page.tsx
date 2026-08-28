@@ -9,11 +9,11 @@ export default async function Home() {
   const host = (await headers()).get("host")?.split(":")[0]?.toLowerCase();
   if (host === "printbee-a4-printing.bharathsaipulipati.chatgpt.site") redirect("https://www.printbee.co.in");
   const viewer = await getViewer();
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  const supabaseConfig = supabaseUrl && supabaseAnonKey
-    ? { url: supabaseUrl, anonKey: supabaseAnonKey }
-    : null;
+  const appwriteConfigured = Boolean(
+    process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT
+    && process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID
+    && process.env.APPWRITE_API_KEY,
+  );
 
-  return <PrintBeeApp viewer={viewer} supabaseConfig={supabaseConfig} />;
+  return <PrintBeeApp viewer={viewer} appwriteConfigured={appwriteConfigured} />;
 }

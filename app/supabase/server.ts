@@ -1,5 +1,5 @@
-import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { Account, Client } from "node-appwrite";
 import { database } from "../api/db";
 
 const ADMIN_EMAILS = new Set([
@@ -8,19 +8,16 @@ const ADMIN_EMAILS = new Set([
 ]);
 
 export async function getViewer() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !key) return null;
+  const endpoint = process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT;
+  const projectId = process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID;
+  if (!endpoint || !projectId) return null;
 
   const cookieStore = await cookies();
-  const supabase = createServerClient(url, key, {
-    cookies: {
-      getAll: () => cookieStore.getAll(),
-      setAll: () => {},
-    },
-  });
-  const { data } = await supabase.auth.getUser();
-  const email = data.user?.email?.toLowerCase();
+  const session = cookieStore.get("printbee_appwrite_session")?.value;
+  if (!session) return null;
+  const client = new Client().setEndpoint(endpoint).setProject(projectId).setSession(session);
+  const user = await new Account(client).get().catch(() => null);
+  const email = user?.email?.toLowerCase();
   if (!email) return null;
 
   let adminRole: "OWNER" | "OPERATIONS" | "ACCOUNTANT" | "SUPPORT" | null = ADMIN_EMAILS.has(email) ? "OWNER" : null;
