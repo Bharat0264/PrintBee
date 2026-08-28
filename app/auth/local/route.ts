@@ -5,7 +5,7 @@ import { database } from "../../api/db";
 const encode = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes));
 async function hash(password: string, salt: string) {
   const material = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveBits"]);
-  const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", salt: Uint8Array.from(atob(salt), c => c.charCodeAt(0)), iterations: 210000, hash: "SHA-256" }, material, 256);
+  const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", salt: Uint8Array.from(atob(salt), c => c.charCodeAt(0)), iterations: 100000, hash: "SHA-256" }, material, 256);
   return encode(new Uint8Array(bits));
 }
 async function startSession(email: string) {
