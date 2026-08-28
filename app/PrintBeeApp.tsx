@@ -296,6 +296,9 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
   const [authMessage, setAuthMessage] = useState("");
   const [reviewerEmail, setReviewerEmail] = useState("");
   const [reviewerPassword, setReviewerPassword] = useState("");
+  const [accountName, setAccountName] = useState("");
+  const [accountMobile, setAccountMobile] = useState("");
+  const [accountMode, setAccountMode] = useState<"register" | "login">("register");
   const [role, setRole] = useState<string | null>(viewer?.isAdmin ? "ADMIN" : null);
   const [adminRole, setAdminRole] = useState<string | null>(viewer?.isAdmin ? "OWNER" : null);
   const [approvalStatus, setApprovalStatus] = useState<string | null>(null);
@@ -803,28 +806,20 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
     setGatewayEnabled(data.gatewayEnabled); setSurgeEnabled(data.surgeEnabled); setSurgeType(data.surgeType); setSurgeValue(data.surgeValue); setLateNightEnabled(data.lateNightEnabled); setLateNightType(data.lateNightType); setLateNightValue(data.lateNightValue); setPlatformFee(data.platformFee); setBaseDeliveryFee(data.baseDeliveryFee); setDeliveryFeePer100Meters(data.deliveryFeePer100Meters); setPackagingEnabled(data.packagingEnabled); setPackagingFee(data.packagingFee); if (!data.packagingEnabled) setNeedsPackaging(false); setNotificationMessage("Checkout fee settings saved.");
   };
 
-  const signInWithGoogle = async (mode: "CUSTOMER" | "PARTNER" = "CUSTOMER") => {
-    window.localStorage.setItem("printbee-login-mode", mode);
-    setLoginMode(mode);
-    if (referralCode.trim()) window.localStorage.setItem("printbee-referral-code", referralCode.trim().toUpperCase());
-    if (!appwriteConfigured) return setAuthMessage("Authentication is awaiting Appwrite configuration.");
-    window.location.assign("/auth/login");
-  };
-
   const signInWithPassword = async () => {
     setAuthMessage("");
-    if (!appwriteConfigured) return setAuthMessage("Authentication is awaiting Appwrite configuration.");
     if (!reviewerEmail.trim() || !reviewerPassword) return setAuthMessage("Enter the reviewer email and password.");
     window.localStorage.setItem("printbee-login-mode", "CUSTOMER");
-    const response = await fetch("/auth/password", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: reviewerEmail.trim(), password: reviewerPassword }) });
-    if (!response.ok) return setAuthMessage("The email or password is incorrect.");
+    const response = await fetch("/auth/local", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: accountMode, name: accountName, mobileNumber: accountMobile, email: reviewerEmail.trim(), password: reviewerPassword }) });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) return setAuthMessage(data.error ?? "The email or password is incorrect.");
     if (referralCode.trim()) window.localStorage.setItem("printbee-referral-code", referralCode.trim().toUpperCase());
     window.location.reload();
   };
 
   const signOut = async () => {
     window.localStorage.removeItem("printbee-login-mode");
-    await fetch("/auth/signout", { method: "POST" });
+    await fetch("/auth/local", { method: "DELETE" });
     window.location.reload();
   };
 
@@ -2208,14 +2203,15 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
             <button className="close" onClick={() => setLoginOpen(false)} aria-label="Close">×</button>
             <img src="/printbee-logo.png" width={88} height={88} alt="PrintBee" />
             <h2 id="login-title">Welcome to PrintBee</h2>
-            <p>Choose how you want to use PrintBee. The same Google email can be used in both modes.</p>
-            <button className="google-button" onClick={() => signInWithGoogle("CUSTOMER")}><span>G</span> Login with Google as user</button>
-            <button className="partner-button" onClick={() => signInWithGoogle("PARTNER")}><span>G</span> Login with Google as delivery partner</button>
+            <p>Create a PrintBee account once, then use your email and password next time.</p>
+            <p className="auth-message">Google / Supabase login is temporarily unavailable.</p>
             <label className="checkout-field referral-input">Referral code <small>Optional · only for a new account</small><input value={referralCode} onChange={(event) => setReferralCode(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))} placeholder="PBXXXXXXXX" /></label>
-            <div className="reviewer-login-divider"><span>Website reviewer access</span></div>
+            <div className="reviewer-login-divider"><span>{accountMode === "register" ? "Create your account" : "Sign in to your account"}</span></div>
+            {accountMode === "register" && <><label className="checkout-field">Full name<input value={accountName} onChange={(e) => setAccountName(e.target.value)} /></label><label className="checkout-field">Mobile number<input inputMode="numeric" value={accountMobile} onChange={(e) => setAccountMobile(e.target.value.replace(/\D/g, "").slice(0, 10))} /></label></>}
             <label className="checkout-field">Email<input type="email" autoComplete="username" value={reviewerEmail} onChange={(e) => setReviewerEmail(e.target.value)} /></label>
             <label className="checkout-field">Password<input type="password" autoComplete="current-password" value={reviewerPassword} onChange={(e) => setReviewerPassword(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") signInWithPassword(); }} /></label>
-            <button className="save-button" onClick={signInWithPassword}>Sign in with email</button>
+            <button className="save-button" onClick={signInWithPassword}>{accountMode === "register" ? "Create account" : "Sign in"}</button>
+            <button className="skip-feedback" onClick={() => { setAccountMode(accountMode === "register" ? "login" : "register"); setAuthMessage(""); }}>{accountMode === "register" ? "Already have an account? Sign in" : "New here? Create an account"}</button>
             {approvalStatus === "PENDING" && <p className="auth-message">Your delivery partner application is awaiting admin verification.</p>}
             {authMessage && <p className="auth-message">{authMessage}</p>}
             <small>By continuing, you agree to PrintBee's <a href="/terms">terms</a> and <a href="/privacy-policy">privacy policy</a>.</small>
@@ -2230,7 +2226,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
             <div className="admin-badge">DELIVERY PARTNER</div>
             <h2>Register as a rider</h2>
             <p>Submit the details once verified by admin you can continue as delivery partner.</p>
-            {!viewer && <button className="google-button" onClick={() => signInWithGoogle("PARTNER")}><span>G</span> Login with Google as delivery partner</button>}
+            {!viewer && <p className="auth-message">Sign in with a PrintBee account before applying.</p>}
             <label className="checkout-field">Full name<input value={riderApplication.name} onChange={(e) => setRiderApplication({ ...riderApplication, name: e.target.value })} /></label>
             <label className="checkout-field">Mobile number<input inputMode="numeric" value={riderApplication.mobileNumber} onChange={(e) => setRiderApplication({ ...riderApplication, mobileNumber: e.target.value.replace(/\D/g, "").slice(0, 10) })} /></label>
             <button className="save-button" disabled={!viewer || !riderApplication.name.trim() || riderApplication.mobileNumber.length !== 10} onClick={submitRiderApplication}>Submit for admin verification</button>
