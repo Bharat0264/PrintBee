@@ -809,7 +809,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
   const signInWithPassword = async () => {
     setAuthMessage("");
     if (!reviewerEmail.trim() || !reviewerPassword) return setAuthMessage("Enter the reviewer email and password.");
-    window.localStorage.setItem("printbee-login-mode", "CUSTOMER");
+    window.localStorage.setItem("printbee-login-mode", loginMode);
     const response = await fetch("/auth/local", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: accountMode, name: accountName, mobileNumber: accountMobile, email: reviewerEmail.trim(), password: reviewerPassword }) });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) return setAuthMessage(data.error ?? "The email or password is incorrect.");
@@ -2205,12 +2205,14 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
             <h2 id="login-title">Welcome to PrintBee</h2>
             <p>Create a PrintBee account once, then use your email and password next time.</p>
             <p className="auth-message">Google / Supabase login is temporarily unavailable.</p>
+            <div className="login-mode-picker"><button type="button" className={loginMode === "CUSTOMER" ? "selected" : ""} onClick={() => { setLoginMode("CUSTOMER"); window.localStorage.setItem("printbee-login-mode", "CUSTOMER"); }}>Customer</button><button type="button" className={loginMode === "PARTNER" ? "selected" : ""} onClick={() => { setLoginMode("PARTNER"); window.localStorage.setItem("printbee-login-mode", "PARTNER"); }}>Delivery partner</button></div>
             <label className="checkout-field referral-input">Referral code <small>Optional · only for a new account</small><input value={referralCode} onChange={(event) => setReferralCode(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))} placeholder="PBXXXXXXXX" /></label>
             <div className="reviewer-login-divider"><span>{accountMode === "register" ? "Create your account" : "Sign in to your account"}</span></div>
             {accountMode === "register" && <><label className="checkout-field">Full name<input value={accountName} onChange={(e) => setAccountName(e.target.value)} /></label><label className="checkout-field">Mobile number<input inputMode="numeric" value={accountMobile} onChange={(e) => setAccountMobile(e.target.value.replace(/\D/g, "").slice(0, 10))} /></label></>}
             <label className="checkout-field">Email<input type="email" autoComplete="username" value={reviewerEmail} onChange={(e) => setReviewerEmail(e.target.value)} /></label>
             <label className="checkout-field">Password<input type="password" autoComplete="current-password" value={reviewerPassword} onChange={(e) => setReviewerPassword(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") signInWithPassword(); }} /></label>
             <button className="save-button" onClick={signInWithPassword}>{accountMode === "register" ? "Create account" : "Sign in"}</button>
+            {loginMode === "PARTNER" && <small>After sign-in, submit your delivery-partner application for approval.</small>}
             <button className="skip-feedback" onClick={() => { setAccountMode(accountMode === "register" ? "login" : "register"); setAuthMessage(""); }}>{accountMode === "register" ? "Already have an account? Sign in" : "New here? Create an account"}</button>
             {approvalStatus === "PENDING" && <p className="auth-message">Your delivery partner application is awaiting admin verification.</p>}
             {authMessage && <p className="auth-message">{authMessage}</p>}
