@@ -298,6 +298,8 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [fileQueue, setFileQueue] = useState<File[]>([]);
   const [batchFiles, setBatchFiles] = useState<BatchFile[]>([]);
+  const [batchIndex, setBatchIndex] = useState(0);
+  const [swipeStartX, setSwipeStartX] = useState<number | null>(null);
   const [fileType, setFileType] = useState<"PDF" | "IMAGE" | "DOCUMENT">("PDF");
   const [countingPages, setCountingPages] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
@@ -671,6 +673,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
     if (!validFiles.length) return setUploadError("Choose PDF, JPG/JPEG, PNG, WEBP or HEIC files smaller than 50 MB.");
     if (validFiles.length === 1) {
       setBatchFiles([]);
+      setBatchIndex(0);
       await selectFile(validFiles[0]);
       return;
     }
@@ -683,12 +686,14 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
         return { file, fileName: file.name, fileType: isPdf ? "PDF" : "IMAGE", pages: filePages, copies: 1, mode: "bw-single", serviceId: "document-printing" };
       }));
       setBatchFiles(prepared);
+      setBatchIndex(0);
       setFileQueue([]);
       setFileName("");
       setSelectedFile(null);
       setUploadError(validFiles.length === files.length ? "" : "Unsupported or oversized files were skipped. Each accepted file must be 50 MB or smaller.");
     } catch (error) {
       setBatchFiles([]);
+      setBatchIndex(0);
       setUploadError(error instanceof Error ? error.message : "One of the selected files could not be read.");
     } finally {
       setCountingPages(false);
@@ -1720,22 +1725,26 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
           <p className="file-retention-note"><strong>Accepted files: PDF, JPG/JPEG, PNG, WEBP and HEIC only.</strong> Select multiple files to review all print choices together before adding the full batch to your cart. PDFs are counted automatically; each image is treated as one printable page. Files are deleted after delivery or cancellation. Maximum file size: 50 MB per file.</p>
           {uploadError && <p className="upload-error">{uploadError}</p>}
 
-          {batchFiles.length > 0 && <section className="binding-fields batch-file-review" aria-labelledby="batch-file-review-title">
-            <div className="field-label"><span className="step">2</span><strong id="batch-file-review-title">Review {batchFiles.length} files</strong></div>
-            <p>Set the printing choices for each file, then add the whole batch to your cart once.</p>
-            <div className="ledger-sheet"><table><thead><tr><th>File</th><th>Pages</th><th>Service</th><th>Print</th><th>Copies</th><th>Total</th><th /></tr></thead><tbody>
-              {batchFiles.map((item, index) => <tr key={`${item.fileName}-${index}`}>
-                <td><strong>{item.fileName}</strong><small>{item.fileType}</small></td>
-                <td>{item.pages}</td>
-                <td><select aria-label={`Service for ${item.fileName}`} value={item.serviceId} onChange={(event) => updateBatchFile(index, { serviceId: event.target.value })}>{printServices.map((service) => <option key={service.id} value={service.id}>{service.name}</option>)}</select></td>
-                <td><select aria-label={`Print style for ${item.fileName}`} value={item.mode} onChange={(event) => updateBatchFile(index, { mode: event.target.value as PrintMode })}>{options.map((option) => <option key={option.id} value={option.id}>{option.title}</option>)}</select></td>
-                <td><div className="quantity-stepper"><button type="button" aria-label={`Decrease copies for ${item.fileName}`} disabled={item.copies <= 1} onClick={() => updateBatchFile(index, { copies: Math.max(1, item.copies - 1) })}>−</button><output>{item.copies}</output><button type="button" aria-label={`Increase copies for ${item.fileName}`} onClick={() => updateBatchFile(index, { copies: item.copies + 1 })}>+</button></div></td>
-                <td><strong>{inr.format(batchTotal(item))}</strong></td>
-                <td><button type="button" className="remove-item" aria-label={`Remove ${item.fileName}`} onClick={() => setBatchFiles((items) => items.filter((_, itemIndex) => itemIndex !== index))}>×</button></td>
-              </tr>)}
-            </tbody></table></div>
-            <div className="estimate"><div><small>Batch total</small><strong>{inr.format(batchFiles.reduce((sum, item) => sum + batchTotal(item), 0))}</strong></div><button disabled={countingPages} onClick={addBatchToCart}>{uploadProgress !== null ? `Adding… ${uploadProgress}%` : `Add ${batchFiles.length} files to cart`} <span>→</span></button></div>
-          </section>}
+          {batchFiles.length > 0 && (() => {
+            const item = batchFiles[Math.min(batchIndex, batchFiles.length - 1)];
+            const moveBatch = (direction: number) => setBatchIndex((current) => Math.max(0, Math.min(batchFiles.length - 1, current + direction)));
+            const removeCurrent = () => {
+              setBatchFiles((items) => items.filter((_, itemIndex) => itemIndex !== batchIndex));
+              setBatchIndex((current) => Math.max(0, Math.min(current, batchFiles.length - 2)));
+            };
+            return <section className="binding-fields batch-file-review" aria-labelledby="batch-file-review-title">
+              <div className="field-label"><span className="step">2</span><strong id="batch-file-review-title">Review your files</strong></div>
+              <p>Swipe left or right to set printing choices for each file. Your changes stay saved as you move between files.</p>
+              <div className="batch-progress" aria-label={`File ${batchIndex + 1} of ${batchFiles.length}`}>{batchFiles.map((_, index) => <button type="button" key={index} className={index === batchIndex ? "active" : ""} onClick={() => setBatchIndex(index)} aria-label={`Review file ${index + 1}`} />)}</div>
+              <article className="batch-file-card" onTouchStart={(event) => setSwipeStartX(event.changedTouches[0]?.clientX ?? null)} onTouchEnd={(event) => { const endX = event.changedTouches[0]?.clientX; if (swipeStartX !== null && endX !== undefined && Math.abs(endX - swipeStartX) > 45) moveBatch(endX < swipeStartX ? 1 : -1); setSwipeStartX(null); }}>
+                <div className="batch-file-nav"><button type="button" onClick={() => moveBatch(-1)} disabled={batchIndex === 0} aria-label="Previous file">←</button><span>File {batchIndex + 1} of {batchFiles.length}</span><button type="button" onClick={() => moveBatch(1)} disabled={batchIndex === batchFiles.length - 1} aria-label="Next file">→</button></div>
+                <div className="batch-file-name"><span>{item.fileType === "PDF" ? "PDF" : "IMG"}</span><div><strong>{item.fileName}</strong><small>{item.pages} {item.pages === 1 ? "page" : "pages"}</small></div><button type="button" className="remove-item" onClick={removeCurrent} aria-label={`Remove ${item.fileName}`}>×</button></div>
+                <div className="batch-file-fields"><label>Service<select value={item.serviceId} onChange={(event) => updateBatchFile(batchIndex, { serviceId: event.target.value })}>{printServices.map((service) => <option key={service.id} value={service.id}>{service.name}</option>)}</select></label><label>Print style<select value={item.mode} onChange={(event) => updateBatchFile(batchIndex, { mode: event.target.value as PrintMode })}>{options.map((option) => <option key={option.id} value={option.id}>{option.title}</option>)}</select></label><div><small>Copies</small><div className="quantity-stepper"><button type="button" disabled={item.copies <= 1} onClick={() => updateBatchFile(batchIndex, { copies: Math.max(1, item.copies - 1) })}>−</button><output>{item.copies}</output><button type="button" onClick={() => updateBatchFile(batchIndex, { copies: item.copies + 1 })}>+</button></div></div></div>
+                <div className="batch-file-total"><span>This file</span><strong>{inr.format(batchTotal(item))}</strong></div>
+              </article>
+              <div className="estimate"><div><small>Batch total · {batchFiles.length} files</small><strong>{inr.format(batchFiles.reduce((sum, batchItem) => sum + batchTotal(batchItem), 0))}</strong></div><button disabled={countingPages} onClick={addBatchToCart}>{uploadProgress !== null ? `Adding… ${uploadProgress}%` : "Add all to cart"} <span>→</span></button></div>
+            </section>;
+          })()}
 
           {addons.length > 0 && <div className="binding-fields standalone-addons">
             <strong>Don’t need printouts? Order add-ons only</strong>

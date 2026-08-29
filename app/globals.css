@@ -850,6 +850,25 @@ footer { border-top: 1px solid var(--line); padding: 28px max(24px, calc((100% -
 .otp-verification > button { height: 41px; border: 0; border-radius: 9px; padding: 0 15px; background: var(--ink); color: white; font-weight: 900; }
 .otp-verification > button:disabled { opacity: .45; }
 .partner-message { padding: 12px; border-radius: 9px; background: #e4f5eb; color: #17633a; font-size: 10px; font-weight: 800; }
+.batch-file-review { overflow: hidden; }
+.batch-progress { display: flex; gap: 6px; margin: 14px 0; }
+.batch-progress button { width: 100%; height: 5px; border: 0; border-radius: 999px; background: #e4e1d7; cursor: pointer; }
+.batch-progress button.active { background: var(--yellow); }
+.batch-file-card { padding: 16px; border: 1px solid var(--line); border-radius: 14px; background: #fffdf6; touch-action: pan-y; user-select: none; }
+.batch-file-nav, .batch-file-name, .batch-file-total { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.batch-file-nav { margin-bottom: 16px; color: var(--muted); font-size: 10px; font-weight: 900; }
+.batch-file-nav button { width: 34px; height: 34px; border: 1px solid var(--line); border-radius: 9px; background: white; color: var(--ink); font-size: 17px; font-weight: 900; cursor: pointer; }
+.batch-file-nav button:disabled { opacity: .35; cursor: not-allowed; }
+.batch-file-name > span { display: grid; width: 42px; height: 42px; place-items: center; border-radius: 10px; background: var(--yellow); color: var(--ink); font-size: 10px; font-weight: 900; }
+.batch-file-name > div { flex: 1; min-width: 0; }
+.batch-file-name strong, .batch-file-name small { display: block; }
+.batch-file-name strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.batch-file-name small { margin-top: 3px; color: var(--muted); font-size: 10px; }
+.batch-file-fields { display: grid; grid-template-columns: 1fr 1fr 112px; gap: 10px; margin: 18px 0; }
+.batch-file-fields label, .batch-file-fields > div > small { display: block; color: var(--muted); font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: .4px; }
+.batch-file-fields select { width: 100%; margin-top: 6px; border: 1px solid var(--line); border-radius: 9px; padding: 10px; background: white; color: var(--ink); font-weight: 800; }
+.batch-file-total { padding-top: 13px; border-top: 1px solid var(--line); color: var(--muted); font-size: 10px; }
+.batch-file-total strong { color: var(--ink); font-size: 18px; }
 
 @media (max-width: 700px) {
   .partner-topbar { height: auto; padding: 10px 16px; align-items: flex-start; }
@@ -864,4 +883,6 @@ footer { border-top: 1px solid var(--line); padding: 28px max(24px, calc((100% -
   .delivery-actions button { grid-column: auto !important; }
   .otp-verification { grid-template-columns: 1fr; }
   .customer-payment-qr, .order-payment-qr { flex-direction: column; text-align: center; }
+  .batch-file-fields { grid-template-columns: 1fr; }
+  .batch-file-fields > div { max-width: 150px; }
 }
