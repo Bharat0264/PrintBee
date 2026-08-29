@@ -98,6 +98,11 @@ nav a, .admin-link { color: #44484f; background: none; border: 0; text-decoratio
 .campus-delivery-banner strong { font-size: 13px; line-height: 1.2; }
 .campus-delivery-banner small { margin-top: 2px; color: #effff3; font-size: 10px; font-weight: 700; }
 @keyframes campus-banner-pulse { 50% { box-shadow: 0 12px 28px rgba(13, 122, 63, .42); transform: translateY(-1px); } }
+.srm-binding-banner { display: grid; grid-template-columns: auto 1fr; column-gap: 10px; align-items: center; margin: 0 0 18px; padding: 12px 14px; border: 2px solid #7a3e91; border-radius: 14px; background: linear-gradient(120deg, #5b266f, #a64bbb 58%, #e9af33); box-shadow: 0 10px 22px rgba(91, 38, 111, .24); color: #fff; animation: srm-binding-banner-pulse 2.6s ease-in-out infinite .3s; }
+.srm-binding-banner span { grid-row: 1 / span 2; align-self: center; border-radius: 999px; padding: 5px 7px; background: #fff; color: #6e3184; font-size: 9px; font-weight: 950; letter-spacing: .7px; }
+.srm-binding-banner strong { font-size: 13px; line-height: 1.2; }
+.srm-binding-banner small { margin-top: 2px; color: #fff3ff; font-size: 10px; font-weight: 700; }
+@keyframes srm-binding-banner-pulse { 50% { box-shadow: 0 12px 28px rgba(91, 38, 111, .4); transform: translateY(-1px); } }
 .eyebrow { display: inline-flex; align-items: center; gap: 9px; color: #5b5e63; font-size: 13px; font-weight: 800; letter-spacing: .8px; text-transform: uppercase; }
 .eyebrow span { color: var(--yellow); font-size: 16px; }
 h1 { font-size: clamp(48px, 5vw, 78px); line-height: .98; letter-spacing: -4px; margin: 24px 0; }

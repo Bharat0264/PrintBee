@@ -1671,6 +1671,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
       <section className="hero" id="top">
         <div className="hero-copy">
           <div className="campus-delivery-banner" role="status"><span>NEW</span><strong>Classroom &amp; hostel delivery is now available</strong><small>Fast in-campus delivery for university students</small></div>
+          <div className="srm-binding-banner" role="status"><span>NEW</span><strong>SRM-style soft binding is now available</strong><small>Add your documents, then select the binding style from the service options.</small></div>
           <div className="eyebrow"><span>●</span> A4 printing, delivered locally</div>
           <h1>Your documents.<br /><em>Printed right.</em></h1>
           <p>Upload a PDF or image, choose your A4 print style, and get crisp prints delivered to your door.</p>
