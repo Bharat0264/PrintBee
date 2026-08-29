@@ -278,6 +278,16 @@ type CartItem = {
   addonsTotal?: number;
 };
 
+type BatchFile = {
+  file: File;
+  fileName: string;
+  fileType: "PDF" | "IMAGE";
+  pages: number;
+  copies: number;
+  mode: PrintMode;
+  serviceId: string;
+};
+
 export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Viewer; appwriteConfigured: boolean }) {
   const [prices, setPrices] = useState<Prices>(defaultPrices);
   const [draftPrices, setDraftPrices] = useState<Prices>(defaultPrices);
@@ -287,6 +297,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
   const [fileName, setFileName] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [fileQueue, setFileQueue] = useState<File[]>([]);
+  const [batchFiles, setBatchFiles] = useState<BatchFile[]>([]);
   const [fileType, setFileType] = useState<"PDF" | "IMAGE" | "DOCUMENT">("PDF");
   const [countingPages, setCountingPages] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
@@ -658,9 +669,67 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
     if (!files.length) return;
     const validFiles = files.filter((file) => file.size <= MAX_UPLOAD_BYTES && PRINTABLE_FILE_EXTENSIONS.test(file.name));
     if (!validFiles.length) return setUploadError("Choose PDF, JPG/JPEG, PNG, WEBP or HEIC files smaller than 50 MB.");
-    setFileQueue(validFiles.slice(1));
-    if (validFiles.length !== files.length) setUploadError("Unsupported or oversized files were skipped. Each accepted file must be 50 MB or smaller.");
-    await selectFile(validFiles[0]);
+    if (validFiles.length === 1) {
+      setBatchFiles([]);
+      await selectFile(validFiles[0]);
+      return;
+    }
+    setCountingPages(true);
+    setUploadError("");
+    try {
+      const prepared = await Promise.all(validFiles.map(async (file): Promise<BatchFile> => {
+        const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+        const filePages = isPdf ? (await PDFDocument.load(await file.arrayBuffer(), { ignoreEncryption: true })).getPageCount() : 1;
+        return { file, fileName: file.name, fileType: isPdf ? "PDF" : "IMAGE", pages: filePages, copies: 1, mode: "bw-single", serviceId: "document-printing" };
+      }));
+      setBatchFiles(prepared);
+      setFileQueue([]);
+      setFileName("");
+      setSelectedFile(null);
+      setUploadError(validFiles.length === files.length ? "" : "Unsupported or oversized files were skipped. Each accepted file must be 50 MB or smaller.");
+    } catch (error) {
+      setBatchFiles([]);
+      setUploadError(error instanceof Error ? error.message : "One of the selected files could not be read.");
+    } finally {
+      setCountingPages(false);
+    }
+  };
+
+  const batchTotal = (item: BatchFile) => {
+    const service = printServices.find((candidate) => candidate.id === item.serviceId);
+    const sides = item.mode.endsWith("double") ? 2 : 1;
+    return (item.pages / sides) * item.copies * prices[item.mode] + (service?.price_paise ?? 0) / 100;
+  };
+
+  const updateBatchFile = (index: number, updates: Partial<BatchFile>) => setBatchFiles((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, ...updates } : item));
+
+  const addBatchToCart = async () => {
+    if (!viewer) return setLoginOpen(true);
+    if (!batchFiles.length || countingPages) return;
+    setCountingPages(true);
+    setUploadProgress(0);
+    setUploadError("");
+    const added: CartItem[] = [];
+    try {
+      for (let index = 0; index < batchFiles.length; index += 1) {
+        const item = batchFiles[index];
+        const uploadFile = await optimizeImageForUpload(item.file);
+        const uploaded = await uploadPrintableFile(uploadFile, item.pages, (progress) => setUploadProgress(Math.round(((index + progress / 100) / batchFiles.length) * 100)));
+        const service = printServices.find((candidate) => candidate.id === item.serviceId);
+        const cartItem: CartItem = { id: crypto.randomUUID(), uploadId: uploaded.uploadId, fileName: item.fileName, fileType: item.fileType, pages: item.pages, copies: item.copies, mode: item.mode, unitPrice: prices[item.mode], bwUnitPrice: prices[`bw-${item.mode.endsWith("double") ? "double" : "single"}`], colourUnitPrice: prices[`colour-${item.mode.endsWith("double") ? "double" : "single"}`], total: batchTotal(item), serviceId: item.serviceId, serviceName: service?.name ?? "Document printing", servicePrice: (service?.price_paise ?? 0) / 100, countsForPackaging: Boolean(service?.counts_for_packaging ?? 1), addons: [], addonsTotal: 0 };
+        const response = await fetch("/api/cart", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cartItem) });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(result.error ?? `Could not add ${item.fileName} to the cart.`);
+        added.push(cartItem);
+      }
+      setCart((items) => [...items, ...added]);
+      setBatchFiles([]);
+    } catch (error) {
+      setUploadError(error instanceof Error ? error.message : "The selected files could not be added to the cart.");
+    } finally {
+      setCountingPages(false);
+      setUploadProgress(null);
+    }
   };
 
   const addToCart = async () => {
@@ -721,21 +790,14 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
       return setUploadError(error instanceof Error ? error.message : "The cart could not be saved. Please try again.");
     }
     setCart((items) => [...items, cartItem]);
-    const [nextFile, ...remainingFiles] = fileQueue;
-    setFileQueue(remainingFiles);
-    if (nextFile) {
-      void selectFile(nextFile);
-    } else {
-      setFileName("");
-      setSelectedFile(null);
-      setPages(1);
-      setCopies(1);
-      setPrintInstructions("");
-      setColourPageNumbers("");
-      setColourChoice("");
-      setSelectedAddonIds([]);
-    }
-    setCheckoutOpen(true);
+    setFileName("");
+    setSelectedFile(null);
+    setPages(1);
+    setCopies(1);
+    setPrintInstructions("");
+    setColourPageNumbers("");
+    setColourChoice("");
+    setSelectedAddonIds([]);
   };
 
   const removeFromCart = async (item: CartItem) => {
@@ -1655,8 +1717,25 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
             <strong>{fileName || "Choose document(s)"}</strong>
             <small>{uploadProgress !== null ? `Uploading… ${uploadProgress}%` : countingPages ? "Checking file…" : fileName ? `${pages} ${pages === 1 ? "page" : "pages"} detected${fileQueue.length ? ` · ${fileQueue.length} more queued` : ""}` : "Select one or more PDF or image files"}</small>
           </label>
-          <p className="file-retention-note"><strong>Accepted files: PDF, JPG/JPEG, PNG, WEBP and HEIC only.</strong> You can select multiple files; each is queued for review and added separately. PDFs are counted automatically; each image is treated as one printable page. Files are deleted after delivery or cancellation. Maximum file size: 50 MB per file.</p>
+          <p className="file-retention-note"><strong>Accepted files: PDF, JPG/JPEG, PNG, WEBP and HEIC only.</strong> Select multiple files to review all print choices together before adding the full batch to your cart. PDFs are counted automatically; each image is treated as one printable page. Files are deleted after delivery or cancellation. Maximum file size: 50 MB per file.</p>
           {uploadError && <p className="upload-error">{uploadError}</p>}
+
+          {batchFiles.length > 0 && <section className="binding-fields batch-file-review" aria-labelledby="batch-file-review-title">
+            <div className="field-label"><span className="step">2</span><strong id="batch-file-review-title">Review {batchFiles.length} files</strong></div>
+            <p>Set the printing choices for each file, then add the whole batch to your cart once.</p>
+            <div className="ledger-sheet"><table><thead><tr><th>File</th><th>Pages</th><th>Service</th><th>Print</th><th>Copies</th><th>Total</th><th /></tr></thead><tbody>
+              {batchFiles.map((item, index) => <tr key={`${item.fileName}-${index}`}>
+                <td><strong>{item.fileName}</strong><small>{item.fileType}</small></td>
+                <td>{item.pages}</td>
+                <td><select aria-label={`Service for ${item.fileName}`} value={item.serviceId} onChange={(event) => updateBatchFile(index, { serviceId: event.target.value })}>{printServices.map((service) => <option key={service.id} value={service.id}>{service.name}</option>)}</select></td>
+                <td><select aria-label={`Print style for ${item.fileName}`} value={item.mode} onChange={(event) => updateBatchFile(index, { mode: event.target.value as PrintMode })}>{options.map((option) => <option key={option.id} value={option.id}>{option.title}</option>)}</select></td>
+                <td><div className="quantity-stepper"><button type="button" aria-label={`Decrease copies for ${item.fileName}`} disabled={item.copies <= 1} onClick={() => updateBatchFile(index, { copies: Math.max(1, item.copies - 1) })}>−</button><output>{item.copies}</output><button type="button" aria-label={`Increase copies for ${item.fileName}`} onClick={() => updateBatchFile(index, { copies: item.copies + 1 })}>+</button></div></td>
+                <td><strong>{inr.format(batchTotal(item))}</strong></td>
+                <td><button type="button" className="remove-item" aria-label={`Remove ${item.fileName}`} onClick={() => setBatchFiles((items) => items.filter((_, itemIndex) => itemIndex !== index))}>×</button></td>
+              </tr>)}
+            </tbody></table></div>
+            <div className="estimate"><div><small>Batch total</small><strong>{inr.format(batchFiles.reduce((sum, item) => sum + batchTotal(item), 0))}</strong></div><button disabled={countingPages} onClick={addBatchToCart}>{uploadProgress !== null ? `Adding… ${uploadProgress}%` : `Add ${batchFiles.length} files to cart`} <span>→</span></button></div>
+          </section>}
 
           {addons.length > 0 && <div className="binding-fields standalone-addons">
             <strong>Don’t need printouts? Order add-ons only</strong>
