@@ -286,6 +286,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
   const [copies, setCopies] = useState(1);
   const [fileName, setFileName] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [fileQueue, setFileQueue] = useState<File[]>([]);
   const [fileType, setFileType] = useState<"PDF" | "IMAGE" | "DOCUMENT">("PDF");
   const [countingPages, setCountingPages] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
@@ -294,11 +295,6 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
   const [adminOpen, setAdminOpen] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
   const [authMessage, setAuthMessage] = useState("");
-  const [reviewerEmail, setReviewerEmail] = useState("");
-  const [reviewerPassword, setReviewerPassword] = useState("");
-  const [accountName, setAccountName] = useState("");
-  const [accountMobile, setAccountMobile] = useState("");
-  const [accountMode, setAccountMode] = useState<"register" | "login">("register");
   const [role, setRole] = useState<string | null>(viewer?.isAdmin ? "ADMIN" : null);
   const [adminRole, setAdminRole] = useState<string | null>(viewer?.isAdmin ? "OWNER" : null);
   const [approvalStatus, setApprovalStatus] = useState<string | null>(null);
@@ -619,18 +615,14 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
   const total = printTotal + servicePrice + addonsTotal;
   const colourPagesValid = colourChoice === "bw" || colourChoice === "colour" || (colourChoice === "mixed" && colourPageNumbers.trim().length > 0 && colourPageResult.invalid.length === 0);
 
-  const handleFile = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+  const selectFile = async (file: File) => {
     if (file.size > MAX_UPLOAD_BYTES) {
-      event.target.value = "";
       setFileName("");
       setSelectedFile(null);
       setUploadError(`"${file.name}" is too large. Please upload a PDF or image smaller than 50 MB.`);
       return;
     }
     if (!PRINTABLE_FILE_EXTENSIONS.test(file.name)) {
-      event.target.value = "";
       setUploadError("Only PDF, JPG/JPEG, PNG, WEBP and HEIC files are accepted.");
       return;
     }
@@ -658,6 +650,17 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
     } finally {
       setCountingPages(false);
     }
+  };
+
+  const handleFile = async (event: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? []);
+    event.target.value = "";
+    if (!files.length) return;
+    const validFiles = files.filter((file) => file.size <= MAX_UPLOAD_BYTES && PRINTABLE_FILE_EXTENSIONS.test(file.name));
+    if (!validFiles.length) return setUploadError("Choose PDF, JPG/JPEG, PNG, WEBP or HEIC files smaller than 50 MB.");
+    setFileQueue(validFiles.slice(1));
+    if (validFiles.length !== files.length) setUploadError("Unsupported or oversized files were skipped. Each accepted file must be 50 MB or smaller.");
+    await selectFile(validFiles[0]);
   };
 
   const addToCart = async () => {
@@ -718,14 +721,21 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
       return setUploadError(error instanceof Error ? error.message : "The cart could not be saved. Please try again.");
     }
     setCart((items) => [...items, cartItem]);
-    setFileName("");
-    setSelectedFile(null);
-    setPages(1);
-    setCopies(1);
-    setPrintInstructions("");
-    setColourPageNumbers("");
-    setColourChoice("");
-    setSelectedAddonIds([]);
+    const [nextFile, ...remainingFiles] = fileQueue;
+    setFileQueue(remainingFiles);
+    if (nextFile) {
+      void selectFile(nextFile);
+    } else {
+      setFileName("");
+      setSelectedFile(null);
+      setPages(1);
+      setCopies(1);
+      setPrintInstructions("");
+      setColourPageNumbers("");
+      setColourChoice("");
+      setSelectedAddonIds([]);
+    }
+    setCheckoutOpen(true);
   };
 
   const removeFromCart = async (item: CartItem) => {
@@ -806,20 +816,15 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
     setGatewayEnabled(data.gatewayEnabled); setSurgeEnabled(data.surgeEnabled); setSurgeType(data.surgeType); setSurgeValue(data.surgeValue); setLateNightEnabled(data.lateNightEnabled); setLateNightType(data.lateNightType); setLateNightValue(data.lateNightValue); setPlatformFee(data.platformFee); setBaseDeliveryFee(data.baseDeliveryFee); setDeliveryFeePer100Meters(data.deliveryFeePer100Meters); setPackagingEnabled(data.packagingEnabled); setPackagingFee(data.packagingFee); if (!data.packagingEnabled) setNeedsPackaging(false); setNotificationMessage("Checkout fee settings saved.");
   };
 
-  const signInWithPassword = async () => {
-    setAuthMessage("");
-    if (!reviewerEmail.trim() || !reviewerPassword) return setAuthMessage("Enter the reviewer email and password.");
+  const signInWithGoogle = () => {
     window.localStorage.setItem("printbee-login-mode", loginMode);
-    const response = await fetch("/auth/local", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: accountMode, name: accountName, mobileNumber: accountMobile, email: reviewerEmail.trim(), password: reviewerPassword }) });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) return setAuthMessage(data.error ?? "The email or password is incorrect.");
     if (referralCode.trim()) window.localStorage.setItem("printbee-referral-code", referralCode.trim().toUpperCase());
-    window.location.reload();
+    window.location.assign("/auth/login");
   };
 
   const signOut = async () => {
     window.localStorage.removeItem("printbee-login-mode");
-    await fetch("/auth/local", { method: "DELETE" });
+    await fetch("/auth/signout", { method: "POST" });
     window.location.reload();
   };
 
@@ -1645,12 +1650,12 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
           </div>
 
           <label className={`upload-zone ${fileName ? "has-file" : ""}`}>
-            <input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,application/pdf,image/jpeg,image/png,image/webp,image/heic,image/heif" onChange={handleFile} />
+            <input type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,application/pdf,image/jpeg,image/png,image/webp,image/heic,image/heif" onChange={handleFile} />
             <span className="upload-icon">{countingPages ? "…" : fileName ? "✓" : "↑"}</span>
-            <strong>{fileName || "Choose a document"}</strong>
-            <small>{uploadProgress !== null ? `Uploading… ${uploadProgress}%` : countingPages ? "Checking file…" : fileName ? `${pages} ${pages === 1 ? "page" : "pages"} detected` : "PDF or image files"}</small>
+            <strong>{fileName || "Choose document(s)"}</strong>
+            <small>{uploadProgress !== null ? `Uploading… ${uploadProgress}%` : countingPages ? "Checking file…" : fileName ? `${pages} ${pages === 1 ? "page" : "pages"} detected${fileQueue.length ? ` · ${fileQueue.length} more queued` : ""}` : "Select one or more PDF or image files"}</small>
           </label>
-          <p className="file-retention-note"><strong>Accepted files: PDF, JPG/JPEG, PNG, WEBP and HEIC only.</strong> PDFs are counted automatically; each image is treated as one printable page. Export other files as PDF before uploading. Files are deleted after delivery or cancellation. Maximum file size: 50 MB.</p>
+          <p className="file-retention-note"><strong>Accepted files: PDF, JPG/JPEG, PNG, WEBP and HEIC only.</strong> You can select multiple files; each is queued for review and added separately. PDFs are counted automatically; each image is treated as one printable page. Files are deleted after delivery or cancellation. Maximum file size: 50 MB per file.</p>
           {uploadError && <p className="upload-error">{uploadError}</p>}
 
           {addons.length > 0 && <div className="binding-fields standalone-addons">
@@ -1719,7 +1724,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
 
           <div className="estimate">
             <div><small>Estimated print total</small><strong>{inr.format(total)}</strong></div>
-            <button disabled={!fileName || countingPages || (usesMixedPagePricing && !colourPagesValid) || (Boolean(printServices.find((service) => service.id === serviceId)?.is_binding) && whatsappNumber.length !== 10)} onClick={addToCart}>Add to cart <span>→</span></button>
+            <button disabled={!fileName || countingPages || (usesMixedPagePricing && !colourPagesValid) || (Boolean(printServices.find((service) => service.id === serviceId)?.is_binding) && whatsappNumber.length !== 10)} onClick={addToCart}>Add &amp; proceed to checkout <span>→</span></button>
           </div>
           <p className="estimate-note">{usesMixedPagePricing ? `${bwPageCount} B&W + ${colourPageCount} colour pages × ${copies} ${copies === 1 ? "copy" : "copies"} · ${side === "double" ? "Double sided (pages ÷ 2)" : "Single sided"}` : `${pages}${side === "double" ? " ÷ 2" : ""} pages × ${copies} ${copies === 1 ? "copy" : "copies"} × ${inr.format(prices[mode])} · ${selected.title}`}{servicePrice > 0 ? ` + ${inr.format(servicePrice)} ${selectedService?.name} charge` : ""}{addonsTotal > 0 ? ` + ${inr.format(addonsTotal)} add-ons` : ""}</p>
           <div className="payment-instruction" role="note">
@@ -2203,17 +2208,12 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
             <button className="close" onClick={() => setLoginOpen(false)} aria-label="Close">×</button>
             <img src="/printbee-logo.png" width={88} height={88} alt="PrintBee" />
             <h2 id="login-title">Welcome to PrintBee</h2>
-            <p>Create a PrintBee account once, then use your email and password next time.</p>
-            <p className="auth-message">Google / Supabase login is temporarily unavailable.</p>
+            <p>Sign in securely with your Google account to continue.</p>
             <div className="login-mode-picker"><button type="button" className={loginMode === "CUSTOMER" ? "selected" : ""} onClick={() => { setLoginMode("CUSTOMER"); window.localStorage.setItem("printbee-login-mode", "CUSTOMER"); }}>Customer</button><button type="button" className={loginMode === "PARTNER" ? "selected" : ""} onClick={() => { setLoginMode("PARTNER"); window.localStorage.setItem("printbee-login-mode", "PARTNER"); }}>Delivery partner</button></div>
             <label className="checkout-field referral-input">Referral code <small>Optional · only for a new account</small><input value={referralCode} onChange={(event) => setReferralCode(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))} placeholder="PBXXXXXXXX" /></label>
-            <div className="reviewer-login-divider"><span>{accountMode === "register" ? "Create your account" : "Sign in to your account"}</span></div>
-            {accountMode === "register" && <><label className="checkout-field">Full name<input value={accountName} onChange={(e) => setAccountName(e.target.value)} /></label><label className="checkout-field">Mobile number<input inputMode="numeric" value={accountMobile} onChange={(e) => setAccountMobile(e.target.value.replace(/\D/g, "").slice(0, 10))} /></label></>}
-            <label className="checkout-field">Email<input type="email" autoComplete="username" value={reviewerEmail} onChange={(e) => setReviewerEmail(e.target.value)} /></label>
-            <label className="checkout-field">Password<input type="password" autoComplete="current-password" value={reviewerPassword} onChange={(e) => setReviewerPassword(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") signInWithPassword(); }} /></label>
-            <button className="save-button" onClick={signInWithPassword}>{accountMode === "register" ? "Create account" : "Sign in"}</button>
+            <div className="reviewer-login-divider"><span>Secure account access</span></div>
+            <button className="save-button" onClick={signInWithGoogle}>Continue with Google</button>
             {loginMode === "PARTNER" && <small>After sign-in, submit your delivery-partner application for approval.</small>}
-            <button className="skip-feedback" onClick={() => { setAccountMode(accountMode === "register" ? "login" : "register"); setAuthMessage(""); }}>{accountMode === "register" ? "Already have an account? Sign in" : "New here? Create an account"}</button>
             {approvalStatus === "PENDING" && <p className="auth-message">Your delivery partner application is awaiting admin verification.</p>}
             {authMessage && <p className="auth-message">{authMessage}</p>}
             <small>By continuing, you agree to PrintBee's <a href="/terms">terms</a> and <a href="/privacy-policy">privacy policy</a>.</small>
