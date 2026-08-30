@@ -908,6 +908,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
 
   const useCurrentLocation = () => {
     setLocationMessage("");
+    setCalculatedDeliveryFee(null);
     if (!navigator.geolocation) return setLocationMessage("Location is not available in this browser.");
     navigator.geolocation.getCurrentPosition(async (position) => {
       const coordinates = { latitude: position.coords.latitude, longitude: position.coords.longitude, accuracy: position.coords.accuracy };
