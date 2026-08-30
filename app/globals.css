@@ -879,7 +879,7 @@ footer { border-top: 1px solid var(--line); padding: 28px max(24px, calc((100% -
 .batch-file-name small { margin-top: 3px; color: var(--muted); font-size: 10px; }
 .batch-file-fields { display: grid; grid-template-columns: 1fr 1fr 112px; gap: 10px; margin: 18px 0; }
 .batch-file-fields { display: none; }
-.batch-file-choice-cards { display: grid; grid-template-columns: 1fr 1fr 112px; gap: 14px; margin: 18px 0; }
+.batch-file-choice-cards { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 14px; margin: 18px 0; }
 .batch-choice-group { display: grid; gap: 6px; }
 .batch-choice-group > small, .batch-copies > small { color: var(--muted); font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: .4px; }
 .batch-choice-group .service-option-grid { grid-template-columns: 1fr; margin: 0; }
@@ -890,7 +890,8 @@ footer { border-top: 1px solid var(--line); padding: 28px max(24px, calc((100% -
 .batch-choice-group .print-option strong { font-size: 9px; }
 .batch-choice-group .print-option small { display: none; }
 .batch-choice-group .mode-icon { width: 23px; height: 23px; font-size: 12px; }
-.batch-copies { display: grid; align-content: start; gap: 6px; }
+.batch-copies { display: grid; grid-column: 1 / -1; grid-template-columns: 112px 1fr; align-items: center; gap: 12px; }
+.batch-copies .quantity-stepper { margin: 0; max-width: 170px; }
 .batch-file-fields label, .batch-file-fields > div > small { display: block; color: var(--muted); font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: .4px; }
 .batch-file-fields select { width: 100%; margin-top: 6px; border: 1px solid var(--line); border-radius: 9px; padding: 10px; background: white; color: var(--ink); font-weight: 800; }
 .batch-file-total { padding-top: 13px; border-top: 1px solid var(--line); color: var(--muted); font-size: 10px; }
@@ -911,6 +912,6 @@ footer { border-top: 1px solid var(--line); padding: 28px max(24px, calc((100% -
   .customer-payment-qr, .order-payment-qr { flex-direction: column; text-align: center; }
   .batch-file-fields { grid-template-columns: 1fr; }
   .batch-file-choice-cards { grid-template-columns: 1fr; }
-  .batch-copies { max-width: 150px; }
+  .batch-copies { grid-column: auto; grid-template-columns: 1fr; max-width: 150px; }
   .batch-file-fields > div { max-width: 150px; }
 }
