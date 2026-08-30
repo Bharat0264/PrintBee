@@ -305,6 +305,10 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [uploadError, setUploadError] = useState("");
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [editingCartItem, setEditingCartItem] = useState<CartItem | null>(null);
+  const [cartEditMode, setCartEditMode] = useState<PrintMode>("bw-single");
+  const [cartEditCopies, setCartEditCopies] = useState(1);
+  const [cartEditServiceId, setCartEditServiceId] = useState("document-printing");
   const [adminOpen, setAdminOpen] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
   const [authMessage, setAuthMessage] = useState("");
@@ -812,6 +816,27 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
       return setUploadError(data.error ?? "This item could not be removed. Please try again.");
     }
     setCart((items) => items.filter((current) => current.id !== item.id));
+  };
+
+  const openCartEditor = (item: CartItem) => {
+    setEditingCartItem(item);
+    setCartEditMode(item.mode);
+    setCartEditCopies(item.copies);
+    setCartEditServiceId(item.serviceId);
+  };
+
+  const saveCartEdit = async () => {
+    if (!editingCartItem) return;
+    const service = printServices.find((candidate) => candidate.id === cartEditServiceId);
+    if (!service) return setUploadError("That print service is no longer available.");
+    const sides = cartEditMode.endsWith("double") ? 2 : 1;
+    const servicePrice = (service.price_paise ?? 0) / 100;
+    const updated: CartItem = { ...editingCartItem, mode: cartEditMode, copies: cartEditCopies, unitPrice: prices[cartEditMode], bwUnitPrice: prices[`bw-${cartEditMode.endsWith("double") ? "double" : "single"}`], colourUnitPrice: prices[`colour-${cartEditMode.endsWith("double") ? "double" : "single"}`], serviceId: service.id, serviceName: service.name, servicePrice, countsForPackaging: Boolean(service.counts_for_packaging ?? 1), total: (editingCartItem.pages / sides) * cartEditCopies * prices[cartEditMode] + servicePrice + (editingCartItem.addonsTotal ?? 0), colourPages: undefined, colourPageNumbers: undefined, bwPageNumbers: undefined };
+    const response = await fetch("/api/cart", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(updated) });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) return setUploadError(data.error ?? "Your changes could not be saved. Please try again.");
+    setCart((items) => items.map((item) => item.id === updated.id ? updated : item));
+    setEditingCartItem(null);
   };
 
   const addStandaloneAddon = async (addon: Addon) => {
@@ -1843,6 +1868,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
                     <div className="file-badge">{item.kind === "ADDON" ? "ADD" : item.fileType === "PDF" ? "PDF" : item.fileType === "IMAGE" ? "IMG" : "DOC"}</div>
                     {item.kind === "ADDON" ? <div className="cart-file"><h3>{item.fileName}</h3><p>Add-on only · No printout required</p><small>Fixed product price</small></div> : <div className="cart-file"><h3>{item.fileName}</h3><p>{item.serviceName} · {item.pages} {item.pages === 1 ? "page" : "pages"} · A4 · {itemOption?.title ?? printModeLabel(item.mode)} · {item.copies} {item.copies === 1 ? "copy" : "copies"}</p>{item.colourPageNumbers !== undefined && <p>Colour pages: {item.colourPageNumbers} · B&amp;W pages: {item.bwPageNumbers ?? `remaining ${item.pages - (item.colourPages ?? 0)} pages`}</p>}{item.addons?.length ? <p>Add-ons: {item.addons.map((addon) => addon.name).join(", ")}</p> : null}{item.printInstructions && <p>{item.printInstructions}{item.whatsappNumber ? ` · WhatsApp ${item.whatsappNumber}` : ""}</p>}<small>{item.colourPageNumbers !== undefined ? `${item.pages - (item.colourPages ?? 0)} B&W + ${item.colourPages ?? 0} colour × ${item.copies}` : `${item.pages}${item.mode.endsWith("double") ? " ÷ 2" : ""} × ${item.copies} × ${inr.format(item.unitPrice)}`}{item.servicePrice > 0 ? ` + ${inr.format(item.servicePrice)} service charge` : ""}{item.addonsTotal ? ` + ${inr.format(item.addonsTotal)} add-ons` : ""}</small></div>}
                     <strong>{inr.format(item.total)}</strong>
+                    {item.kind !== "ADDON" && <button className="edit-cart-item" onClick={() => openCartEditor(item)} aria-label={`Edit ${item.fileName}`}>Edit</button>}
                     <button className="remove-item" onClick={() => removeFromCart(item)} aria-label={`Remove ${item.fileName}`}>×</button>
                   </article>
                 );
@@ -2307,6 +2333,22 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
             {approvalStatus === "PENDING" && <p className="auth-message">Your delivery partner application is awaiting admin verification.</p>}
             {authMessage && <p className="auth-message">{authMessage}</p>}
             <small>By continuing, you agree to PrintBee's <a href="/terms">terms</a> and <a href="/privacy-policy">privacy policy</a>.</small>
+          </section>
+        </div>
+      )}
+
+      {editingCartItem && (
+        <div className="modal-backdrop" role="presentation" onMouseDown={() => setEditingCartItem(null)}>
+          <section className="checkout-modal cart-edit-modal" role="dialog" aria-modal="true" aria-labelledby="cart-edit-title" onMouseDown={(event) => event.stopPropagation()}>
+            <button className="close" onClick={() => setEditingCartItem(null)} aria-label="Close">×</button>
+            <div className="admin-badge">EDIT DOCUMENT</div>
+            <h2 id="cart-edit-title">Edit print options</h2>
+            <p><strong>{editingCartItem.fileName}</strong> · {editingCartItem.pages} {editingCartItem.pages === 1 ? "page" : "pages"}</p>
+            <label className="service-picker">Print service<select value={cartEditServiceId} onChange={(event) => setCartEditServiceId(event.target.value)}>{printServices.map((service) => <option key={service.id} value={service.id}>{service.name}{service.price_paise ? ` (+${inr.format(service.price_paise / 100)})` : ""}</option>)}</select></label>
+            <div className="field-label">Printing style</div>
+            <div className="option-grid" role="radiogroup" aria-label="Printing style">{options.map((option) => <button type="button" role="radio" aria-checked={cartEditMode === option.id} className={`print-option ${cartEditMode === option.id ? "selected" : ""}`} key={option.id} onClick={() => setCartEditMode(option.id)}><span className={`mode-icon ${option.id.startsWith("colour") ? "colour" : ""}`}>{option.icon}</span><span><strong>{option.title}</strong><small>{option.note}</small></span></button>)}</div>
+            <div className="cart-edit-details"><div className="copy-quantity"><small>Copies</small><div className="quantity-stepper"><button type="button" aria-label="Decrease copies" disabled={cartEditCopies <= 1} onClick={() => setCartEditCopies((value) => Math.max(1, value - 1))}>−</button><output>{cartEditCopies}</output><button type="button" aria-label="Increase copies" onClick={() => setCartEditCopies((value) => value + 1)}>+</button></div></div><div className="paper"><small>Paper size</small><strong>A4</strong><span>210 × 297 mm</span></div></div>
+            <button className="save-button" onClick={saveCartEdit}>Save changes</button>
           </section>
         </div>
       )}
