@@ -876,6 +876,19 @@ footer { border-top: 1px solid var(--line); padding: 28px max(24px, calc((100% -
 .batch-file-name strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .batch-file-name small { margin-top: 3px; color: var(--muted); font-size: 10px; }
 .batch-file-fields { display: grid; grid-template-columns: 1fr 1fr 112px; gap: 10px; margin: 18px 0; }
+.batch-file-fields { display: none; }
+.batch-file-choice-cards { display: grid; grid-template-columns: 1fr 1fr 112px; gap: 14px; margin: 18px 0; }
+.batch-choice-group { display: grid; gap: 6px; }
+.batch-choice-group > small, .batch-copies > small { color: var(--muted); font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: .4px; }
+.batch-choice-group .service-option-grid { grid-template-columns: 1fr; margin: 0; }
+.batch-choice-group .service-option-grid > button { padding: 10px; }
+.batch-choice-group .service-option-grid small { font-size: 9px; }
+.batch-choice-group .option-grid { grid-template-columns: 1fr 1fr; gap: 6px; }
+.batch-choice-group .print-option { padding: 8px; gap: 6px; }
+.batch-choice-group .print-option strong { font-size: 9px; }
+.batch-choice-group .print-option small { display: none; }
+.batch-choice-group .mode-icon { width: 23px; height: 23px; font-size: 12px; }
+.batch-copies { display: grid; align-content: start; gap: 6px; }
 .batch-file-fields label, .batch-file-fields > div > small { display: block; color: var(--muted); font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: .4px; }
 .batch-file-fields select { width: 100%; margin-top: 6px; border: 1px solid var(--line); border-radius: 9px; padding: 10px; background: white; color: var(--ink); font-weight: 800; }
 .batch-file-total { padding-top: 13px; border-top: 1px solid var(--line); color: var(--muted); font-size: 10px; }
@@ -895,5 +908,7 @@ footer { border-top: 1px solid var(--line); padding: 28px max(24px, calc((100% -
   .otp-verification { grid-template-columns: 1fr; }
   .customer-payment-qr, .order-payment-qr { flex-direction: column; text-align: center; }
   .batch-file-fields { grid-template-columns: 1fr; }
+  .batch-file-choice-cards { grid-template-columns: 1fr; }
+  .batch-copies { max-width: 150px; }
   .batch-file-fields > div { max-width: 150px; }
 }
