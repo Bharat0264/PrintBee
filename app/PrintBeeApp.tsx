@@ -675,12 +675,6 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
     if (!files.length) return;
     const validFiles = files.filter((file) => file.size <= MAX_UPLOAD_BYTES && PRINTABLE_FILE_EXTENSIONS.test(file.name));
     if (!validFiles.length) return setUploadError("Choose PDF, JPG/JPEG, PNG, WEBP or HEIC files smaller than 50 MB.");
-    if (validFiles.length === 1) {
-      setBatchFiles([]);
-      setBatchIndex(0);
-      await selectFile(validFiles[0]);
-      return;
-    }
     setCountingPages(true);
     setUploadError("");
     try {
@@ -689,8 +683,8 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
         const filePages = isPdf ? (await PDFDocument.load(await file.arrayBuffer(), { ignoreEncryption: true })).getPageCount() : 1;
         return { file, fileName: file.name, fileType: isPdf ? "PDF" : "IMAGE", pages: filePages, copies: 1, mode: "bw-single", serviceId: "document-printing" };
       }));
-      setBatchFiles(prepared);
-      setBatchIndex(0);
+      setBatchFiles((items) => [...items, ...prepared]);
+      setBatchIndex(batchFiles.length);
       setFileQueue([]);
       setFileName("");
       setSelectedFile(null);
@@ -1763,6 +1757,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
               <div className="field-label"><span className="step">2</span><strong id="batch-file-review-title">Review your files</strong></div>
               <p>Swipe left or right to set printing choices for each file. Your changes stay saved as you move between files.</p>
               <div className="batch-progress" aria-label={`File ${batchIndex + 1} of ${batchFiles.length}`}>{batchFiles.map((_, index) => <button type="button" key={index} className={index === batchIndex ? "active" : ""} onClick={() => setBatchIndex(index)} aria-label={`Review file ${index + 1}`} />)}</div>
+              <label className="add-more-files"><input type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,application/pdf,image/jpeg,image/png,image/webp,image/heic,image/heif" onChange={handleFile} />+ Add more files</label>
               <article className="batch-file-card" onTouchStart={(event) => setSwipeStartX(event.changedTouches[0]?.clientX ?? null)} onTouchEnd={(event) => { const endX = event.changedTouches[0]?.clientX; if (swipeStartX !== null && endX !== undefined && Math.abs(endX - swipeStartX) > 45) moveBatch(endX < swipeStartX ? 1 : -1); setSwipeStartX(null); }}>
                 <div className="batch-file-nav"><button type="button" onClick={() => moveBatch(-1)} disabled={batchIndex === 0} aria-label="Previous file">←</button><span>File {batchIndex + 1} of {batchFiles.length}</span><button type="button" onClick={() => moveBatch(1)} disabled={batchIndex === batchFiles.length - 1} aria-label="Next file">→</button></div>
                 <div className="batch-file-name"><span>{item.fileType === "PDF" ? "PDF" : "IMG"}</span><div><strong>{item.fileName}</strong><small>{item.pages} {item.pages === 1 ? "page" : "pages"}</small></div><button type="button" className="remove-item" onClick={removeCurrent} aria-label={`Remove ${item.fileName}`}>×</button></div>

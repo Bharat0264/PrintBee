@@ -866,6 +866,8 @@ footer { border-top: 1px solid var(--line); padding: 28px max(24px, calc((100% -
 .batch-progress button { width: 100%; height: 5px; border: 0; border-radius: 999px; background: #e4e1d7; cursor: pointer; }
 .batch-progress button.active { background: var(--yellow); }
 .batch-file-card { padding: 16px; border: 1px solid var(--line); border-radius: 14px; background: #fffdf6; touch-action: pan-y; user-select: none; }
+.add-more-files { display: inline-flex; align-items: center; margin: 0 0 10px auto; border: 1px solid #d9b300; border-radius: 9px; padding: 8px 11px; background: #fff8d8; color: #725500; font-size: 10px; font-weight: 900; cursor: pointer; }
+.add-more-files input { position: absolute; opacity: 0; pointer-events: none; }
 .batch-file-nav, .batch-file-name, .batch-file-total { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .batch-file-nav { margin-bottom: 16px; color: var(--muted); font-size: 10px; font-weight: 900; }
 .batch-file-nav button { width: 34px; height: 34px; border: 1px solid var(--line); border-radius: 9px; background: white; color: var(--ink); font-size: 17px; font-weight: 900; cursor: pointer; }
