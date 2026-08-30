@@ -37,7 +37,12 @@ const CHUNKED_UPLOAD_THRESHOLD_BYTES = 700 * 1024;
 const IMAGE_EXTENSIONS = /\.(heic|jpe?g|png|webp)$/i;
 const OPTIMIZABLE_IMAGE_EXTENSIONS = /\.(jpe?g|png)$/i;
 const PRINTABLE_FILE_EXTENSIONS = /\.(pdf|heic|jpe?g|png|webp)$/i;
-const MIXED_PRINT_SERVICES = new Set(["document-printing", "document-binding"]);
+const MIXED_PRINT_SERVICES = new Set([
+  "document-printing",
+  "document-binding",
+  // Soft Binding Blue Sheet SRM
+  "70d778dc-2d81-4302-a383-2d53724616e3",
+]);
 const GEN_Z_MEMES = [
   "POV: You skipped the Xerox queue and chose peace. 😌",
   "Your assignment is printing itself. Main-character logistics. ✨",
