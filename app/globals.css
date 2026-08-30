@@ -890,6 +890,12 @@ footer { border-top: 1px solid var(--line); padding: 28px max(24px, calc((100% -
 .batch-choice-group .print-option strong { font-size: 9px; }
 .batch-choice-group .print-option small { display: none; }
 .batch-choice-group .mode-icon { width: 23px; height: 23px; font-size: 12px; }
+.batch-mixed-pages { display: grid; gap: 8px; margin-top: 8px; }
+.batch-mixed-pages > button { display: grid; gap: 3px; border: 1px solid #d9d9d3; border-radius: 10px; padding: 9px; background: white; color: var(--ink); text-align: left; }
+.batch-mixed-pages > button.selected { border-color: #d5a900; background: #fff9d9; box-shadow: 0 0 0 2px rgba(224,173,0,.16); }
+.batch-mixed-pages button small { color: var(--muted); font-size: 9px; }
+.batch-mixed-pages label { display: grid; gap: 5px; color: var(--muted); font-size: 9px; font-weight: 900; letter-spacing: .4px; text-transform: uppercase; }
+.batch-mixed-pages input { width: 100%; border: 1px solid var(--line); border-radius: 9px; padding: 10px; background: white; color: var(--ink); font-size: 16px; font-weight: 800; text-transform: none; }
 .batch-copies { display: grid; grid-column: 1 / -1; grid-template-columns: 112px 1fr; align-items: center; gap: 12px; }
 .batch-copies .quantity-stepper { margin: 0; max-width: 170px; }
 .batch-file-fields label, .batch-file-fields > div > small { display: block; color: var(--muted); font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: .4px; }
