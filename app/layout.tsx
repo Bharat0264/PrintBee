@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -19,6 +19,14 @@ export const metadata: Metadata = {
     icon: "/printbee-logo.png",
     shortcut: "/printbee-logo.png",
   },
+};
+
+// Keep Safari's layout viewport tied to the device width. Without this, each
+// file-picker return can cause the page to be rendered against Safari's wider
+// desktop viewport and visually scale the review form down.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
 };
 
 export default function RootLayout({
