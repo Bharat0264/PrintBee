@@ -1,6 +1,6 @@
 export type Coordinates = { latitude: number; longitude: number };
 
-export const MAX_DELIVERY_DISTANCE_METERS = 3_500;
+export const MAX_DELIVERY_DISTANCE_METERS = 4_000;
 
 export function readCoordinates(value: unknown): Coordinates | null {
   if (!value || typeof value !== "object") return null;

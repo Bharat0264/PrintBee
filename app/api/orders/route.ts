@@ -33,7 +33,7 @@ export async function POST(request: Request) {
   const deliveryCode = code.toString().padStart(6, "0");
   const printingSubtotalPaise = Math.max(0, Math.round(Number(body.totalPaise) || 0));
   const deliveryDistanceMeters = Math.round(calculateDistanceMeters(storeLocation, customerLocation));
-  if (deliveryDistanceMeters > MAX_DELIVERY_DISTANCE_METERS) return NextResponse.json({ error: "We are unable to deliver to this location. Delivery is available within 3.5 km of the store." }, { status: 422 });
+  if (deliveryDistanceMeters > MAX_DELIVERY_DISTANCE_METERS) return NextResponse.json({ error: "We are unable to deliver to this location. Delivery is available within 4 km of the store." }, { status: 422 });
   const deliveryAccuracy = typeof body.accuracy === "number" && Number.isFinite(body.accuracy) && body.accuracy >= 0 ? body.accuracy : null;
   const uploadIds = body.items.filter((item: any) => item.kind !== "ADDON").map((item: any) => item.uploadId).filter(Boolean);
   if (uploadIds.length !== body.items.filter((item: any) => item.kind !== "ADDON").length) return NextResponse.json({ error: "Every print item must finish uploading" }, { status: 400 });
