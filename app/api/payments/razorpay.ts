@@ -35,9 +35,11 @@ export async function markRazorpayOrderPaid(razorpayOrderId: string, paymentId: 
     if (!sequence) throw new Error("Order numbering is temporarily unavailable");
     finalOrderNumber = `PB${String(sequence.number).padStart(3, "0")}`;
   }
+  let documentNumber = 0;
+  const numberedItems = items.map((item) => item?.kind === "ADDON" ? item : { ...item, displayReference: `${finalOrderNumber}-${++documentNumber}` });
   const uploadIds = items.filter((item) => item.kind !== "ADDON").map((item) => item.uploadId).filter(Boolean);
   await db.batch([
-    db.prepare("UPDATE orders SET order_number=?,payment_status='PAID',status=CASE WHEN status='PAYMENT_PENDING' THEN 'CONFIRMED' ELSE status END,razorpay_payment_id=?,payment_verified_at=?,payment_verified_by=?,payment_qr_storage_key=NULL,payment_qr_file_name=NULL,payment_qr_deleted_at=? WHERE id=? AND payment_status!='PAID'").bind(finalOrderNumber, paymentId, now, actor, now, order.id),
+    db.prepare("UPDATE orders SET order_number=?,items_json=?,payment_status='PAID',status=CASE WHEN status='PAYMENT_PENDING' THEN 'CONFIRMED' ELSE status END,razorpay_payment_id=?,payment_verified_at=?,payment_verified_by=?,payment_qr_storage_key=NULL,payment_qr_file_name=NULL,payment_qr_deleted_at=? WHERE id=? AND payment_status!='PAID'").bind(finalOrderNumber, JSON.stringify(numberedItems), paymentId, now, actor, now, order.id),
     ...(stagedCheckout && order.points_redeemed ? [db.prepare("UPDATE customer_profiles SET points_balance=points_balance-? WHERE email=? AND points_balance>=?").bind(order.points_redeemed, order.customer_email, order.points_redeemed)] : []),
     ...uploadIds.map((uploadId) => db.prepare("UPDATE uploads SET order_id=? WHERE id=? AND customer_email=? AND order_id IS NULL").bind(order.id, uploadId, order.customer_email)),
     ...uploadIds.map((uploadId) => db.prepare("DELETE FROM cart_items WHERE upload_id=? AND customer_email=?").bind(uploadId, order.customer_email)),

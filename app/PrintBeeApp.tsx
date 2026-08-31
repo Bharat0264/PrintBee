@@ -44,10 +44,6 @@ const MIXED_PRINT_SERVICES = new Set([
   "70d778dc-2d81-4302-a383-2d53724616e3",
 ]);
 const PLAGIARISM_SERVICE_ID = "turnitin-plagiarism-check";
-
-function createFileReference() {
-  return `PB${String(Math.floor(Math.random() * 1000)).padStart(3, "0")}`;
-}
 const GEN_Z_MEMES = [
   "POV: You skipped the Xerox queue and chose peace. 😌",
   "Your assignment is printing itself. Main-character logistics. ✨",
@@ -310,7 +306,6 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
   const [pages, setPages] = useState(12);
   const [copies, setCopies] = useState(1);
   const [fileName, setFileName] = useState("");
-  const [fileReference, setFileReference] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [fileQueue, setFileQueue] = useState<File[]>([]);
   const [batchFiles, setBatchFiles] = useState<BatchFile[]>([]);
@@ -661,7 +656,6 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
       return;
     }
     setFileName(file.name);
-    setFileReference(createFileReference());
     setSelectedFile(file);
     setColourChoice("");
     setColourPageNumbers("");
@@ -697,12 +691,10 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
     setCountingPages(true);
     setUploadError("");
     try {
-      const batchReference = batchFiles.length && fileReference ? fileReference : createFileReference();
-      setFileReference(batchReference);
       const prepared = await Promise.all(validFiles.map(async (file, index): Promise<BatchFile> => {
         const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
         const filePages = isPdf ? (await PDFDocument.load(await file.arrayBuffer(), { ignoreEncryption: true })).getPageCount() : 1;
-        return { file, fileName: file.name, reference: `${batchReference}-${batchFiles.length + index + 1}`, fileType: isPdf ? "PDF" : "IMAGE", pages: filePages, copies: 1, mode: "bw-single", serviceId: "document-printing" };
+        return { file, fileName: file.name, reference: `File ${batchFiles.length + index + 1}`, fileType: isPdf ? "PDF" : "IMAGE", pages: filePages, copies: 1, mode: "bw-single", serviceId: "document-printing" };
       }));
       setBatchFiles((items) => [...items, ...prepared]);
       setBatchIndex(batchFiles.length);
@@ -794,7 +786,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
         id: crypto.randomUUID(),
         uploadId: uploaded.uploadId,
         fileName,
-        displayReference: `${fileReference || createFileReference()}-1`,
+        displayReference: "File 1",
         fileType,
         pages,
         copies,
@@ -1776,7 +1768,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
           <label className={`upload-zone ${fileName ? "has-file" : ""}`}>
             <input type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,application/pdf,image/jpeg,image/png,image/webp,image/heic,image/heif" onChange={handleFile} />
             <span className="upload-icon">{countingPages ? "…" : fileName ? "✓" : "↑"}</span>
-            <strong>{fileName ? `${fileReference || "PB000"}-1` : "Choose document(s)"}</strong>
+            <strong>{fileName ? "File 1" : "Choose document(s)"}</strong>
             {fileName && <small className="original-file-name">Original: {fileName}</small>}
             <small>{uploadProgress !== null ? `Uploading… ${uploadProgress}%` : countingPages ? "Checking file…" : fileName ? `${pages} ${pages === 1 ? "page" : "pages"} detected${fileQueue.length ? ` · ${fileQueue.length} more queued` : ""}` : "Select one or more PDF or image files"}</small>
           </label>
@@ -2190,7 +2182,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
                       {(() => { const total = printSummary(order.items); return <div className="print-summary"><span>B&amp;W: {total.bwSingle + total.bwDouble} pages</span><span>Colour: {total.colourSingle + total.colourDouble} pages</span></div>; })()}
                       {order.items?.length ? order.items.map((item: any, index: number) => (
                         <div key={`${item.uploadId ?? item.fileName}-${index}`}>
-                          <span>{item.fileName ?? `Document ${index + 1}`}</span>
+                          <span>{item.displayReference ?? `${order.order_number}-${index + 1}`}</span><small className="original-file-name">Original: {item.fileName ?? `Document ${index + 1}`}</small>
                           {item.kind === "ADDON" ? <small>Optional product · {item.addons?.[0]?.description || "Add-on only"} · {inr.format(item.total ?? item.addonsTotal ?? 0)}</small> : <small>{String(item.fileType ?? "PDF").toUpperCase()} · {printModeLabel(item.mode)} · {item.pages ?? 1} pages · {item.copies ?? 1} {item.copies === 1 ? "copy" : "copies"} · {item.serviceName || "Document printing"}</small>}
                           {item.colourPageNumbers !== undefined && <small><b>Colour pages:</b> {item.colourPageNumbers} · all remaining pages B&amp;W</small>}
                           {item.bwPageNumbers && <small><b>B&amp;W pages:</b> {item.bwPageNumbers}</small>}
