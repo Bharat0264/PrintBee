@@ -257,6 +257,12 @@ function LedgerFinancialTable({ rows, total, orderView = false }: { rows: any[];
   return <div className="ledger-sheet"><table><thead><tr><th>{orderView ? "Order" : "Date"}</th>{!orderView && <th>Orders</th>}{ledgerFinancialColumns.map(([title]) => <th key={title}>{title}</th>)}</tr></thead><tbody>{rows.map((row) => <tr key={orderView ? row.order_number : row.date}><td>{label(row)}</td>{!orderView && <td>{row.orders}</td>}{ledgerFinancialColumns.map(([title, key]) => <td key={title}>{inr.format((Number(row[key]) || 0) / 100)}</td>)}</tr>)}</tbody>{total && <tfoot><tr><th>Grand total</th><th>{total.orders}</th>{ledgerFinancialColumns.map(([title, key]) => <th key={title}>{inr.format((Number(total[key]) || 0) / 100)}</th>)}</tr></tfoot>}</table></div>;
 }
 
+function PlagiarismTracker({ status }: { status: string }) {
+  const current = status === "DELIVERED" ? 2 : status === "PLAGIARISM_REPORT_RECEIVED" ? 1 : 0;
+  const steps = ["Document submitted", "Report received", "Sent to WhatsApp"];
+  return <div className="plagiarism-tracker" aria-label="Plagiarism report progress">{steps.map((step, index) => <span className={index <= current ? "done" : ""} key={step}><i>{index < current ? "✓" : index + 1}</i><b>{step}</b>{index === 2 && current === 2 && <small>Completed</small>}</span>)}</div>;
+}
+
 type CartItem = {
   kind?: "PRINT" | "ADDON";
   addonId?: string;
@@ -1819,7 +1825,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
             </div>
           )}
 
-          {isPlagiarismService && <div className="binding-fields plagiarism-service-note"><strong>Turnitin plagiarism check · ₹175</strong><p>Upload your paper or report and enter the WhatsApp number that should receive the plagiarism report within 24 hours.</p><label>WhatsApp number<input value={whatsappNumber} onChange={(e) => setWhatsappNumber(e.target.value.replace(/\D/g, "").slice(0, 10))} inputMode="numeric" placeholder="10-digit WhatsApp number" /></label><small>No delivery, platform, packaging, surge or late-night fees apply. A 1% payment gateway charge applies only when enabled in Admin.</small></div>}
+          {isPlagiarismService && <div className="binding-fields plagiarism-service-note"><strong>Turnitin plagiarism check · ₹175</strong><p>You will receive your plagiarism report within 24 hours on the WhatsApp number provided below.</p><label>WhatsApp number<input value={whatsappNumber} onChange={(e) => setWhatsappNumber(e.target.value.replace(/\D/g, "").slice(0, 10))} inputMode="numeric" placeholder="10-digit WhatsApp number" /></label></div>}
 
           {!isPlagiarismService && <div className="binding-fields">
             <strong><span className="step">3</span> Choose print sides</strong>
@@ -2171,6 +2177,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
                       <label>Delivery partner<select disabled={order.status === "CANCELLED" || order.payment_status === "REJECTED"} value={order.rider_email ?? ""} onChange={(e) => assignRider(order.id, e.target.value)}><option value="">Assign available rider</option>{dashboard.riders.filter((rider: any) => rider.is_available).map((rider: any) => <option key={rider.email} value={rider.email}>{rider.name || rider.email} · Available</option>)}</select></label>
                     </div>
                     <div className="payment-review-details"><span><small>Payment</small><strong>{order.payment_status === "PAY_ON_DELIVERY" ? "Pay on delivery" : order.payment_reference || order.payment_status}</strong></span><span><small>Total</small><strong>{inr.format(order.total_paise / 100)}</strong></span></div>
+                    {order.items?.every((item: any) => item.serviceId === PLAGIARISM_SERVICE_ID) && <div className="plagiarism-admin-flow"><strong>Plagiarism report flow</strong><PlagiarismTracker status={order.status} /><div><button className={order.status === "PLAGIARISM_SUBMITTED" ? "active" : ""} onClick={() => updateOrderStatus(order.id, "PLAGIARISM_SUBMITTED")}>Document submitted</button><button className={order.status === "PLAGIARISM_REPORT_RECEIVED" ? "active" : ""} onClick={() => updateOrderStatus(order.id, "PLAGIARISM_REPORT_RECEIVED")}>Report received</button><button className={order.status === "DELIVERED" ? "active" : ""} onClick={() => updateOrderStatus(order.id, "DELIVERED")}>Sent to WhatsApp · complete</button></div></div>}
                     {order.payment_status === "PAID" && order.payment_verified_at && <div className="payment-cleared-note"><strong>Payment received and verified</strong><small>Verified {new Date(order.payment_verified_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })} by {order.payment_verified_by}. Scanner deleted from admin, customer and delivery-partner views.</small></div>}
                     {Boolean(order.has_payment_qr) && <div className="admin-payment-qr"><strong>Legacy payment scanner</strong><img src={`/api/orders/${order.id}/payment-qr`} alt={`Payment scanner for ${order.order_number}`} /></div>}
                     {order.payment_status === "PAY_ON_DELIVERY" && order.status !== "CANCELLED" && <div className="payment-review-actions"><button className="mini-action" onClick={() => reviewPayment(order.id, "APPROVE")}>Payment received & verified</button></div>}
@@ -2314,6 +2321,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
           <section className="orders-modal" role="dialog" aria-modal="true" onMouseDown={(e) => e.stopPropagation()}>
             <button className="close" onClick={() => setMyOrdersOpen(false)} aria-label="Close">×</button>
             <div className="admin-badge">CUSTOMER</div><h2>My orders</h2>
+            {myOrders.filter((order) => order.items?.every((item: any) => item.serviceId === PLAGIARISM_SERVICE_ID)).map((order) => <section className="customer-plagiarism-status" key={`plagiarism-${order.id}`}><strong>{order.order_number} · Plagiarism report</strong><small>Your report will be sent to your provided WhatsApp number within 24 hours.</small><PlagiarismTracker status={order.status} /></section>)}
             {myReferralCode && <div className="referral-wallet"><span><small>Your referral code</small><strong>{myReferralCode}</strong></span><span><small>Points balance</small><strong>{pointsBalance}</strong></span><p>Your own delivered orders earn 1 point per ₹10 spent. You also earn 1 point per ₹15 spent on delivered orders by each person you referred. Redeem 15 points for ₹1 at checkout.</p></div>}
             {myOrders.some((order) => (order.late_night_fee_paise ?? 0) > 0) && <div className="fee-breakdown">{myOrders.filter((order) => (order.late_night_fee_paise ?? 0) > 0).map((order) => <div key={`late-night-${order.id}`}><span>{order.order_number} · Late-night delivery fee</span><strong>{inr.format(order.late_night_fee_paise / 100)}</strong></div>)}</div>}
             {myOrders.some((order) => order.payment_status === "PENDING" && order.status !== "CANCELLED") && <div className="customer-error"><strong>Payment required</strong><p>Complete payment before PrintBee starts printing.</p>{myOrders.filter((order) => order.payment_status === "PENDING" && order.status !== "CANCELLED").map((order) => <button className="save-button" key={order.id} disabled={paymentProcessing} onClick={() => startRazorpayPayment(order)}>Pay {inr.format(order.total_paise / 100)} for {order.order_number}</button>)}</div>}
