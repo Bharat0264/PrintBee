@@ -685,6 +685,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
     if (!files.length) return;
     const validFiles = files.filter((file) => file.size <= MAX_UPLOAD_BYTES && PRINTABLE_FILE_EXTENSIONS.test(file.name));
     if (!validFiles.length) return setUploadError("Choose PDF, JPG/JPEG, PNG, WEBP or HEIC files smaller than 50 MB.");
+    if (isPlagiarismService) return selectFile(validFiles[0]);
     setCountingPages(true);
     setUploadError("");
     try {
@@ -1758,6 +1759,9 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
             <div><h2>Start your print</h2><p>PDF, JPG, PNG, WEBP or HEIC · A4 printing</p></div>
           </div>
 
+          {!isPlagiarismService && <button type="button" className="plagiarism-start" onClick={() => { setServiceId(PLAGIARISM_SERVICE_ID); setFileName(""); setSelectedFile(null); setBatchFiles([]); setUploadError(""); }}><span>NEW</span><div><strong>Plagiarism report</strong><small>Upload your paper or report · ₹175 · WhatsApp report within 24 hours</small></div><b>Start →</b></button>}
+          {isPlagiarismService && <div className="plagiarism-flow-heading"><button type="button" onClick={() => { setServiceId("document-printing"); setFileName(""); setSelectedFile(null); }}>← Back to printing</button><strong>Plagiarism report</strong><small>Online service · ₹175 · no delivery or printing charges</small></div>}
+
           <label className={`upload-zone ${fileName ? "has-file" : ""}`}>
             <input type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,application/pdf,image/jpeg,image/png,image/webp,image/heic,image/heif" onChange={handleFile} />
             <span className="upload-icon">{countingPages ? "…" : fileName ? "✓" : "↑"}</span>
@@ -1798,10 +1802,10 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
           </div>}
 
           {fileName && <>
-          <div className="field-label"><span className="step">2</span> Choose service</div>
+          {!isPlagiarismService && <><div className="field-label"><span className="step">2</span> Choose service</div>
           <div className="service-option-grid" role="radiogroup" aria-label="Print service">
-            {printServices.map((service) => <button type="button" role="radio" aria-checked={serviceId === service.id} className={serviceId === service.id ? "selected" : ""} key={service.id} onClick={() => setServiceId(service.id)}><span><strong>{service.name}</strong><small>{service.description}</small></span><b>{service.price_paise ? `+${inr.format(service.price_paise / 100)}` : "Included"}</b></button>)}
-          </div>
+            {printServices.filter((service) => service.id !== PLAGIARISM_SERVICE_ID).map((service) => <button type="button" role="radio" aria-checked={serviceId === service.id} className={serviceId === service.id ? "selected" : ""} key={service.id} onClick={() => setServiceId(service.id)}><span><strong>{service.name}</strong><small>{service.description}</small></span><b>{service.price_paise ? `+${inr.format(service.price_paise / 100)}` : "Included"}</b></button>)}
+          </div></>}
           {Boolean(printServices.find((service) => service.id === serviceId)?.is_binding) && (
             <div className="binding-fields">
               <strong>Binding instructions</strong>
