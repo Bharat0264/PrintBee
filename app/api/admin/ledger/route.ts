@@ -82,7 +82,9 @@ function finish(values: LedgerValues) {
   const colourProfitPaise = values.colourRevenuePaise - values.colourCostPaise;
   const printingRevenuePaise = values.bwRevenuePaise + values.colourRevenuePaise;
   const plagiarismProfitPaise = values.plagiarismRevenuePaise - values.plagiarismOperationalCostPaise;
-  const serviceRevenuePaise = values.printingCollectedPaise - printingRevenuePaise - values.plagiarismRevenuePaise - values.addonRevenuePaise;
+  // Keep the established service-revenue calculation intact; ₹25 per paid
+  // plagiarism report is an additional Bharat profit allocation.
+  const serviceRevenuePaise = values.printingCollectedPaise - printingRevenuePaise - values.addonRevenuePaise;
   const printingOperationalCostPaise = values.bwCostPaise + values.colourCostPaise;
   const printingProfitPaise = printingRevenuePaise - printingOperationalCostPaise;
   const deliveryProfitPaise = values.deliveryCollectedPaise - values.riderCostPaise;
