@@ -1759,7 +1759,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
             <div><h2>Start your print</h2><p>PDF, JPG, PNG, WEBP or HEIC · A4 printing</p></div>
           </div>
 
-          {!isPlagiarismService && <button type="button" className="plagiarism-start" onClick={() => { setServiceId(PLAGIARISM_SERVICE_ID); setFileName(""); setSelectedFile(null); setBatchFiles([]); setUploadError(""); }}><span>NEW</span><div><strong>Plagiarism report</strong><small>Upload your paper or report · ₹175 · WhatsApp report within 24 hours</small></div><b>Start →</b></button>}
+          {!isPlagiarismService && <button type="button" className="plagiarism-start" onClick={() => { setServiceId(PLAGIARISM_SERVICE_ID); setFileName(""); setSelectedFile(null); setBatchFiles([]); setSelectedAddonIds([]); setUploadError(""); }}><span>NEW</span><div><strong>Plagiarism report</strong><small>Upload your paper or report · ₹175 · WhatsApp report within 24 hours</small></div><b>Start →</b></button>}
           {isPlagiarismService && <div className="plagiarism-flow-heading"><button type="button" onClick={() => { setServiceId("document-printing"); setFileName(""); setSelectedFile(null); }}>← Back to printing</button><strong>Plagiarism report</strong><small>Online service · ₹175 · no delivery or printing charges</small></div>}
 
           <label className={`upload-zone ${fileName ? "has-file" : ""}`}>
@@ -1794,7 +1794,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
             </section>;
           })()}
 
-          {addons.length > 0 && <div className="binding-fields standalone-addons">
+          {!isPlagiarismService && addons.length > 0 && <div className="binding-fields standalone-addons">
             <strong>Don’t need printouts? Order add-ons only</strong>
             <p>No document upload is required. Choose a product below and proceed directly to checkout.</p>
             <div className="service-option-grid" role="group" aria-label="Add-on products">{addons.map((addon) => <button type="button" key={addon.id} onClick={() => addStandaloneAddon(addon)}><span><strong>{addon.name}</strong><small>{addon.description}</small></span><b>{inr.format(addon.price_paise / 100)} · Add</b></button>)}</div>
@@ -1841,7 +1841,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
             </div>
           )}
 
-          {addons.length > 0 && <div className="binding-fields addons-section">
+          {!isPlagiarismService && addons.length > 0 && <div className="binding-fields addons-section">
             <strong><span className="step">4</span> Add-ons <small>Optional</small></strong>
             <p>Select any extra products you want with this document.</p>
             <div className="service-option-grid" role="group" aria-label="Optional add-ons">{addons.map((addon) => <button type="button" aria-pressed={selectedAddonIds.includes(addon.id)} className={selectedAddonIds.includes(addon.id) ? "selected" : ""} key={addon.id} onClick={() => setSelectedAddonIds((ids) => ids.includes(addon.id) ? ids.filter((id) => id !== addon.id) : [...ids, addon.id])}><span><strong>{addon.name}</strong><small>{addon.description}</small></span><b>+{inr.format(addon.price_paise / 100)}</b></button>)}</div>
