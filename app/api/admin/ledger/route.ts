@@ -26,6 +26,8 @@ type LedgerValues = {
   colourPages: number;
   colourRevenuePaise: number;
   colourCostPaise: number;
+  plagiarismRevenuePaise: number;
+  plagiarismOperationalCostPaise: number;
   addonRevenuePaise: number;
   packagingOrders: number;
   amountCollectedPaise: number;
@@ -41,10 +43,15 @@ type LedgerValues = {
 };
 
 function emptyValues(): LedgerValues {
-  return { orders: 0, bwPages: 0, bwRevenuePaise: 0, bwCostPaise: 0, colourPages: 0, colourRevenuePaise: 0, colourCostPaise: 0, addonRevenuePaise: 0, packagingOrders: 0, amountCollectedPaise: 0, printingCollectedPaise: 0, deliveryCollectedPaise: 0, platformCollectedPaise: 0, packagingCollectedPaise: 0, gatewayCollectedPaise: 0, surgeCollectedPaise: 0, lateNightCollectedPaise: 0, pointsDiscountPaise: 0, riderCostPaise: 0 };
+  return { orders: 0, bwPages: 0, bwRevenuePaise: 0, bwCostPaise: 0, colourPages: 0, colourRevenuePaise: 0, colourCostPaise: 0, plagiarismRevenuePaise: 0, plagiarismOperationalCostPaise: 0, addonRevenuePaise: 0, packagingOrders: 0, amountCollectedPaise: 0, printingCollectedPaise: 0, deliveryCollectedPaise: 0, platformCollectedPaise: 0, packagingCollectedPaise: 0, gatewayCollectedPaise: 0, surgeCollectedPaise: 0, lateNightCollectedPaise: 0, pointsDiscountPaise: 0, riderCostPaise: 0 };
 }
 
 function addItem(values: LedgerValues, item: any) {
+  if (item?.serviceId === "turnitin-plagiarism-check") {
+    values.plagiarismRevenuePaise += Math.round((Number(item?.servicePrice ?? item?.total) || 175) * 100);
+    values.plagiarismOperationalCostPaise += 15000;
+    return;
+  }
   if (item?.kind === "ADDON") {
     values.addonRevenuePaise += Math.round((Number(item?.total ?? item?.addonsTotal) || 0) * 100);
     return;
@@ -74,22 +81,23 @@ function finish(values: LedgerValues) {
   const bwProfitPaise = values.bwRevenuePaise - values.bwCostPaise;
   const colourProfitPaise = values.colourRevenuePaise - values.colourCostPaise;
   const printingRevenuePaise = values.bwRevenuePaise + values.colourRevenuePaise;
-  const serviceRevenuePaise = values.printingCollectedPaise - printingRevenuePaise - values.addonRevenuePaise;
+  const plagiarismProfitPaise = values.plagiarismRevenuePaise - values.plagiarismOperationalCostPaise;
+  const serviceRevenuePaise = values.printingCollectedPaise - printingRevenuePaise - values.plagiarismRevenuePaise - values.addonRevenuePaise;
   const printingOperationalCostPaise = values.bwCostPaise + values.colourCostPaise;
   const printingProfitPaise = printingRevenuePaise - printingOperationalCostPaise;
   const deliveryProfitPaise = values.deliveryCollectedPaise - values.riderCostPaise;
   const packagingProfitPaise = Math.min(values.packagingCollectedPaise, values.packagingOrders * 170);
   const packagingCostPaise = values.packagingCollectedPaise - packagingProfitPaise;
-  const operationalCostPaise = printingOperationalCostPaise + values.riderCostPaise + packagingCostPaise + values.gatewayCollectedPaise;
+  const operationalCostPaise = printingOperationalCostPaise + values.plagiarismOperationalCostPaise + values.riderCostPaise + packagingCostPaise + values.gatewayCollectedPaise;
   const netProfitPaise = values.amountCollectedPaise - operationalCostPaise;
   // Ramya shares only the profit earned from printing. All other revenue belongs to Bharat.
   const ramyaPrintingProfitPaise = Math.round(printingProfitPaise * 0.65);
   const bharatPrintingProfitPaise = printingProfitPaise - ramyaPrintingProfitPaise;
   // Delivery profit is exactly the 25% retained after the delivery partner receives 75%.
-  const bharatOtherProfitPaise = serviceRevenuePaise + values.addonRevenuePaise + deliveryProfitPaise + values.platformCollectedPaise + packagingProfitPaise + values.surgeCollectedPaise + values.lateNightCollectedPaise - values.pointsDiscountPaise;
+  const bharatOtherProfitPaise = serviceRevenuePaise + values.plagiarismProfitPaise + values.addonRevenuePaise + deliveryProfitPaise + values.platformCollectedPaise + packagingProfitPaise + values.surgeCollectedPaise + values.lateNightCollectedPaise - values.pointsDiscountPaise;
   const bharatTotalProfitPaise = bharatPrintingProfitPaise + bharatOtherProfitPaise;
   const ramyaTotalProfitPaise = ramyaPrintingProfitPaise;
-  return { ...values, bwProfitPaise, colourProfitPaise, printingRevenuePaise, serviceRevenuePaise, printingOperationalCostPaise, printingProfitPaise, addonProfitPaise: values.addonRevenuePaise, deliveryProfitPaise, packagingCostPaise, packagingProfitPaise, operationalCostPaise, netProfitPaise, bharatPrintingProfitPaise, bharatOtherProfitPaise, ramyaPrintingProfitPaise, bharatTotalProfitPaise, ramyaTotalProfitPaise, shareTallyPaise: bharatTotalProfitPaise + ramyaTotalProfitPaise };
+  return { ...values, bwProfitPaise, colourProfitPaise, printingRevenuePaise, plagiarismProfitPaise, serviceRevenuePaise, printingOperationalCostPaise, printingProfitPaise, addonProfitPaise: values.addonRevenuePaise, deliveryProfitPaise, packagingCostPaise, packagingProfitPaise, operationalCostPaise, netProfitPaise, bharatPrintingProfitPaise, bharatOtherProfitPaise, ramyaPrintingProfitPaise, bharatTotalProfitPaise, ramyaTotalProfitPaise, shareTallyPaise: bharatTotalProfitPaise + ramyaTotalProfitPaise };
 }
 
 function addValues(target: LedgerValues, source: LedgerValues) {
