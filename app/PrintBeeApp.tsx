@@ -43,6 +43,7 @@ const MIXED_PRINT_SERVICES = new Set([
   // Soft Binding Blue Sheet SRM
   "70d778dc-2d81-4302-a383-2d53724616e3",
 ]);
+const PLAGIARISM_SERVICE_ID = "turnitin-plagiarism-check";
 const GEN_Z_MEMES = [
   "POV: You skipped the Xerox queue and chose peace. 😌",
   "Your assignment is printing itself. Main-character logistics. ✨",
@@ -619,6 +620,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
 
   const selected = options.find((item) => item.id === mode)!;
   const selectedService = printServices.find((service) => service.id === serviceId);
+  const isPlagiarismService = serviceId === PLAGIARISM_SERVICE_ID;
   const servicePrice = (selectedService?.price_paise ?? 0) / 100;
   const usesMixedPagePricing = MIXED_PRINT_SERVICES.has(serviceId);
   const colourPageResult = useMemo(() => parsePageNumbers(colourPageNumbers, pages), [colourPageNumbers, pages]);
@@ -636,7 +638,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
   const selectedAddons = addons.filter((addon) => selectedAddonIds.includes(addon.id));
   const addonsTotal = selectedAddons.reduce((sum, addon) => sum + addon.price_paise / 100, 0);
   const mixedPrintTotal = ((bwPageCount / sideDivisor) * prices[`bw-${side}`] + (colourPageCount / sideDivisor) * prices[`colour-${side}`]) * copies;
-  const printTotal = usesMixedPagePricing ? mixedPrintTotal : (pages / sideDivisor) * copies * prices[mode];
+  const printTotal = isPlagiarismService ? 0 : usesMixedPagePricing ? mixedPrintTotal : (pages / sideDivisor) * copies * prices[mode];
   const total = printTotal + servicePrice + addonsTotal;
   const colourPagesValid = colourChoice === "bw" || colourChoice === "colour" || (colourChoice === "mixed" && colourPageNumbers.trim().length > 0 && colourPageResult.invalid.length === 0);
 
@@ -785,7 +787,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
         pages,
         copies,
         mode: usesMixedPagePricing ? `${colourChoice === "colour" ? "colour" : "bw"}-${side}` as PrintMode : mode,
-        unitPrice: usesMixedPagePricing ? (mixedPrintTotal / Math.max(1, pages * copies)) : prices[mode],
+        unitPrice: isPlagiarismService ? 0 : usesMixedPagePricing ? (mixedPrintTotal / Math.max(1, pages * copies)) : prices[mode],
         bwUnitPrice: prices[`bw-${side}`],
         colourUnitPrice: prices[`colour-${side}`],
         total,
@@ -1596,14 +1598,15 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
     setDeliveryOpen(true);
   };
 
-  const checkoutDeliveryFee = calculatedDeliveryFee ?? 0;
-  const checkoutIncampusFee = incampusDelivery ? 10 : 0;
-  const checkoutPlatformFee = platformFee;
+  const isPlagiarismOnly = cart.length > 0 && cart.every((item) => item.serviceId === PLAGIARISM_SERVICE_ID);
+  const checkoutDeliveryFee = isPlagiarismOnly ? 0 : calculatedDeliveryFee ?? 0;
+  const checkoutIncampusFee = isPlagiarismOnly ? 0 : incampusDelivery ? 10 : 0;
+  const checkoutPlatformFee = isPlagiarismOnly ? 0 : platformFee;
   const surgeBase = cartTotal + checkoutDeliveryFee + checkoutPlatformFee;
-  const checkoutSurgeFee = surgeEnabled ? surgeType === "FIXED" ? surgeValue : surgeBase * surgeValue / 100 : 0;
-  const checkoutLateNightFee = lateNightEnabled ? lateNightType === "FIXED" ? lateNightValue : surgeBase * lateNightValue / 100 : 0;
-  const checkoutGatewayFee = gatewayEnabled ? surgeBase * .01 : 0;
-  const checkoutPackagingFee = packagingEnabled && needsPackaging ? packagingFee : 0;
+  const checkoutSurgeFee = isPlagiarismOnly ? 0 : surgeEnabled ? surgeType === "FIXED" ? surgeValue : surgeBase * surgeValue / 100 : 0;
+  const checkoutLateNightFee = isPlagiarismOnly ? 0 : lateNightEnabled ? lateNightType === "FIXED" ? lateNightValue : surgeBase * lateNightValue / 100 : 0;
+  const checkoutGatewayFee = gatewayEnabled ? cartTotal * .01 : 0;
+  const checkoutPackagingFee = isPlagiarismOnly ? 0 : packagingEnabled && needsPackaging ? packagingFee : 0;
   const checkoutBeforePoints = cartTotal + checkoutDeliveryFee + checkoutIncampusFee + checkoutPlatformFee + checkoutPackagingFee + checkoutSurgeFee + checkoutLateNightFee + checkoutGatewayFee;
   const redeemablePoints = Math.min(pointsBalance, Math.max(0, Math.floor((checkoutBeforePoints - 1) * 15)));
   const pointsDiscount = usePoints ? Math.floor(redeemablePoints * 100 / 15) / 100 : 0;
@@ -1706,9 +1709,10 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
       </header>
 
       <section className="hero" id="top">
-        <div className="hero-copy">
+          <div className="hero-copy">
           <div className="campus-delivery-banner" role="status"><span>NEW</span><strong>Classroom &amp; hostel delivery is now available</strong><small>Fast in-campus delivery for university students</small></div>
           <div className="srm-binding-banner" role="status"><span>NEW</span><strong>SRM-style soft binding is now available</strong><small>Add your documents, then select the binding style from the service options.</small></div>
+          <div className="plagiarism-banner" role="status"><span>NEW</span><strong>Plagiarism reports for papers and reports are now available</strong><small>Upload your document and receive the report on WhatsApp within 24 hours.</small></div>
           <div className="eyebrow"><span>●</span> A4 printing, delivered locally</div>
           <h1>Your documents.<br /><em>Printed right.</em></h1>
           <p>Upload a PDF or image, choose your A4 print style, and get crisp prints delivered to your door.</p>
@@ -1807,14 +1811,16 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
             </div>
           )}
 
-          <div className="binding-fields">
+          {isPlagiarismService && <div className="binding-fields plagiarism-service-note"><strong>Turnitin plagiarism check · ₹175</strong><p>Upload your paper or report and enter the WhatsApp number that should receive the plagiarism report within 24 hours.</p><label>WhatsApp number<input value={whatsappNumber} onChange={(e) => setWhatsappNumber(e.target.value.replace(/\D/g, "").slice(0, 10))} inputMode="numeric" placeholder="10-digit WhatsApp number" /></label><small>No delivery, platform, packaging, surge or late-night fees apply. A 1% payment gateway charge applies only when enabled in Admin.</small></div>}
+
+          {!isPlagiarismService && <div className="binding-fields">
             <strong><span className="step">3</span> Choose print sides</strong>
             <p>Double-sided pricing uses pages ÷ 2 × the admin-set double-side price.</p>
             <div className="service-option-grid" role="radiogroup" aria-label="Print sides">
               <button type="button" role="radio" aria-checked={side === "single"} className={side === "single" ? "selected" : ""} onClick={() => setMode(`${mode.startsWith("colour") ? "colour" : "bw"}-single` as PrintMode)}><span><strong>Single side</strong><small>One page per sheet</small></span></button>
               <button type="button" role="radio" aria-checked={side === "double"} className={side === "double" ? "selected" : ""} onClick={() => setMode(`${mode.startsWith("colour") ? "colour" : "bw"}-double` as PrintMode)}><span><strong>Double side</strong><small>{pages} pages ÷ 2 = {pages / 2} priced units</small></span></button>
             </div>
-          </div>
+          </div>}
 
           {usesMixedPagePricing && (
             <div className="binding-fields">
@@ -1852,7 +1858,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
 
           <div className="estimate">
             <div><small>Estimated print total</small><strong>{inr.format(total)}</strong></div>
-            <button disabled={!fileName || countingPages || (usesMixedPagePricing && !colourPagesValid) || (Boolean(printServices.find((service) => service.id === serviceId)?.is_binding) && whatsappNumber.length !== 10)} onClick={addToCart}>Add &amp; proceed to checkout <span>→</span></button>
+            <button disabled={!fileName || countingPages || (usesMixedPagePricing && !colourPagesValid) || ((Boolean(printServices.find((service) => service.id === serviceId)?.is_binding) || isPlagiarismService) && whatsappNumber.length !== 10)} onClick={addToCart}>Add &amp; proceed to checkout <span>→</span></button>
           </div>
           <p className="estimate-note">{usesMixedPagePricing ? `${bwPageCount} B&W + ${colourPageCount} colour pages × ${copies} ${copies === 1 ? "copy" : "copies"} · ${side === "double" ? "Double sided (pages ÷ 2)" : "Single sided"}` : `${pages}${side === "double" ? " ÷ 2" : ""} pages × ${copies} ${copies === 1 ? "copy" : "copies"} × ${inr.format(prices[mode])} · ${selected.title}`}{servicePrice > 0 ? ` + ${inr.format(servicePrice)} ${selectedService?.name} charge` : ""}{addonsTotal > 0 ? ` + ${inr.format(addonsTotal)} add-ons` : ""}</p>
           <div className="payment-instruction" role="note">

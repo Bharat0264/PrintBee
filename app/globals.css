@@ -10,9 +10,11 @@
 }
 
 * { box-sizing: border-box; }
-html { scroll-behavior: smooth; }
+html { scroll-behavior: smooth; max-width: 100%; overflow-x: clip; }
 body {
   margin: 0;
+  max-width: 100%;
+  overflow-x: clip;
   background: var(--paper);
   color: var(--ink);
   font-family: Arial, Helvetica, sans-serif;
@@ -94,6 +96,10 @@ nav a, .admin-link { color: #44484f; background: none; border: 0; text-decoratio
 }
 .hero-copy { max-width: 480px; }
 .campus-delivery-banner { display: grid; grid-template-columns: auto 1fr; column-gap: 10px; align-items: center; margin: 0 0 18px; padding: 12px 14px; border: 2px solid #0d7a3f; border-radius: 14px; background: linear-gradient(120deg, #0b7d3d, #13a652 58%, #f2b705); box-shadow: 0 10px 22px rgba(13, 122, 63, .25); color: #fff; animation: campus-banner-pulse 2.6s ease-in-out infinite; }
+.plagiarism-banner { display: grid; grid-template-columns: auto 1fr; column-gap: 10px; align-items: center; margin: 0 0 18px; padding: 12px 14px; border: 2px solid #6a41a1; border-radius: 14px; background: linear-gradient(120deg, #4a2678, #7750ab 58%, #d6af22); box-shadow: 0 10px 22px rgba(74,38,120,.24); color: #fff; }
+.plagiarism-banner span { grid-row: 1 / span 2; align-self: center; border-radius: 999px; padding: 5px 7px; background: #fff; color: #4a2678; font-size: 9px; font-weight: 950; letter-spacing: .7px; }
+.plagiarism-banner strong { font-size: 13px; line-height: 1.2; }
+.plagiarism-banner small { margin-top: 2px; color: #f8f1ff; font-size: 10px; font-weight: 700; }
 .campus-delivery-banner span { grid-row: 1 / span 2; align-self: center; border-radius: 999px; padding: 5px 7px; background: #fff; color: #087237; font-size: 9px; font-weight: 950; letter-spacing: .7px; }
 .campus-delivery-banner strong { font-size: 13px; line-height: 1.2; }
 .campus-delivery-banner small { margin-top: 2px; color: #effff3; font-size: 10px; font-weight: 700; }
@@ -145,6 +151,8 @@ h1 em { color: var(--yellow); font-style: normal; }
 .card-heading p { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
 .upload-zone { margin: 22px 0; min-height: 120px; border: 1.5px dashed #d4d0c5; border-radius: 15px; display: flex; flex-direction: column; justify-content: center; align-items: center; background: #fffcf2; transition: .2s; }
 .upload-zone:hover, .upload-zone.has-file { border-color: var(--yellow); background: var(--yellow-soft); }
+.upload-zone, .upload-zone > strong, .upload-zone > small, .batch-file-name, .batch-file-name > div { min-width: 0; max-width: 100%; }
+.upload-zone > strong, .upload-zone > small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .upload-zone input { position: absolute; opacity: 0; pointer-events: none; }
 .upload-icon { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; background: var(--yellow); font-weight: 900; margin-bottom: 7px; }
 .upload-zone strong { font-size: 14px; max-width: 85%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
