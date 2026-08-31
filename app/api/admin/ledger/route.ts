@@ -96,7 +96,7 @@ function finish(values: LedgerValues) {
   const ramyaPrintingProfitPaise = Math.round(printingProfitPaise * 0.65);
   const bharatPrintingProfitPaise = printingProfitPaise - ramyaPrintingProfitPaise;
   // Delivery profit is exactly the 25% retained after the delivery partner receives 75%.
-  const bharatOtherProfitPaise = serviceRevenuePaise + values.plagiarismProfitPaise + values.addonRevenuePaise + deliveryProfitPaise + values.platformCollectedPaise + packagingProfitPaise + values.surgeCollectedPaise + values.lateNightCollectedPaise - values.pointsDiscountPaise;
+  const bharatOtherProfitPaise = serviceRevenuePaise + plagiarismProfitPaise + values.addonRevenuePaise + deliveryProfitPaise + values.platformCollectedPaise + packagingProfitPaise + values.surgeCollectedPaise + values.lateNightCollectedPaise - values.pointsDiscountPaise;
   const bharatTotalProfitPaise = bharatPrintingProfitPaise + bharatOtherProfitPaise;
   const ramyaTotalProfitPaise = ramyaPrintingProfitPaise;
   return { ...values, bwProfitPaise, colourProfitPaise, printingRevenuePaise, plagiarismProfitPaise, serviceRevenuePaise, printingOperationalCostPaise, printingProfitPaise, addonProfitPaise: values.addonRevenuePaise, deliveryProfitPaise, packagingCostPaise, packagingProfitPaise, operationalCostPaise, netProfitPaise, bharatPrintingProfitPaise, bharatOtherProfitPaise, ramyaPrintingProfitPaise, bharatTotalProfitPaise, ramyaTotalProfitPaise, shareTallyPaise: bharatTotalProfitPaise + ramyaTotalProfitPaise };
