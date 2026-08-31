@@ -44,6 +44,10 @@ const MIXED_PRINT_SERVICES = new Set([
   "70d778dc-2d81-4302-a383-2d53724616e3",
 ]);
 const PLAGIARISM_SERVICE_ID = "turnitin-plagiarism-check";
+
+function createFileReference() {
+  return `PB${String(Math.floor(Math.random() * 1000)).padStart(3, "0")}`;
+}
 const GEN_Z_MEMES = [
   "POV: You skipped the Xerox queue and chose peace. 😌",
   "Your assignment is printing itself. Main-character logistics. ✨",
@@ -263,6 +267,7 @@ type CartItem = {
   id: string;
   uploadId: string;
   fileName: string;
+  displayReference?: string;
   fileType: "PDF" | "IMAGE" | "DOCUMENT";
   pages: number;
   copies: number;
@@ -287,6 +292,7 @@ type CartItem = {
 type BatchFile = {
   file: File;
   fileName: string;
+  reference: string;
   fileType: "PDF" | "IMAGE";
   pages: number;
   copies: number;
@@ -304,6 +310,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
   const [pages, setPages] = useState(12);
   const [copies, setCopies] = useState(1);
   const [fileName, setFileName] = useState("");
+  const [fileReference, setFileReference] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [fileQueue, setFileQueue] = useState<File[]>([]);
   const [batchFiles, setBatchFiles] = useState<BatchFile[]>([]);
@@ -654,6 +661,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
       return;
     }
     setFileName(file.name);
+    setFileReference(createFileReference());
     setSelectedFile(file);
     setColourChoice("");
     setColourPageNumbers("");
@@ -689,10 +697,12 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
     setCountingPages(true);
     setUploadError("");
     try {
-      const prepared = await Promise.all(validFiles.map(async (file): Promise<BatchFile> => {
+      const batchReference = batchFiles.length && fileReference ? fileReference : createFileReference();
+      setFileReference(batchReference);
+      const prepared = await Promise.all(validFiles.map(async (file, index): Promise<BatchFile> => {
         const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
         const filePages = isPdf ? (await PDFDocument.load(await file.arrayBuffer(), { ignoreEncryption: true })).getPageCount() : 1;
-        return { file, fileName: file.name, fileType: isPdf ? "PDF" : "IMAGE", pages: filePages, copies: 1, mode: "bw-single", serviceId: "document-printing" };
+        return { file, fileName: file.name, reference: `${batchReference}-${batchFiles.length + index + 1}`, fileType: isPdf ? "PDF" : "IMAGE", pages: filePages, copies: 1, mode: "bw-single", serviceId: "document-printing" };
       }));
       setBatchFiles((items) => [...items, ...prepared]);
       setBatchIndex(batchFiles.length);
@@ -739,7 +749,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
         const service = printServices.find((candidate) => candidate.id === item.serviceId);
         const mixedResult = item.colourPageNumbers !== undefined ? parsePageNumbers(item.colourPageNumbers, item.pages) : null;
         const bwPages = mixedResult ? formatPageRanges(Array.from({ length: item.pages }, (_, pageIndex) => pageIndex + 1).filter((page) => !mixedResult.pages.includes(page))) : undefined;
-        const cartItem: CartItem = { id: crypto.randomUUID(), uploadId: uploaded.uploadId, fileName: item.fileName, fileType: item.fileType, pages: item.pages, copies: item.copies, mode: item.mode, unitPrice: prices[item.mode], bwUnitPrice: prices[`bw-${item.mode.endsWith("double") ? "double" : "single"}`], colourUnitPrice: prices[`colour-${item.mode.endsWith("double") ? "double" : "single"}`], total: batchTotal(item), serviceId: item.serviceId, serviceName: service?.name ?? "Document printing", servicePrice: (service?.price_paise ?? 0) / 100, countsForPackaging: Boolean(service?.counts_for_packaging ?? 1), colourPages: mixedResult?.count, colourPageNumbers: mixedResult ? formatPageRanges(mixedResult.pages) : undefined, bwPageNumbers: bwPages, addons: [], addonsTotal: 0 };
+        const cartItem: CartItem = { id: crypto.randomUUID(), uploadId: uploaded.uploadId, fileName: item.fileName, displayReference: item.reference, fileType: item.fileType, pages: item.pages, copies: item.copies, mode: item.mode, unitPrice: prices[item.mode], bwUnitPrice: prices[`bw-${item.mode.endsWith("double") ? "double" : "single"}`], colourUnitPrice: prices[`colour-${item.mode.endsWith("double") ? "double" : "single"}`], total: batchTotal(item), serviceId: item.serviceId, serviceName: service?.name ?? "Document printing", servicePrice: (service?.price_paise ?? 0) / 100, countsForPackaging: Boolean(service?.counts_for_packaging ?? 1), colourPages: mixedResult?.count, colourPageNumbers: mixedResult ? formatPageRanges(mixedResult.pages) : undefined, bwPageNumbers: bwPages, addons: [], addonsTotal: 0 };
         const response = await fetch("/api/cart", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cartItem) });
         const result = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(result.error ?? `Could not add ${item.fileName} to the cart.`);
@@ -784,6 +794,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
         id: crypto.randomUUID(),
         uploadId: uploaded.uploadId,
         fileName,
+        displayReference: `${fileReference || createFileReference()}-1`,
         fileType,
         pages,
         copies,
@@ -1765,7 +1776,8 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
           <label className={`upload-zone ${fileName ? "has-file" : ""}`}>
             <input type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,application/pdf,image/jpeg,image/png,image/webp,image/heic,image/heif" onChange={handleFile} />
             <span className="upload-icon">{countingPages ? "…" : fileName ? "✓" : "↑"}</span>
-            <strong>{fileName || "Choose document(s)"}</strong>
+            <strong>{fileName ? `${fileReference || "PB000"}-1` : "Choose document(s)"}</strong>
+            {fileName && <small className="original-file-name">Original: {fileName}</small>}
             <small>{uploadProgress !== null ? `Uploading… ${uploadProgress}%` : countingPages ? "Checking file…" : fileName ? `${pages} ${pages === 1 ? "page" : "pages"} detected${fileQueue.length ? ` · ${fileQueue.length} more queued` : ""}` : "Select one or more PDF or image files"}</small>
           </label>
           <p className="file-retention-note"><strong>Accepted files: PDF, JPG/JPEG, PNG, WEBP and HEIC only.</strong> Select multiple files to review all print choices together before adding the full batch to your cart. PDFs are counted automatically; each image is treated as one printable page. Files are deleted after delivery or cancellation. Maximum file size: 50 MB per file.</p>
@@ -1785,7 +1797,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
               <label className="add-more-files"><input type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,application/pdf,image/jpeg,image/png,image/webp,image/heic,image/heif" onChange={handleFile} />+ Add more files</label>
               <article className="batch-file-card" onTouchStart={(event) => setSwipeStartX(event.changedTouches[0]?.clientX ?? null)} onTouchEnd={(event) => { const endX = event.changedTouches[0]?.clientX; if (swipeStartX !== null && endX !== undefined && Math.abs(endX - swipeStartX) > 45) moveBatch(endX < swipeStartX ? 1 : -1); setSwipeStartX(null); }}>
                 <div className="batch-file-nav"><button type="button" onClick={() => moveBatch(-1)} disabled={batchIndex === 0} aria-label="Previous file">←</button><span>File {batchIndex + 1} of {batchFiles.length}</span><button type="button" onClick={() => moveBatch(1)} disabled={batchIndex === batchFiles.length - 1} aria-label="Next file">→</button></div>
-                <div className="batch-file-name"><span>{item.fileType === "PDF" ? "PDF" : "IMG"}</span><div><strong>{item.fileName}</strong><small>{item.pages} {item.pages === 1 ? "page" : "pages"}</small></div><button type="button" className="remove-item" onClick={removeCurrent} aria-label={`Remove ${item.fileName}`}>×</button></div>
+                <div className="batch-file-name"><span>{item.fileType === "PDF" ? "PDF" : "IMG"}</span><div><strong>{item.reference}</strong><small className="original-file-name">Original: {item.fileName}</small><small>{item.pages} {item.pages === 1 ? "page" : "pages"}</small></div><button type="button" className="remove-item" onClick={removeCurrent} aria-label={`Remove ${item.fileName}`}>×</button></div>
                 <div className="batch-file-fields"><label>Service<select value={item.serviceId} onChange={(event) => updateBatchFile(batchIndex, { serviceId: event.target.value })}>{printServices.map((service) => <option key={service.id} value={service.id}>{service.name}</option>)}</select></label><label>Print style<select value={item.mode} onChange={(event) => updateBatchFile(batchIndex, { mode: event.target.value as PrintMode })}>{options.map((option) => <option key={option.id} value={option.id}>{option.title}</option>)}</select></label><div><small>Copies</small><div className="quantity-stepper"><button type="button" disabled={item.copies <= 1} onClick={() => updateBatchFile(batchIndex, { copies: Math.max(1, item.copies - 1) })}>−</button><output>{item.copies}</output><button type="button" onClick={() => updateBatchFile(batchIndex, { copies: item.copies + 1 })}>+</button></div></div></div>
                 <div className="batch-file-choice-cards"><div className="batch-choice-group"><small>Service</small><div className="service-option-grid" role="radiogroup" aria-label="Print service">{printServices.map((service) => <button type="button" role="radio" aria-checked={item.serviceId === service.id} className={item.serviceId === service.id ? "selected" : ""} key={service.id} onClick={() => updateBatchFile(batchIndex, { serviceId: service.id, colourPageNumbers: MIXED_PRINT_SERVICES.has(service.id) ? item.colourPageNumbers : undefined })}><span><strong>{service.name}</strong><small>{service.description}</small></span><b>{service.price_paise ? `+${inr.format(service.price_paise / 100)}` : "Included"}</b></button>)}</div></div><div className="batch-choice-group"><small>Print style</small><div className="option-grid" role="radiogroup" aria-label="Print style">{options.map((option) => <button type="button" role="radio" aria-checked={item.mode === option.id && item.colourPageNumbers === undefined} className={`print-option ${item.mode === option.id && item.colourPageNumbers === undefined ? "selected" : ""}`} key={option.id} onClick={() => updateBatchFile(batchIndex, { mode: option.id, colourPageNumbers: undefined })}><span className={`mode-icon ${option.id.startsWith("colour") ? "colour" : ""}`}>{option.icon}</span><span><strong>{option.title}</strong><small>{option.note}</small></span></button>)}</div>{MIXED_PRINT_SERVICES.has(item.serviceId) && <div className="batch-mixed-pages"><button type="button" className={item.colourPageNumbers !== undefined ? "selected" : ""} onClick={() => updateBatchFile(batchIndex, { mode: `bw-${item.mode.endsWith("double") ? "double" : "single"}` as PrintMode, colourPageNumbers: item.colourPageNumbers ?? "" })}><strong>Select colour pages</strong><small>Enter only the colour page numbers; all remaining pages print in B&amp;W.</small></button>{item.colourPageNumbers !== undefined && <label>Colour page numbers<input value={item.colourPageNumbers} onChange={(event) => updateBatchFile(batchIndex, { colourPageNumbers: event.target.value })} inputMode="text" placeholder="Example: 1-4, 12, 18-20" /></label>}{item.colourPageNumbers?.trim() && parsePageNumbers(item.colourPageNumbers, item.pages).invalid.length > 0 && <small className="upload-error">Use pages between 1 and {item.pages}.</small>}</div>}</div><div className="batch-copies"><small>Copies</small><div className="quantity-stepper"><button type="button" disabled={item.copies <= 1} onClick={() => updateBatchFile(batchIndex, { copies: Math.max(1, item.copies - 1) })}>−</button><output>{item.copies}</output><button type="button" onClick={() => updateBatchFile(batchIndex, { copies: item.copies + 1 })}>+</button></div></div></div>
                 <div className="batch-file-total"><span>This file</span><strong>{inr.format(batchTotal(item))}</strong></div>
@@ -1889,7 +1901,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
                 return (
                   <article className="cart-item" key={item.id}>
                     <div className="file-badge">{item.kind === "ADDON" ? "ADD" : item.fileType === "PDF" ? "PDF" : item.fileType === "IMAGE" ? "IMG" : "DOC"}</div>
-                    {item.kind === "ADDON" ? <div className="cart-file"><h3>{item.fileName}</h3><p>Add-on only · No printout required</p><small>Fixed product price</small></div> : <div className="cart-file"><h3>{item.fileName}</h3><p>{item.serviceName} · {item.pages} {item.pages === 1 ? "page" : "pages"} · A4 · {itemOption?.title ?? printModeLabel(item.mode)} · {item.copies} {item.copies === 1 ? "copy" : "copies"}</p>{item.colourPageNumbers !== undefined && <p>Colour pages: {item.colourPageNumbers} · B&amp;W pages: {item.bwPageNumbers ?? `remaining ${item.pages - (item.colourPages ?? 0)} pages`}</p>}{item.addons?.length ? <p>Add-ons: {item.addons.map((addon) => addon.name).join(", ")}</p> : null}{item.printInstructions && <p>{item.printInstructions}{item.whatsappNumber ? ` · WhatsApp ${item.whatsappNumber}` : ""}</p>}<small>{item.colourPageNumbers !== undefined ? `${item.pages - (item.colourPages ?? 0)} B&W + ${item.colourPages ?? 0} colour × ${item.copies}` : `${item.pages}${item.mode.endsWith("double") ? " ÷ 2" : ""} × ${item.copies} × ${inr.format(item.unitPrice)}`}{item.servicePrice > 0 ? ` + ${inr.format(item.servicePrice)} service charge` : ""}{item.addonsTotal ? ` + ${inr.format(item.addonsTotal)} add-ons` : ""}</small></div>}
+                    {item.kind === "ADDON" ? <div className="cart-file"><h3>{item.fileName}</h3><p>Add-on only · No printout required</p><small>Fixed product price</small></div> : <div className="cart-file"><h3>{item.displayReference ?? item.fileName}</h3><small className="original-file-name">Original: {item.fileName}</small><p>{item.serviceName} · {item.pages} {item.pages === 1 ? "page" : "pages"} · A4 · {itemOption?.title ?? printModeLabel(item.mode)} · {item.copies} {item.copies === 1 ? "copy" : "copies"}</p>{item.colourPageNumbers !== undefined && <p>Colour pages: {item.colourPageNumbers} · B&amp;W pages: {item.bwPageNumbers ?? `remaining ${item.pages - (item.colourPages ?? 0)} pages`}</p>}{item.addons?.length ? <p>Add-ons: {item.addons.map((addon) => addon.name).join(", ")}</p> : null}{item.printInstructions && <p>{item.printInstructions}{item.whatsappNumber ? ` · WhatsApp ${item.whatsappNumber}` : ""}</p>}<small>{item.colourPageNumbers !== undefined ? `${item.pages - (item.colourPages ?? 0)} B&W + ${item.colourPages ?? 0} colour × ${item.copies}` : `${item.pages}${item.mode.endsWith("double") ? " ÷ 2" : ""} × ${item.copies} × ${inr.format(item.unitPrice)}`}{item.servicePrice > 0 ? ` + ${inr.format(item.servicePrice)} service charge` : ""}{item.addonsTotal ? ` + ${inr.format(item.addonsTotal)} add-ons` : ""}</small></div>}
                     <strong>{inr.format(item.total)}</strong>
                     {item.kind !== "ADDON" && <button className="edit-cart-item" onClick={() => openCartEditor(item)} aria-label={`Edit ${item.fileName}`}>Edit</button>}
                     <button className="remove-item" onClick={() => removeFromCart(item)} aria-label={`Remove ${item.fileName}`}>×</button>
