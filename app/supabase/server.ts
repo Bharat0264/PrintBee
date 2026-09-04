@@ -9,6 +9,13 @@ const ADMIN_EMAILS = new Set([
 
 export async function getViewer() {
   const cookieStore = await cookies();
+  const localSession = cookieStore.get("printbee_local_session")?.value;
+  if (localSession) {
+    try {
+      const session = await database().prepare("SELECT email FROM local_sessions WHERE id=? AND expires_at>? ").bind(localSession, new Date().toISOString()).first<{ email: string }>();
+      if (session?.email) return viewerForEmail(session.email);
+    } catch { /* The session tables may not have reached a newly created preview yet. */ }
+  }
   const endpoint = process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT;
   const projectId = process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID;
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -20,6 +27,10 @@ export async function getViewer() {
   const email = data.user?.email?.toLowerCase();
   if (!email) return null;
 
+  return viewerForEmail(email);
+}
+
+async function viewerForEmail(email: string) {
   let adminRole: "OWNER" | "OPERATIONS" | "ACCOUNTANT" | "SUPPORT" | null = ADMIN_EMAILS.has(email) ? "OWNER" : null;
   try {
     const member = await database().prepare("SELECT role FROM admin_members WHERE email=?").bind(email).first<{ role: typeof adminRole }>();

@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import QRCode from "qrcode";
 
@@ -162,6 +162,11 @@ async function uploadPrintableFile(file: File, pageCount: number, onProgress?: (
 }
 
 type Viewer = { email: string; isAdmin: boolean } | null;
+
+declare global {
+  interface Window { google?: { accounts: { id: { initialize: (options: { client_id: string; callback: (response: { credential: string }) => void }) => void; renderButton: (element: HTMLElement, options: Record<string, unknown>) => void } } } }
+}
+const GOOGLE_CLIENT_ID = "365409440317-vn99jp0h6jd5suom0gppbjoubvs8sqio.apps.googleusercontent.com";
 type LocationOption = { id: string; name: string; delivery_fee_paise?: number; platform_fee_paise?: number };
 type PrintService = { id: string; name: string; description: string; active: number; is_binding: number; price_paise: number; counts_for_packaging: number };
 type Addon = { id: string; name: string; description: string; active: number; price_paise: number };
@@ -329,6 +334,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
   const [adminOpen, setAdminOpen] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
   const [authMessage, setAuthMessage] = useState("");
+  const googleButtonRef = useRef<HTMLDivElement>(null);
   const [role, setRole] = useState<string | null>(viewer?.isAdmin ? "ADMIN" : null);
   const [adminRole, setAdminRole] = useState<string | null>(viewer?.isAdmin ? "OWNER" : null);
   const [approvalStatus, setApprovalStatus] = useState<string | null>(null);
@@ -931,11 +937,30 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
     setGatewayEnabled(data.gatewayEnabled); setSurgeEnabled(data.surgeEnabled); setSurgeType(data.surgeType); setSurgeValue(data.surgeValue); setLateNightEnabled(data.lateNightEnabled); setLateNightType(data.lateNightType); setLateNightValue(data.lateNightValue); setPlatformFee(data.platformFee); setBaseDeliveryFee(data.baseDeliveryFee); setDeliveryFeePer100Meters(data.deliveryFeePer100Meters); setPackagingEnabled(data.packagingEnabled); setPackagingFee(data.packagingFee); if (!data.packagingEnabled) setNeedsPackaging(false); setNotificationMessage("Checkout fee settings saved.");
   };
 
-  const signInWithGoogle = () => {
+  const signInWithGoogle = async (credential: string) => {
     window.localStorage.setItem("printbee-login-mode", loginMode);
     if (referralCode.trim()) window.localStorage.setItem("printbee-referral-code", referralCode.trim().toUpperCase());
-    window.location.assign("/auth/login");
+    setAuthMessage("Signing you in securely…");
+    const response = await fetch("/api/auth/google", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ credential }) });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) { setAuthMessage(data.error ?? "Google sign-in could not be completed."); return; }
+    window.location.reload();
   };
+
+  useEffect(() => {
+    if (!loginOpen || !googleButtonRef.current) return;
+    const render = () => {
+      if (!window.google || !googleButtonRef.current) return;
+      window.google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: (response) => { void signInWithGoogle(response.credential); } });
+      googleButtonRef.current.replaceChildren();
+      window.google.accounts.id.renderButton(googleButtonRef.current, { theme: "outline", size: "large", text: "continue_with", shape: "rectangular", width: 300, logo_alignment: "left" });
+    };
+    const existing = document.querySelector('script[src="https://accounts.google.com/gsi/client"]');
+    if (existing) { const timer = window.setInterval(() => { if (window.google) { window.clearInterval(timer); render(); } }, 50); return () => window.clearInterval(timer); }
+    const script = document.createElement("script");
+    script.src = "https://accounts.google.com/gsi/client"; script.async = true; script.defer = true; script.onload = render;
+    document.head.appendChild(script);
+  }, [loginOpen, loginMode, referralCode]);
 
   const signOut = async () => {
     window.localStorage.removeItem("printbee-login-mode");
@@ -2363,7 +2388,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
             <div className="login-mode-picker"><button type="button" className={loginMode === "CUSTOMER" ? "selected" : ""} onClick={() => { setLoginMode("CUSTOMER"); window.localStorage.setItem("printbee-login-mode", "CUSTOMER"); }}>Customer</button><button type="button" className={loginMode === "PARTNER" ? "selected" : ""} onClick={() => { setLoginMode("PARTNER"); window.localStorage.setItem("printbee-login-mode", "PARTNER"); }}>Delivery partner</button></div>
             <label className="checkout-field referral-input">Referral code <small>Optional · only for a new account</small><input value={referralCode} onChange={(event) => setReferralCode(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))} placeholder="PBXXXXXXXX" /></label>
             <div className="reviewer-login-divider"><span>Secure account access</span></div>
-            <button className="save-button" onClick={signInWithGoogle}>Continue with Google</button>
+            <div className="google-sign-in-button" ref={googleButtonRef} aria-label="Continue with Google" />
             {loginMode === "PARTNER" && <small>After sign-in, submit your delivery-partner application for approval.</small>}
             {approvalStatus === "PENDING" && <p className="auth-message">Your delivery partner application is awaiting admin verification.</p>}
             {authMessage && <p className="auth-message">{authMessage}</p>}

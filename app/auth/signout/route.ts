@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
+import { database } from "../../api/db";
 
 export async function POST(request: Request) {
   const response = NextResponse.json({ ok: true });
+  const localSession = request.headers.get("cookie")?.match(/(?:^|;\\s*)printbee_local_session=([^;]+)/)?.[1];
+  if (localSession) {
+    try { await database().prepare("DELETE FROM local_sessions WHERE id=?").bind(localSession).run(); } catch { /* Clear the cookie even if the database is temporarily unavailable. */ }
+  }
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (url && key) {
