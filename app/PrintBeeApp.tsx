@@ -594,7 +594,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
     if (!adminOpen || adminSection !== "orders") return;
     let lastNewest = dashboard?.orders?.[0]?.id ?? "";
     const refresh = window.setInterval(async () => {
-      const response = await fetch(`/api/admin/dashboard?page=${adminPage}&pageSize=25`, { cache: "no-store" });
+      const response = await fetch(`/api/admin/dashboard?page=${adminPage}&pageSize=100`, { cache: "no-store" });
       if (!response.ok) return;
       const next = await response.json();
       const newest = next.orders?.[0]?.id ?? "";
@@ -1325,7 +1325,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
 
   const openAdminDashboard = async (page = adminPage) => {
     setAdminOpen(true);
-    const [response, storeResponse] = await Promise.all([fetch(`/api/admin/dashboard?page=${page}&pageSize=25`), fetch("/api/admin/store-location")]);
+    const [response, storeResponse] = await Promise.all([fetch(`/api/admin/dashboard?page=${page}&pageSize=100`), fetch("/api/admin/store-location")]);
     if (response.ok) { setDashboard(await response.json()); setAdminPage(page); }
     if (storeResponse.ok) { const store = await storeResponse.json(); if (store.latitude != null) setStoreLocation(store); }
   };
@@ -2006,7 +2006,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
           <section className="admin-modal admin-portal" role="dialog" aria-modal="true" aria-labelledby="admin-title" onMouseDown={(e) => e.stopPropagation()}>
             <aside className="admin-sidebar">
               <div className="admin-sidebar-brand"><img src="/printbee-logo.png" alt="" /><strong>PrintBee Admin</strong></div>
-              {([["dashboard", "Dashboard", "⌂"], ["traffic", "Traffic", "↗"], ["revenue", "Revenue", "₹"], ["ledger", "Ledger", "▦"], ["orders", "Orders", "▤"], ["riders", "Rider approvals", "♙"], ["services", "Print services", "＋"]] as const).map(([id, label, icon]) => <button key={id} className={adminSection === id ? "active" : ""} onClick={() => { void selectAdminSection(id); }}><span>{icon}</span>{label}{id === "orders" && <b>{dashboard?.orders?.length ?? 0}</b>}</button>)}
+              {([["dashboard", "Dashboard", "⌂"], ["traffic", "Traffic", "↗"], ["revenue", "Revenue", "₹"], ["ledger", "Ledger", "▦"], ["orders", "Orders", "▤"], ["riders", "Rider approvals", "♙"], ["services", "Print services", "＋"]] as const).map(([id, label, icon]) => <button key={id} className={adminSection === id ? "active" : ""} onClick={() => { void selectAdminSection(id); }}><span>{icon}</span>{label}{id === "orders" && <b>{dashboard?.pagination?.total ?? 0}</b>}</button>)}
               {notificationPermission !== "granted" && <button onClick={() => { if (ledger) void lockLedger(); void enableNotifications(); }}><span>♬</span>Enable order alerts</button>}
               {notificationPermission === "granted" && <button onClick={() => { if (ledger) void lockLedger(); void testNotifications(); }}><span>♬</span>Test sound + banner</button>}
               <button className="admin-sidebar-exit" onClick={() => { void closeAdminDashboard(); }}>← Back to website</button>
