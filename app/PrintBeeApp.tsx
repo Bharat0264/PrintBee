@@ -3,6 +3,7 @@
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import QRCode from "qrcode";
+import { BeeMascot, DocumentPreview, MobileNavigation, DialogAccessibility } from "./components/PrintBeeExperience";
 
 type PrintMode = "bw-single" | "bw-double" | "colour-single" | "colour-double";
 type Prices = Record<PrintMode, number>;
@@ -334,6 +335,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
   const [cartEditServiceId, setCartEditServiceId] = useState("document-printing");
   const [adminOpen, setAdminOpen] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const [authMessage, setAuthMessage] = useState("");
   const [franchiseApplyOpen, setFranchiseApplyOpen] = useState(false);
   const [franchiseApplyMessage, setFranchiseApplyMessage] = useState("");
@@ -1812,7 +1814,9 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
   }
 
   return (
-    <main>
+    <main className="printbee-experience">
+      <DialogAccessibility />
+      <a className="skip-link" href="#upload">Skip to upload</a>
       {notificationPromptOpen && (
         <div className="modal-backdrop notification-permission-backdrop" role="presentation">
           <section className="notification-permission-modal" role="dialog" aria-modal="true" aria-labelledby="notification-permission-title">
@@ -1850,12 +1854,11 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
 
       <section className="hero" id="top">
           <div className="hero-copy">
+          <div className="hero-intro"><div className="eyebrow">YOUR CAMPUS PRINT COMPANION</div><h1>Upload. Print.<br /><em>Delivered.</em></h1><p>Notes, assignments, big ideas. Fresh A4 prints, delivered to your door.</p><a className="primary-cta" href="#upload">Upload Files <span aria-hidden="true">↑</span></a><BeeMascot /></div>
           <div className="campus-delivery-banner" role="status"><span>NEW</span><strong>Classroom &amp; hostel delivery is now available</strong><small>Fast in-campus delivery for university students</small></div>
           <div className="srm-binding-banner" role="status"><span>NEW</span><strong>SRM-style soft binding is now available</strong><small>Add your documents, then select the binding style from the service options.</small></div>
           <div className="plagiarism-banner" role="status"><span>NEW</span><strong>Plagiarism reports for papers and reports are now available</strong><small>Upload your document and receive the report on WhatsApp within 24 hours.</small></div>
           <div className="eyebrow"><span>●</span> A4 printing, delivered locally</div>
-          <h1>Your documents.<br /><em>Printed right.</em></h1>
-          <p>Upload a PDF or image, choose your A4 print style, and get crisp prints delivered to your door.</p>
           <div className="trust-row">
             <span>✓ Secure files</span><span>✓ Clear pricing</span><span>✓ Doorstep delivery</span>
           </div>
@@ -1891,7 +1894,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
           )}
         </div>
 
-        <section className="order-card" aria-label="Create print order">
+        <section className="order-card" id="upload" aria-label="Create print order" tabIndex={-1}>
           {acceptingOrders ? <>
           <div className="card-heading">
             <span className="step">1</span>
@@ -1901,15 +1904,19 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
           {!isPlagiarismService && <button type="button" className="plagiarism-start" onClick={() => { setServiceId(PLAGIARISM_SERVICE_ID); setFileName(""); setSelectedFile(null); setBatchFiles([]); setSelectedAddonIds([]); setUploadError(""); }}><span>NEW</span><div><strong>Plagiarism report</strong><small>Upload your paper or report · ₹175 · WhatsApp report within 24 hours</small></div><b>Start →</b></button>}
           {isPlagiarismService && <div className="plagiarism-flow-heading"><div><strong>Plagiarism report</strong><small>Online service · ₹175 · no delivery or printing charges</small></div><button type="button" className="plagiarism-back-button" onClick={() => { setServiceId("document-printing"); setFileName(""); setSelectedFile(null); setBatchFiles([]); }}>← Go back to printing</button></div>}
 
-          <label className={`upload-zone ${fileName ? "has-file" : ""}`}>
+          <label className={`upload-zone ${fileName ? "has-file" : ""}`} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); if (!countingPages) void handleFile({ target: { files: event.dataTransfer.files, value: "" } } as ChangeEvent<HTMLInputElement>); }}>
             <input type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,application/pdf,image/jpeg,image/png,image/webp,image/heic,image/heif" onChange={handleFile} />
             <span className="upload-icon">{countingPages ? "…" : fileName ? "✓" : "↑"}</span>
-            <strong>{fileName ? "File 1" : "Choose document(s)"}</strong>
+            <strong>{fileName ? "Document ready" : "Upload Files"}</strong>
             {fileName && <small className="original-file-name">Original: {fileName}</small>}
             <small>{uploadProgress !== null ? `Uploading… ${uploadProgress}%` : countingPages ? "Checking file…" : fileName ? `${pages} ${pages === 1 ? "page" : "pages"} detected${fileQueue.length ? ` · ${fileQueue.length} more queued` : ""}` : "Select one or more PDF or image files"}</small>
           </label>
+          {uploadProgress !== null && <progress className="upload-progress" value={uploadProgress} max={100} aria-label="File upload progress" />}
+          {countingPages && <div className="processing-skeleton" role="status">Preparing your document…</div>}
+          {selectedFile && <p className="file-size">{(selectedFile.size / 1024 / 1024).toFixed(2)} MB · securely selected</p>}
+          {fileName && !isPlagiarismService && <DocumentPreview pages={pages} copies={copies} colour={mode.startsWith("colour")} doubleSided={mode.endsWith("double")} file={selectedFile} />}
           <p className="file-retention-note"><strong>Accepted files: PDF, JPG/JPEG, PNG, WEBP and HEIC only.</strong> Select multiple files to review all print choices together before adding the full batch to your cart. PDFs are counted automatically; each image is treated as one printable page. Files are deleted after delivery or cancellation. Maximum file size: 50 MB per file.</p>
-          {uploadError && <p className="upload-error">{uploadError}</p>}
+          {uploadError && <div className="upload-error" role="alert"><p>{uploadError}</p><button type="button" onClick={() => document.querySelector<HTMLInputElement>('.upload-zone input')?.click()}>Choose file again</button></div>}
 
           {batchFiles.length > 0 && (() => {
             const item = batchFiles[Math.min(batchIndex, batchFiles.length - 1)];
@@ -1921,6 +1928,8 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
             return <section className="binding-fields batch-file-review" aria-labelledby="batch-file-review-title">
               <div className="field-label"><span className="step">2</span><strong id="batch-file-review-title">Review your files</strong></div>
               <p>Swipe left or right to set printing choices for each file. Your changes stay saved as you move between files.</p>
+              <DocumentPreview pages={item.pages} copies={item.copies} colour={item.mode.startsWith("colour") || Boolean(item.colourPageNumbers)} doubleSided={item.mode.endsWith("double")} file={item.file} />
+              <p className="file-size">{(item.file.size / 1024 / 1024).toFixed(2)} MB · {item.fileName}</p>
               <div className="batch-progress" aria-label={`File ${batchIndex + 1} of ${batchFiles.length}`}>{batchFiles.map((_, index) => <button type="button" key={index} className={index === batchIndex ? "active" : ""} onClick={() => setBatchIndex(index)} aria-label={`Review file ${index + 1}`} />)}</div>
               <label className="add-more-files"><input type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,application/pdf,image/jpeg,image/png,image/webp,image/heic,image/heif" onChange={handleFile} />+ Add more files</label>
               <article className="batch-file-card" onTouchStart={(event) => setSwipeStartX(event.changedTouches[0]?.clientX ?? null)} onTouchEnd={(event) => { const endX = event.changedTouches[0]?.clientX; if (swipeStartX !== null && endX !== undefined && Math.abs(endX - swipeStartX) > 45) moveBatch(endX < swipeStartX ? 1 : -1); setSwipeStartX(null); }}>
@@ -1959,7 +1968,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
 
           {!isPlagiarismService && <div className="binding-fields">
             <strong><span className="step">3</span> Choose print sides</strong>
-            <p>Double-sided pricing uses pages ÷ 2 × the admin-set double-side price.</p>
+            <p>Choose how your document is printed. Your price updates below.</p>
             <div className="service-option-grid" role="radiogroup" aria-label="Print sides">
               <button type="button" role="radio" aria-checked={side === "single"} className={side === "single" ? "selected" : ""} onClick={() => setMode(`${mode.startsWith("colour") ? "colour" : "bw"}-single` as PrintMode)}><span><strong>Single side</strong><small>One page per sheet</small></span></button>
               <button type="button" role="radio" aria-checked={side === "double"} className={side === "double" ? "selected" : ""} onClick={() => setMode(`${mode.startsWith("colour") ? "colour" : "bw"}-double` as PrintMode)}><span><strong>Double side</strong><small>{pages} pages ÷ 2 = {pages / 2} priced units</small></span></button>
@@ -2020,7 +2029,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
           {cart.length > 0 && <strong>{inr.format(cartTotal)}</strong>}
         </div>
         {cart.length === 0 ? (
-          <div className="empty-cart"><span>▤</span><p>Upload a document or choose an add-on product above.</p></div>
+          <div className="empty-cart"><BeeMascot /><strong>A little empty. A lot of possibility.</strong><p>Add your notes, assignments or an add-on to get started.</p><a className="primary-cta" href="#upload">Add something to print ↑</a></div>
         ) : (
           <>
             <div className="cart-items">
@@ -2105,6 +2114,8 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
         </address>
         <p className="footer-copyright">© 2026 PrintBee · Local A4 printing made easy.</p>
       </footer>
+      {!viewer?.isAdmin && <MobileNavigation orders={() => { if (viewer) void openMyOrders(); else setLoginOpen(true); }} profile={() => { if (viewer) setProfileOpen(true); else setLoginOpen(true); }} cartCount={cart.length} />}
+      {profileOpen && <div className="modal-backdrop" onMouseDown={() => setProfileOpen(false)}><section className="login-modal account-panel" role="dialog" aria-modal="true" aria-labelledby="account-title" onMouseDown={event => event.stopPropagation()}><button className="close" aria-label="Close" onClick={() => setProfileOpen(false)}>×</button><BeeMascot /><h2 id="account-title">Your PrintBee</h2><p>{viewer?.email}</p><div className="account-actions"><button onClick={() => { setProfileOpen(false); void openMyOrders(); }}>Orders & tracking →</button><button onClick={() => { setProfileOpen(false); setWalletOpen(true); }}>Wallet · {pointsBalance} points →</button><a href="/contact">Help & contact →</a><a href="/privacy-policy">Privacy & your documents →</a><button onClick={signOut}>Sign out</button></div></section></div>}
 
       {adminOpen && (
         <div className="modal-backdrop" role="presentation" onMouseDown={() => { void closeAdminDashboard(); }}>
@@ -2371,6 +2382,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
             <button className="close" onClick={() => setCheckoutOpen(false)} aria-label="Close">×</button>
             {orderResult ? (
               <div className="order-success">
+                {orderResult.paid && <><BeeMascot celebrate /><button className="primary-cta" onClick={() => { setCheckoutOpen(false); void openMyOrders(); }}>Track Order →</button></>}
                 <span>{orderResult.paid ? "✓" : "₹"}</span><h2>{orderResult.paid ? "Order placed" : "Complete payment"}</h2>
                 <p>{orderResult.paid ? <>Order <strong>{orderResult.orderNumber}</strong> · {orderResult.locationName}</> : <>Your order number will be created after successful payment · {orderResult.locationName}</>}</p>
                 <div className="payment-pending"><small>Payment status</small><strong>{orderResult.paid ? "PAID" : "PAYMENT REQUIRED"}</strong></div>
