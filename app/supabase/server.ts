@@ -36,7 +36,9 @@ async function viewerForEmail(email: string) {
     const member = await database().prepare("SELECT role FROM admin_members WHERE email=?").bind(email).first<{ role: typeof adminRole }>();
     if (member?.role) adminRole = member.role;
   } catch { /* Migration may not have reached a newly created preview yet. */ }
-  return { email, isAdmin: Boolean(adminRole), adminRole };
+  let isFranchise = false;
+  try { isFranchise = Boolean(await database().prepare("SELECT 1 FROM franchise_members WHERE lower(email)=? LIMIT 1").bind(email).first()); } catch { /* Franchise tables may not exist on an older deployment. */ }
+  return { email, isAdmin: Boolean(adminRole), adminRole, isFranchise };
 }
 
 export async function requireAdmin() {

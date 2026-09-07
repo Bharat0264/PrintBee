@@ -161,7 +161,7 @@ async function uploadPrintableFile(file: File, pageCount: number, onProgress?: (
   return completed;
 }
 
-type Viewer = { email: string; isAdmin: boolean } | null;
+type Viewer = { email: string; isAdmin: boolean; isFranchise?: boolean } | null;
 
 declare global {
   interface Window { google?: { accounts: { id: { initialize: (options: { client_id: string; callback: (response: { credential: string }) => void }) => void; renderButton: (element: HTMLElement, options: Record<string, unknown>) => void } } } }
@@ -404,6 +404,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
   const [myOrders, setMyOrders] = useState<any[]>([]);
   const [appQr, setAppQr] = useState("");
   const [riderOrders, setRiderOrders] = useState<any[]>([]);
+  const [franchiseOrders, setFranchiseOrders] = useState<any[]>([]);
   const [riderStoreLocation, setRiderStoreLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [riderEarnings, setRiderEarnings] = useState<any>(null);
   const [withdrawUpi, setWithdrawUpi] = useState("");
@@ -1635,6 +1636,8 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
     }
   };
 
+  const loadFranchiseOrders = async () => { const response = await fetch("/api/franchise/operations", { cache: "no-store" }); if (response.ok) setFranchiseOrders((await response.json()).orders ?? []); };
+
   const requestWithdrawal = async () => {
     const response = await fetch("/api/rider/earnings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ upiId: withdrawUpi }) });
     const data = await response.json();
@@ -1678,6 +1681,10 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
     const matchesSearch = !term || [order.order_number, order.customer_name, order.customer_email, order.mobile_number, order.location_name, order.rider_email].some((value) => String(value ?? "").toLowerCase().includes(term));
     return matchesSearch && (adminOrderStatus === "ALL" || order.status === adminOrderStatus);
   });
+
+  if (viewer && !viewer.isAdmin && viewer.isFranchise) {
+    return <main className="partner-portal"><header className="partner-topbar"><div className="partner-brand"><img src="/printbee-logo.png" alt="PrintBee" /><span><b>PrintBee</b><small>Franchise operations</small></span></div><button onClick={signOut}>Sign out</button></header><section className="partner-portal-main"><div className="partner-welcome"><div><div className="admin-badge">FRANCHISE STORE</div><h1>Your store orders</h1><p>Only orders routed to your assigned franchise are visible here.</p></div><button onClick={loadFranchiseOrders}>Refresh orders</button></div><div className="assigned-orders">{franchiseOrders.length ? franchiseOrders.map((order) => <article key={order.id}><div><strong>{order.order_number}</strong><small>{order.franchise_store_name} · {order.customer_name} · {order.mobile_number}</small><small>{order.location_name}</small></div><strong>{inr.format(order.total_paise / 100)}</strong><select value={order.status} onChange={async (event) => { await fetch("/api/franchise/operations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ orderId: order.id, status: event.target.value }) }); await loadFranchiseOrders(); }}><option value="CONFIRMED">Confirmed</option><option value="PRINTING">Printing</option><option value="READY_FOR_PICKUP">Ready for pickup</option><option value="RIDER_ASSIGNED">Rider assigned</option><option value="DELIVERED">Delivered</option></select></article>) : <div className="empty-partner-orders">No assigned franchise orders yet. Refresh after customers place orders near your store.</div>}</div></section></main>;
+  }
 
   if (viewer && !viewer.isAdmin && loginMode === "PARTNER") {
     const partnerApproved = role === "AGENT" && approvalStatus === "APPROVED";
