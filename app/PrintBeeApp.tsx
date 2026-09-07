@@ -341,6 +341,10 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
   const googleButtonRef = useRef<HTMLDivElement>(null);
   const [role, setRole] = useState<string | null>(viewer?.isAdmin ? "ADMIN" : null);
   const [adminRole, setAdminRole] = useState<string | null>(viewer?.isAdmin ? "OWNER" : null);
+  // Franchise access can be changed by an administrator while this tab is open.
+  // Keep it separate from the server-rendered viewer snapshot so a removed
+  // manager is not left in the franchise portal until they sign out.
+  const [hasFranchiseAccess, setHasFranchiseAccess] = useState(Boolean(viewer?.isFranchise));
   const [approvalStatus, setApprovalStatus] = useState<string | null>(null);
   const [isRiderAvailable, setIsRiderAvailable] = useState(false);
   const [referralCode, setReferralCode] = useState("");
@@ -517,8 +521,11 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
 
   useEffect(() => {
     if (!viewer) return;
-    fetch("/api/me").then((response) => response.json()).then(async (data) => {
-      setRole(data.role); setAdminRole(data.adminRole ?? null); setApprovalStatus(data.approvalStatus ?? null); setIsRiderAvailable(Boolean(data.isAvailable)); setMyReferralCode(data.referralCode ?? ""); setPointsBalance(Number(data.pointsBalance) || 0); setHasReferrer(Boolean(data.hasReferrer));
+    const refreshAccount = async () => {
+      const response = await fetch("/api/me", { cache: "no-store" });
+      if (!response.ok) return;
+      const data = await response.json();
+      setRole(data.role); setAdminRole(data.adminRole ?? null); setHasFranchiseAccess(Boolean(data.isFranchise)); setApprovalStatus(data.approvalStatus ?? null); setIsRiderAvailable(Boolean(data.isAvailable)); setMyReferralCode(data.referralCode ?? ""); setPointsBalance(Number(data.pointsBalance) || 0); setHasReferrer(Boolean(data.hasReferrer));
       const pendingCode = window.localStorage.getItem("printbee-referral-code");
       if (pendingCode && !data.hasReferrer) {
         const linked = await fetch("/api/me", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ referralCode: pendingCode }) });
@@ -527,7 +534,10 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
         if (linked.ok) setHasReferrer(true);
       }
       window.localStorage.removeItem("printbee-referral-code");
-    }).catch(() => {});
+    };
+    void refreshAccount();
+    const refresh = window.setInterval(() => void refreshAccount(), 10_000);
+    return () => window.clearInterval(refresh);
   }, [viewer]);
 
   useEffect(() => {
@@ -1751,7 +1761,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
     return matchesSearch && (adminOrderStatus === "ALL" || order.status === adminOrderStatus);
   });
 
-  if (viewer && !viewer.isAdmin && viewer.isFranchise) {
+  if (viewer && !viewer.isAdmin && hasFranchiseAccess && loginMode !== "PARTNER") {
     return <main className="partner-portal"><header className="partner-topbar"><div className="partner-brand"><img src="/printbee-logo.png" alt="PrintBee" /><span><b>PrintBee</b><small>Franchise operations</small></span></div><button onClick={signOut}>Sign out</button></header><section className="partner-portal-main"><div className="partner-welcome"><div><div className="admin-badge">FRANCHISE STORE</div><h1>Your store orders</h1><p>Only orders routed to your assigned franchise are visible here.</p></div><button onClick={() => { void loadFranchiseOrders(); void loadFranchiseSettings(); }}>Refresh orders</button></div><div className="assigned-orders">{franchiseOrders.length ? franchiseOrders.map((order) => <article key={order.id}><div><strong>{order.order_number}</strong><small>{order.franchise_store_name} · {order.customer_name} · {order.mobile_number}</small><small>{order.location_name}</small></div><strong>{inr.format(order.total_paise / 100)}</strong><select value={order.status} onChange={async (event) => { await fetch("/api/franchise/operations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ orderId: order.id, status: event.target.value }) }); await loadFranchiseOrders(); }}><option value="CONFIRMED">Confirmed</option><option value="PRINTING">Printing</option><option value="READY_FOR_PICKUP">Ready for pickup</option><option value="RIDER_ASSIGNED">Rider assigned</option><option value="DELIVERED">Delivered</option></select></article>) : <div className="empty-partner-orders">No assigned franchise orders yet. Refresh after customers place orders near your store.</div>}</div><section className="assigned-orders"><div className="section-title"><div><h2>Store prices & delivery</h2><p>These settings apply only to your franchise. Platform fee is fixed at ₹1.50 and gateway fee is 1%.</p></div></div>{franchiseSettings.map((setting) => <div className="franchise-setting-grid" key={setting.store_id}>{[["B&W single", "bw_single_paise"],["B&W double", "bw_double_paise"],["Colour single", "colour_single_paise"],["Colour double", "colour_double_paise"],["Base delivery", "delivery_base_fee_paise"],["Extra / 100m", "delivery_fee_per_100m_paise"]].map(([label,key]) => <label key={key}>{label} (₹)<input type="number" min="0" step=".01" value={Number(setting[key]) / 100} onChange={(e) => setFranchiseSettings((current) => current.map((row) => row.store_id === setting.store_id ? { ...row, [key]: Math.round(Number(e.target.value) * 100) } : row))} /></label>)}<button onClick={() => saveFranchiseSettings({ storeId: setting.store_id, bwSinglePaise: setting.bw_single_paise, bwDoublePaise: setting.bw_double_paise, colourSinglePaise: setting.colour_single_paise, colourDoublePaise: setting.colour_double_paise, deliveryBaseFeePaise: setting.delivery_base_fee_paise, deliveryFeePer100mPaise: setting.delivery_fee_per_100m_paise })}>Save store pricing</button></div>)}</section></section></main>;
   }
 
@@ -1834,7 +1844,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
           {viewer ? (
             <button className="login-link" onClick={signOut} title={viewer.email}>Sign out</button>
           ) : (
-            <button className="login-link" onClick={() => setLoginOpen(true)}>Sign in</button>
+            <><button className="login-link" onClick={() => setLoginOpen(true)}>Sign in</button><button className="login-link" onClick={() => { setLoginMode("PARTNER"); window.localStorage.setItem("printbee-login-mode", "PARTNER"); setLoginOpen(true); }}>Delivery partner</button></>
           )}
         </nav>
       </header>
