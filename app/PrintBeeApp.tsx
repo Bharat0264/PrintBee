@@ -424,6 +424,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
   const [adminSection, setAdminSection] = useState<"dashboard" | "traffic" | "revenue" | "ledger" | "orders" | "riders" | "services" | "franchise">("dashboard");
   const [franchiseStores, setFranchiseStores] = useState<any[]>([]);
   const [newFranchise, setNewFranchise] = useState({ name: "" });
+  const [franchiseManagerEmails, setFranchiseManagerEmails] = useState<Record<string, string>>({});
   const [ledgerPassword, setLedgerPassword] = useState("");
   const [ledger, setLedger] = useState<any>(null);
   const [ledgerMessage, setLedgerMessage] = useState("");
@@ -1369,6 +1370,26 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
     if (refreshed.ok) setFranchiseStores(await refreshed.json());
   };
 
+  const addFranchiseManager = async (storeId: string) => {
+    const email = franchiseManagerEmails[storeId] ?? "";
+    const response = await fetch(`/api/franchise/stores/${storeId}/managers`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email }) });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) return setAdminMessage(data.error ?? "Store manager could not be added.");
+    setFranchiseManagerEmails((current) => ({ ...current, [storeId]: "" }));
+    setAdminMessage(`${data.email} can now manage this store's orders.`);
+    const refreshed = await fetch("/api/franchise/stores", { cache: "no-store" });
+    if (refreshed.ok) setFranchiseStores(await refreshed.json());
+  };
+
+  const removeFranchiseManager = async (storeId: string, email: string) => {
+    const response = await fetch(`/api/franchise/stores/${storeId}/managers`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email }) });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) return setAdminMessage(data.error ?? "Store manager could not be removed.");
+    setAdminMessage(`${email} no longer has access to this store.`);
+    const refreshed = await fetch("/api/franchise/stores", { cache: "no-store" });
+    if (refreshed.ok) setFranchiseStores(await refreshed.json());
+  };
+
   const lockLedger = async () => {
     await fetch("/api/admin/ledger", { method: "DELETE", keepalive: true }).catch(() => {});
     setLedger(null);
@@ -2097,7 +2118,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
               <div className="service-chips">{addons.map((addon) => <span key={addon.id}><b>{addon.name} · {inr.format(addon.price_paise / 100)}</b><small>{addon.description}</small><button onClick={() => setNewAddon({ id: addon.id, name: addon.name, description: addon.description, price: addon.price_paise / 100 })}>Edit</button><button onClick={() => removeAddon(addon.id)}>Remove</button></span>)}</div>
             </div>
             </>}
-            {adminSection === "franchise" && <><h2>Franchise network</h2><p>Customers are routed to the closest registered store within its 5 km service radius.</p><div className="service-admin"><h3>Register current store as a franchise</h3><p>This uses the current saved store location automatically. No address or map coordinates are needed.</p>{storeLocation?.latitude == null ? <button type="button" onClick={setCurrentStoreLocation}>Set Current Store Location</button> : <div className="service-admin-form"><input value={newFranchise.name} onChange={(e) => setNewFranchise({ ...newFranchise, name: e.target.value })} placeholder="Name this store" /><button onClick={addFranchiseStore}>Create 5 km franchise store</button></div>}</div><div className="location-table">{franchiseStores.map((store) => <div key={store.id}><span><strong>{store.name}</strong><small>Current saved store location</small></span><strong>5 km</strong><span>{store.members || "No members"}</span></div>)}</div></>}
+            {adminSection === "franchise" && <><h2>Franchise network</h2><p>Customers are routed to the closest registered store within its 5 km service radius.</p><div className="service-admin"><h3>Register current store as a franchise</h3><p>This uses the current saved store location automatically. No address or map coordinates are needed.</p>{storeLocation?.latitude == null ? <button type="button" onClick={setCurrentStoreLocation}>Set Current Store Location</button> : <div className="service-admin-form"><input value={newFranchise.name} onChange={(e) => setNewFranchise({ ...newFranchise, name: e.target.value })} placeholder="Name this store" /><button onClick={addFranchiseStore}>Create 5 km franchise store</button></div>}</div><div className="location-table">{franchiseStores.map((store) => <div key={store.id}><span><strong>{store.name}</strong><small>5 km service radius · Store managers can update only this store's paid orders.</small></span><strong>5 km</strong><div className="service-admin-form"><input aria-label={`Manager email for ${store.name}`} value={franchiseManagerEmails[store.id] ?? ""} onChange={(e) => setFranchiseManagerEmails((current) => ({ ...current, [store.id]: e.target.value }))} placeholder="Add store manager email" /><button type="button" onClick={() => addFranchiseManager(store.id)}>Add manager</button></div><span>{store.members ? store.members.split(",").map((email: string) => <button key={email} type="button" className="secondary-button" onClick={() => removeFranchiseManager(store.id, email)}>Manager: {email} ×</button>) : "No managers yet"}</span></div>)}</div></>}
             {adminMessage && <p className="panel-message">{adminMessage}</p>}
             {dashboard && (
               <div className="dashboard-block">
