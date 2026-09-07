@@ -88,7 +88,9 @@ function finish(values: LedgerValues) {
   // Keep the established service-revenue calculation intact; ₹25 per paid
   // plagiarism report is an additional Bharat profit allocation.
   const serviceRevenuePaise = values.printingCollectedPaise - printingRevenuePaise - values.addonRevenuePaise;
-  const printingOperationalCostPaise = values.bwCostPaise + values.colourCostPaise;
+  // Rewards redeemed against an order are a printing cost, so they reduce
+  // printing profit and are included in the total operating cost.
+  const printingOperationalCostPaise = values.bwCostPaise + values.colourCostPaise + values.pointsDiscountPaise;
   const printingProfitPaise = printingRevenuePaise - printingOperationalCostPaise;
   const deliveryProfitPaise = values.deliveryCollectedPaise - values.riderCostPaise;
   const packagingProfitPaise = Math.min(values.packagingCollectedPaise, values.packagingOrders * 170);
@@ -99,7 +101,7 @@ function finish(values: LedgerValues) {
   const ramyaPrintingProfitPaise = Math.round(printingProfitPaise * 0.65);
   const bharatPrintingProfitPaise = printingProfitPaise - ramyaPrintingProfitPaise;
   // Delivery profit is exactly the 25% retained after the delivery partner receives 75%.
-  const bharatOtherProfitPaise = serviceRevenuePaise + plagiarismProfitPaise + values.addonRevenuePaise + deliveryProfitPaise + values.platformCollectedPaise + packagingProfitPaise + values.surgeCollectedPaise + values.lateNightCollectedPaise - values.pointsDiscountPaise;
+  const bharatOtherProfitPaise = serviceRevenuePaise + plagiarismProfitPaise + values.addonRevenuePaise + deliveryProfitPaise + values.platformCollectedPaise + packagingProfitPaise + values.surgeCollectedPaise + values.lateNightCollectedPaise;
   const bharatTotalProfitPaise = bharatPrintingProfitPaise + bharatOtherProfitPaise;
   const ramyaTotalProfitPaise = ramyaPrintingProfitPaise;
   return { ...values, bwProfitPaise, colourProfitPaise, printingRevenuePaise, plagiarismProfitPaise, serviceRevenuePaise, printingOperationalCostPaise, printingProfitPaise, addonProfitPaise: values.addonRevenuePaise, deliveryProfitPaise, packagingCostPaise, packagingProfitPaise, operationalCostPaise, netProfitPaise, bharatPrintingProfitPaise, bharatOtherProfitPaise, ramyaPrintingProfitPaise, bharatTotalProfitPaise, ramyaTotalProfitPaise, shareTallyPaise: bharatTotalProfitPaise + ramyaTotalProfitPaise };
