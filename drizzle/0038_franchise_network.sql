@@ -1,0 +1,8 @@
+CREATE TABLE `franchise_stores` (`id` text PRIMARY KEY NOT NULL, `name` text NOT NULL, `address` text NOT NULL, `latitude` real NOT NULL, `longitude` real NOT NULL, `radius_meters` integer DEFAULT 5000 NOT NULL, `active` integer DEFAULT true NOT NULL, `created_at` text NOT NULL, `updated_at` text NOT NULL);--> statement-breakpoint
+CREATE TABLE `franchise_members` (`store_id` text NOT NULL, `email` text NOT NULL, `created_at` text NOT NULL, PRIMARY KEY(`store_id`,`email`));--> statement-breakpoint
+CREATE TABLE `franchise_settings` (`store_id` text PRIMARY KEY NOT NULL, `bw_single_paise` integer DEFAULT 200 NOT NULL, `bw_double_paise` integer DEFAULT 300 NOT NULL, `colour_single_paise` integer DEFAULT 800 NOT NULL, `colour_double_paise` integer DEFAULT 1400 NOT NULL, `platform_fee_paise` integer DEFAULT 150 NOT NULL, `delivery_base_fee_paise` integer DEFAULT 1000 NOT NULL, `delivery_fee_per_100m_paise` integer DEFAULT 100 NOT NULL, `updated_at` text NOT NULL, `updated_by` text);--> statement-breakpoint
+CREATE TABLE `franchise_addons` (`id` text PRIMARY KEY NOT NULL, `store_id` text NOT NULL, `name` text NOT NULL, `description` text DEFAULT '' NOT NULL, `price_paise` integer NOT NULL, `active` integer DEFAULT true NOT NULL, `created_at` text NOT NULL, `updated_at` text NOT NULL);--> statement-breakpoint
+ALTER TABLE `orders` ADD `franchise_store_id` text;--> statement-breakpoint
+ALTER TABLE `orders` ADD `franchise_store_name` text;--> statement-breakpoint
+CREATE INDEX `idx_orders_franchise_paid_created` ON `orders` (`franchise_store_id`,`payment_status`,`created_at`);--> statement-breakpoint
+CREATE INDEX `idx_franchise_members_email` ON `franchise_members` (`email`);

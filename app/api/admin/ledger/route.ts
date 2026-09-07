@@ -124,6 +124,7 @@ export async function DELETE() {
 
 export async function GET() {
   if (!(await requireLedgerAccess())) return NextResponse.json({ error: "Ledger password required" }, { status: 401 });
+  const franchiseSummary = await database().prepare("SELECT COALESCE(franchise_store_name,'Unassigned') name, franchise_store_id store_id, COUNT(*) orders, COALESCE(SUM(total_paise),0) revenue_paise, CAST(COALESCE(SUM(total_paise),0) * 0.125 AS INTEGER) admin_revenue_paise, CAST(COALESCE(SUM(total_paise),0) * 0.875 AS INTEGER) franchise_revenue_paise FROM orders WHERE payment_status='PAID' AND hidden_at IS NULL AND franchise_store_id IS NOT NULL GROUP BY franchise_store_id, franchise_store_name ORDER BY revenue_paise DESC").all<any>();
   const result = await database().prepare(`SELECT order_number,customer_name,mobile_number,customer_email,location_name,items_json,printing_subtotal_paise,delivery_fee_paise,platform_fee_paise,packaging_fee_paise,payment_gateway_fee_paise,surge_fee_paise,late_night_fee_paise,points_discount_paise,total_paise,status,created_at FROM orders WHERE payment_status='PAID' AND hidden_at IS NULL ORDER BY created_at DESC`).all<any>();
   const days = new Map<string, LedgerValues>();
   const totals = emptyValues();
@@ -156,5 +157,7 @@ export async function GET() {
     totals: finish(totals),
     daily: Array.from(days, ([date, values]) => ({ date, ...finish(values) })).sort((a, b) => b.date.localeCompare(a.date)),
     orders: orderBreakdowns.map(({ items_json, ...order }) => order),
+    franchises: franchiseSummary.results,
+    franchiseAdminRevenuePaise: (franchiseSummary.results as any[]).reduce((sum, store) => sum + Number(store.admin_revenue_paise || 0), 0),
   });
 }

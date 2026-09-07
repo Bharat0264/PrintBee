@@ -26,15 +26,17 @@ export async function POST(request: Request) {
   if (incampusDelivery && (!campusBuilding || campusBuilding.length > 160 || (incampusType === "CLASSROOM" && (!classroomNumber || classroomNumber.length > 80)))) return NextResponse.json({ error: incampusType === "CLASSROOM" ? "Enter the classroom number and building name" : "Enter the hostel building name" }, { status: 400 });
   const customerLocation = plagiarismOnly ? { latitude: 0, longitude: 0 } : readCoordinates(body);
   if (!customerLocation) return NextResponse.json({ error: "Use your current location before checkout" }, { status: 400 });
-  const store = await database().prepare("SELECT latitude,longitude FROM store_location WHERE id='main'").first<{ latitude: number; longitude: number }>();
-  const storeLocation = readCoordinates(store);
-  if (!storeLocation && !plagiarismOnly) return NextResponse.json({ error: "Delivery is temporarily unavailable" }, { status: 503 });
+  const stores = plagiarismOnly ? [] : (await database().prepare("SELECT s.id,s.name,s.latitude,s.longitude,s.radius_meters,fs.platform_fee_paise,fs.delivery_base_fee_paise,fs.delivery_fee_per_100m_paise FROM franchise_stores s LEFT JOIN franchise_settings fs ON fs.store_id=s.id WHERE s.active=1").all<any>()).results;
+  const nearest = !plagiarismOnly ? stores.map((store: any) => ({ ...store, distance: calculateDistanceMeters({ latitude: Number(store.latitude), longitude: Number(store.longitude) }, customerLocation!) })).filter((store: any) => store.distance <= Number(store.radius_meters || 5000)).sort((a: any, b: any) => a.distance - b.distance)[0] : null;
+  const legacyStore = !plagiarismOnly && !nearest ? await database().prepare("SELECT latitude,longitude FROM store_location WHERE id='main'").first<{ latitude: number; longitude: number }>() : null;
+  const storeLocation = nearest ? { latitude: Number(nearest.latitude), longitude: Number(nearest.longitude) } : readCoordinates(legacyStore);
+  if (!storeLocation && !plagiarismOnly) return NextResponse.json({ error: stores.length ? "No PrintBee franchise currently serves this address. Delivery is available within 5 km of a registered store." : "Delivery is temporarily unavailable" }, { status: 422 });
   const id = crypto.randomUUID();
   const code = crypto.getRandomValues(new Uint32Array(1))[0] % 1_000_000;
   const deliveryCode = code.toString().padStart(6, "0");
   const printingSubtotalPaise = Math.max(0, Math.round(Number(body.totalPaise) || 0));
   const deliveryDistanceMeters = plagiarismOnly ? 0 : Math.round(calculateDistanceMeters(storeLocation!, customerLocation));
-  if (!plagiarismOnly && deliveryDistanceMeters > MAX_DELIVERY_DISTANCE_METERS) return NextResponse.json({ error: "We are unable to deliver to this location. Delivery is available within 4 km of the store." }, { status: 422 });
+  if (!plagiarismOnly && !nearest && deliveryDistanceMeters > MAX_DELIVERY_DISTANCE_METERS) return NextResponse.json({ error: "We are unable to deliver to this location. Delivery is available within 4 km of the store." }, { status: 422 });
   const deliveryAccuracy = typeof body.accuracy === "number" && Number.isFinite(body.accuracy) && body.accuracy >= 0 ? body.accuracy : null;
   const uploadIds = body.items.filter((item: any) => item.kind !== "ADDON").map((item: any) => item.uploadId).filter(Boolean);
   if (uploadIds.length !== body.items.filter((item: any) => item.kind !== "ADDON").length) return NextResponse.json({ error: "Every print item must finish uploading" }, { status: 400 });
@@ -50,10 +52,10 @@ export async function POST(request: Request) {
     if (!service) return NextResponse.json({ error: "One or more selected services are unavailable" }, { status: 400 });
   }
   const feeSettings = await database().prepare("SELECT gateway_enabled,surge_enabled,surge_type,surge_value,late_night_enabled,late_night_type,late_night_value,platform_fee_paise,delivery_base_fee_paise,delivery_fee_per_100m_paise,packaging_enabled,packaging_fee_paise FROM checkout_fee_settings WHERE id='main'").first<any>();
-  const storedPlatformFee = Number(feeSettings?.platform_fee_paise);
+  const storedPlatformFee = Number(nearest?.platform_fee_paise ?? feeSettings?.platform_fee_paise);
   const platformFeePaise = plagiarismOnly ? 0 : Number.isFinite(storedPlatformFee) ? Math.max(0, storedPlatformFee) : 150;
-  const baseDeliveryFeePaise = Number(feeSettings?.delivery_base_fee_paise);
-  const deliveryFeePer100MetersPaise = Number(feeSettings?.delivery_fee_per_100m_paise);
+  const baseDeliveryFeePaise = Number(nearest?.delivery_base_fee_paise ?? feeSettings?.delivery_base_fee_paise);
+  const deliveryFeePer100MetersPaise = Number(nearest?.delivery_fee_per_100m_paise ?? feeSettings?.delivery_fee_per_100m_paise);
   const deliveryFeePaise = plagiarismOnly ? 0 : calculateDeliveryFeePaise(deliveryDistanceMeters, Number.isFinite(baseDeliveryFeePaise) ? baseDeliveryFeePaise : 1000, Number.isFinite(deliveryFeePer100MetersPaise) ? deliveryFeePer100MetersPaise : 100);
   const incampusFeePaise = plagiarismOnly ? 0 : incampusDelivery ? 1000 : 0;
   const packagingFeePaise = !plagiarismOnly && body.needsPackaging && feeSettings?.packaging_enabled ? Math.max(0, Number(feeSettings.packaging_fee_paise) || 0) : 0;
@@ -71,12 +73,13 @@ export async function POST(request: Request) {
   const encryptedCode = await encryptDeliveryCode(deliveryCode);
   const db = database();
   const existing = await db.prepare("SELECT id,order_number,location_name,total_paise,late_night_fee_paise,points_redeemed,points_discount_paise FROM orders WHERE customer_email=? AND payment_status='PENDING' AND status='PAYMENT_PENDING' AND location_id=? AND items_json=? AND total_paise=? ORDER BY created_at DESC LIMIT 1")
-    .bind(viewer.email, "CURRENT_GPS", JSON.stringify(body.items), totalPaise).first<any>();
+    .bind(viewer.email, nearest?.id ?? "CURRENT_GPS", JSON.stringify(body.items), totalPaise).first<any>();
   if (existing) return NextResponse.json({ id: existing.id, orderNumber: null, locationName: existing.location_name, totalPaise: existing.total_paise, lateNightFeePaise: existing.late_night_fee_paise, pointsRedeemed: existing.points_redeemed, pointsDiscountPaise: existing.points_discount_paise, paymentMode: "RAZORPAY" });
   const orderNumber = `CHECKOUT-${id}`;
   const now = new Date().toISOString();
   await db.prepare(`INSERT INTO orders (id, order_number, customer_email, customer_name, mobile_number, location_id, location_name, items_json, printing_subtotal_paise, delivery_fee_paise, delivery_latitude, delivery_longitude, delivery_accuracy, delivery_address, delivery_landmark, delivery_captured_at, delivery_distance_meters, store_latitude, store_longitude, platform_fee_paise, packaging_fee_paise, payment_gateway_fee_paise, surge_fee_paise, late_night_fee_paise, incampus_delivery, incampus_type, campus_building, classroom_number, incampus_fee_paise, points_redeemed, points_discount_paise, total_paise, delivery_code_hash, delivery_code_encrypted, status, payment_status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PAYMENT_PENDING', 'PENDING', ?)`)
     .bind(id, orderNumber, viewer.email, name, mobile, "CURRENT_GPS", incampusDelivery ? `In-campus ${incampusType === "CLASSROOM" ? "classroom" : "hostel"}: ${campusBuilding}${classroomNumber ? ` · Room ${classroomNumber}` : ""}` : deliveryAddress, JSON.stringify(body.items), printingSubtotalPaise, deliveryFeePaise, customerLocation.latitude, customerLocation.longitude, deliveryAccuracy, deliveryAddress, deliveryLandmark, now, deliveryDistanceMeters, storeLocation?.latitude ?? 0, storeLocation?.longitude ?? 0, platformFeePaise, packagingFeePaise, paymentGatewayFeePaise, surgeFeePaise, lateNightFeePaise, incampusDelivery ? 1 : 0, incampusDelivery ? incampusType : null, campusBuilding, classroomNumber, incampusFeePaise, pointsRedeemed, pointsDiscountPaise, totalPaise, hash, encryptedCode, now)
     .run();
+  if (nearest) await db.prepare("UPDATE orders SET franchise_store_id=?, franchise_store_name=?, location_id=? WHERE id=?").bind(nearest.id, nearest.name, nearest.id, id).run();
   return NextResponse.json({ id, orderNumber: null, locationName: incampusDelivery ? `In-campus ${incampusType === "CLASSROOM" ? "classroom" : "hostel"}: ${campusBuilding}${classroomNumber ? ` · Room ${classroomNumber}` : ""}` : deliveryAddress, totalPaise, lateNightFeePaise, pointsRedeemed, pointsDiscountPaise, paymentMode: "RAZORPAY" });
 }

@@ -420,7 +420,9 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
   const [notificationMessage, setNotificationMessage] = useState("");
   const [notificationToast, setNotificationToast] = useState<{ title: string; body: string } | null>(null);
   const [notificationPromptOpen, setNotificationPromptOpen] = useState(false);
-  const [adminSection, setAdminSection] = useState<"dashboard" | "traffic" | "revenue" | "ledger" | "orders" | "riders" | "services">("dashboard");
+  const [adminSection, setAdminSection] = useState<"dashboard" | "traffic" | "revenue" | "ledger" | "orders" | "riders" | "services" | "franchise">("dashboard");
+  const [franchiseStores, setFranchiseStores] = useState<any[]>([]);
+  const [newFranchise, setNewFranchise] = useState({ name: "", address: "", latitude: "", longitude: "", members: "" });
   const [ledgerPassword, setLedgerPassword] = useState("");
   const [ledger, setLedger] = useState<any>(null);
   const [ledgerMessage, setLedgerMessage] = useState("");
@@ -1328,6 +1330,8 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
     const [response, storeResponse] = await Promise.all([fetch(`/api/admin/dashboard?page=${page}&pageSize=100`), fetch("/api/admin/store-location")]);
     if (response.ok) { setDashboard(await response.json()); setAdminPage(page); }
     if (storeResponse.ok) { const store = await storeResponse.json(); if (store.latitude != null) setStoreLocation(store); }
+    const franchiseResponse = await fetch("/api/franchise/stores", { cache: "no-store" });
+    if (franchiseResponse.ok) setFranchiseStores(await franchiseResponse.json());
   };
 
   const openLedger = async () => {
@@ -1340,6 +1344,16 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
       return;
     }
     window.setTimeout(() => document.getElementById("admin-ledger")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
+  };
+
+  const addFranchiseStore = async () => {
+    const response = await fetch("/api/franchise/stores", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...newFranchise, members: newFranchise.members.split(",") }) });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) return setAdminMessage(data.error ?? "Franchise store could not be added.");
+    setNewFranchise({ name: "", address: "", latitude: "", longitude: "", members: "" });
+    setAdminMessage(`${data.name} is ready with a 5 km delivery radius.`);
+    const refreshed = await fetch("/api/franchise/stores", { cache: "no-store" });
+    if (refreshed.ok) setFranchiseStores(await refreshed.json());
   };
 
   const lockLedger = async () => {
@@ -2009,6 +2023,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
               {([["dashboard", "Dashboard", "⌂"], ["traffic", "Traffic", "↗"], ["revenue", "Revenue", "₹"], ["ledger", "Ledger", "▦"], ["orders", "Orders", "▤"], ["riders", "Rider approvals", "♙"], ["services", "Print services", "＋"]] as const).map(([id, label, icon]) => <button key={id} className={adminSection === id ? "active" : ""} onClick={() => { void selectAdminSection(id); }}><span>{icon}</span>{label}{id === "orders" && <b>{dashboard?.pagination?.total ?? 0}</b>}</button>)}
               {notificationPermission !== "granted" && <button onClick={() => { if (ledger) void lockLedger(); void enableNotifications(); }}><span>♬</span>Enable order alerts</button>}
               {notificationPermission === "granted" && <button onClick={() => { if (ledger) void lockLedger(); void testNotifications(); }}><span>♬</span>Test sound + banner</button>}
+              <button className={adminSection === "franchise" ? "active" : ""} onClick={() => { void selectAdminSection("franchise"); }}><span>⌂</span>Franchises</button>
               <button className="admin-sidebar-exit" onClick={() => { void closeAdminDashboard(); }}>← Back to website</button>
             </aside>
             <div className="admin-main">
@@ -2063,6 +2078,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
               <div className="service-chips">{addons.map((addon) => <span key={addon.id}><b>{addon.name} · {inr.format(addon.price_paise / 100)}</b><small>{addon.description}</small><button onClick={() => setNewAddon({ id: addon.id, name: addon.name, description: addon.description, price: addon.price_paise / 100 })}>Edit</button><button onClick={() => removeAddon(addon.id)}>Remove</button></span>)}</div>
             </div>
             </>}
+            {adminSection === "franchise" && <><h2>Franchise network</h2><p>Customers are routed to the closest registered store within its 5 km service radius.</p><div className="service-admin"><h3>Add franchise store</h3><div className="service-admin-form"><input value={newFranchise.name} onChange={(e) => setNewFranchise({ ...newFranchise, name: e.target.value })} placeholder="Store / franchise name" /><input value={newFranchise.address} onChange={(e) => setNewFranchise({ ...newFranchise, address: e.target.value })} placeholder="Store address" /><input value={newFranchise.latitude} onChange={(e) => setNewFranchise({ ...newFranchise, latitude: e.target.value })} placeholder="Latitude" /><input value={newFranchise.longitude} onChange={(e) => setNewFranchise({ ...newFranchise, longitude: e.target.value })} placeholder="Longitude" /><input value={newFranchise.members} onChange={(e) => setNewFranchise({ ...newFranchise, members: e.target.value })} placeholder="Franchise member emails, comma-separated" /><button onClick={addFranchiseStore}>Add 5 km store</button></div></div><div className="location-table">{franchiseStores.map((store) => <div key={store.id}><span><strong>{store.name}</strong><small>{store.address}</small></span><strong>5 km</strong><span>{store.members || "No members"}</span></div>)}</div></>}
             {adminMessage && <p className="panel-message">{adminMessage}</p>}
             {dashboard && (
               <div className="dashboard-block">
@@ -2142,6 +2158,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
                       <div><small>Amount collected</small><strong>{inr.format(ledger.totals.amountCollectedPaise / 100)}</strong></div><div><small>Operational cost</small><strong>{inr.format(ledger.totals.operationalCostPaise / 100)}</strong></div><div><small>Total profit</small><strong>{inr.format(ledger.totals.netProfitPaise / 100)}</strong></div><div><small>Bharat total</small><strong>{inr.format(ledger.totals.bharatTotalProfitPaise / 100)}</strong></div><div><small>Ramya total</small><strong>{inr.format(ledger.totals.ramyaTotalProfitPaise / 100)}</strong></div><div><small>Shares tally to</small><strong>{inr.format(ledger.totals.shareTallyPaise / 100)}</strong></div>
                     </div>
                     <p className="ledger-note">Every plagiarism report is recorded as ₹175 revenue, ₹150 operational cost and ₹25 profit allocated 100% to Bharat. Ramya receives 65% only of printing profit; Bharat receives the other 35% plus all other business profit.</p>
+                    <h3>Franchise ledger</h3><div className="ledger-summary"><div><small>PrintBee franchise revenue (12.5%)</small><strong>{inr.format((ledger.franchiseAdminRevenuePaise ?? 0) / 100)}</strong></div></div><div className="location-table"><div className="table-head"><span>Franchise</span><span>Orders</span><span>Paid revenue</span><span>Franchise share (87.5%)</span></div>{ledger.franchises?.map((store: any) => <div key={store.store_id}><span>{store.name}</span><strong>{store.orders}</strong><strong>{inr.format(store.revenue_paise / 100)}</strong><strong>{inr.format(store.franchise_revenue_paise / 100)}</strong></div>) || <p>No franchise-paid orders yet.</p>}</div>
                     <h3>Daily financial breakdown</h3>
                     <LedgerFinancialTable rows={ledger.daily} total={ledger.totals} />
                     <h3>Order-by-order financial breakdown</h3>
