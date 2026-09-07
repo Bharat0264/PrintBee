@@ -5,7 +5,7 @@ import { franchiseAccess } from "../access";
 export async function GET() {
   const access = await franchiseAccess();
   if (!access.viewer) return NextResponse.json({ error: "Sign in required" }, { status: 401 });
-  const query = access.viewer.isAdmin ? "SELECT s.*, GROUP_CONCAT(m.email) members FROM franchise_stores s LEFT JOIN franchise_members m ON m.store_id=s.id GROUP BY s.id ORDER BY s.name" : "SELECT s.*, GROUP_CONCAT(m.email) members FROM franchise_stores s LEFT JOIN franchise_members m ON m.store_id=s.id WHERE s.id IN (SELECT store_id FROM franchise_members WHERE lower(email)=?) GROUP BY s.id ORDER BY s.name";
+  const query = access.viewer.isAdmin ? "SELECT s.*, GROUP_CONCAT(m.email) members FROM franchise_stores s LEFT JOIN franchise_members m ON m.store_id=s.id WHERE s.active = 1 GROUP BY s.id ORDER BY s.name" : "SELECT s.*, GROUP_CONCAT(m.email) members FROM franchise_stores s LEFT JOIN franchise_members m ON m.store_id=s.id WHERE s.active = 1 AND s.id IN (SELECT store_id FROM franchise_members WHERE lower(email)=?) GROUP BY s.id ORDER BY s.name";
   const rows = access.viewer.isAdmin ? await database().prepare(query).all() : await database().prepare(query).bind(access.viewer.email.toLowerCase()).all();
   return NextResponse.json(rows.results);
 }
