@@ -4,6 +4,10 @@ import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import QRCode from "qrcode";
 import { BeeMascot, DocumentPreview, MobileNavigation, DialogAccessibility } from "./components/PrintBeeExperience";
+import { ActiveOrderWidget, ActiveOrderLinks, OrderDocuments, OrderJourney, OTPCard } from "./components/ActiveOrderWidget";
+import { useCustomerOrders } from "./components/useCustomerOrders";
+import { formatFileSize } from "./components/order-model";
+import { CustomerMotion, customerFeedback, AnimatedPrice, StudioLauncher } from "./components/CustomerMotion";
 
 type PrintMode = "bw-single" | "bw-double" | "colour-single" | "colour-double";
 type Prices = Record<PrintMode, number>;
@@ -411,7 +415,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
   const [deliveryMessage, setDeliveryMessage] = useState("");
   const [dashboard, setDashboard] = useState<any>(null);
   const [myOrdersOpen, setMyOrdersOpen] = useState(false);
-  const [myOrders, setMyOrders] = useState<any[]>([]);
+  const { orders: myOrders, setOrders: setMyOrders, refresh: refreshCustomerOrders, error: customerOrderError } = useCustomerOrders(viewer?.email, Boolean(viewer) && loginMode === "CUSTOMER" && !adminOpen, myOrdersOpen);
   const [appQr, setAppQr] = useState("");
   const [riderOrders, setRiderOrders] = useState<any[]>([]);
   const [franchiseOrders, setFranchiseOrders] = useState<any[]>([]);
@@ -587,14 +591,6 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
     return () => window.clearInterval(refresh);
   }, [viewer, loginMode, approvalStatus]);
 
-  useEffect(() => {
-    if (!myOrdersOpen || !viewer) return;
-    const refresh = window.setInterval(async () => {
-      const response = await fetch("/api/orders/my", { cache: "no-store" });
-      if (response.ok) setMyOrders(await response.json());
-    }, 15000);
-    return () => window.clearInterval(refresh);
-  }, [myOrdersOpen, viewer]);
 
   useEffect(() => {
     QRCode.toDataURL(window.location.origin, {
@@ -657,15 +653,6 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
     return () => window.clearInterval(refresh);
   }, [adminOpen, adminSection, adminPage]);
 
-  useEffect(() => {
-    if (!viewer || viewer.isAdmin || loginMode !== "CUSTOMER") return;
-    checkCustomerNotifications();
-    const refresh = window.setInterval(checkCustomerNotifications, 5000);
-    const refreshNow = () => checkCustomerNotifications();
-    window.addEventListener("focus", refreshNow);
-    document.addEventListener("visibilitychange", refreshNow);
-    return () => { window.clearInterval(refresh); window.removeEventListener("focus", refreshNow); document.removeEventListener("visibilitychange", refreshNow); };
-  }, [viewer, loginMode, notificationPermission]);
 
   const selected = options.find((item) => item.id === mode)!;
   const selectedService = printServices.find((service) => service.id === serviceId);
@@ -744,6 +731,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
         return { file, fileName: file.name, reference: `File ${batchFiles.length + index + 1}`, fileType: isPdf ? "PDF" : "IMAGE", pages: filePages, copies: 1, mode: "bw-single", serviceId: "document-printing" };
       }));
       setBatchFiles((items) => [...items, ...prepared]);
+      customerFeedback('file-ready');
       setBatchIndex(batchFiles.length);
       setFileQueue([]);
       setFileName("");
@@ -795,6 +783,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
         added.push(cartItem);
       }
       setCart((items) => [...items, ...added]);
+      customerFeedback('cart-added');
       setBatchFiles([]);
     } catch (error) {
       setUploadError(error instanceof Error ? error.message : "The selected files could not be added to the cart.");
@@ -863,6 +852,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
       return setUploadError(error instanceof Error ? error.message : "The cart could not be saved. Please try again.");
     }
     setCart((items) => [...items, cartItem]);
+    customerFeedback('cart-added');
     setFileName("");
     setSelectedFile(null);
     setPages(1);
@@ -880,6 +870,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
       return setUploadError(data.error ?? "This item could not be removed. Please try again.");
     }
     setCart((items) => items.filter((current) => current.id !== item.id));
+    customerFeedback('cart-removed');
   };
 
   const openCartEditor = (item: CartItem) => {
@@ -900,6 +891,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
     const data = await response.json().catch(() => ({}));
     if (!response.ok) return setUploadError(data.error ?? "Your changes could not be saved. Please try again.");
     setCart((items) => items.map((item) => item.id === updated.id ? updated : item));
+    customerFeedback('cart-updated');
     setEditingCartItem(null);
   };
 
@@ -916,6 +908,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
     const data = await response.json().catch(() => ({}));
     if (!response.ok) return setAddonMessage(data.error ?? "This add-on could not be added.");
     setCart((items) => [...items.filter((current) => current.uploadId !== item.uploadId), item]);
+    customerFeedback('cart-added');
     setAddonMessage(`${addon.name} added to your cart.`);
   };
 
@@ -1012,6 +1005,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
   const openCheckout = async () => {
     if (!viewer) return setLoginOpen(true);
     setCheckoutOpen(true);
+    customerFeedback('checkout');
   };
 
   const useCurrentLocation = () => {
@@ -1097,7 +1091,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
           setCart([]);
           setNeedsPackaging(false);
           if ((order as any).pointsRedeemed) setPointsBalance((current) => Math.max(0, current - Number((order as any).pointsRedeemed)));
-          await sendOrderNotification("Order placed", `${verified.orderNumber} was created after payment verification.`, `${order.id}-paid`);
+          customerFeedback('payment-verified');
           await checkCustomerNotifications();
         },
         modal: { ondismiss: () => setPaymentProcessing(false) },
@@ -1112,9 +1106,8 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
 
   const openMyOrders = async () => {
     if (!viewer) return setLoginOpen(true);
-    const response = await fetch("/api/orders/my", { cache: "no-store" });
-    if (response.ok) setMyOrders(await response.json());
     setMyOrdersOpen(true);
+    await refreshCustomerOrders();
   };
 
   const sendOrderNotification = async (title: string, body: string, tag: string) => {
@@ -1189,29 +1182,8 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
     setNotificationMessage(sent ? "Test notification sent. Check your notification tray." : "The browser did not deliver the notification. Check site and device notification settings.");
   };
 
-  const checkCustomerNotifications = async () => {
-    try {
-      const response = await fetch("/api/orders/my", { cache: "no-store" });
-      if (!response.ok) return;
-      const orders = await response.json() as any[];
-      setMyOrders(orders);
-      const storageKey = `printbee-order-notifications-${viewer?.email ?? "user"}`;
-      const previous = JSON.parse(window.localStorage.getItem(storageKey) ?? "{}") as Record<string, any>;
-      for (const order of orders) {
-        if (order.payment_status !== "PAID") continue;
-        const before = previous[order.id];
-        if (!before && Date.now() - new Date(order.created_at).getTime() < 30 * 60 * 1000) await sendOrderNotification("Order received", `${order.order_number} has been paid and received by PrintBee.`, `${order.id}-received`);
-        if (order.has_payment_qr && !before?.has_payment_qr) await sendOrderNotification("Payment QR generated", `${order.order_number}: Pay while we deliver. Open My Orders and scan the payment scanner. Displaying the scanner may take a little time.`, `${order.id}-qr`);
-        if (order.status === "PRINTING" && before?.status !== "PRINTING") await sendOrderNotification("Printing started", `${order.order_number} is now being printed.`, `${order.id}-printing`);
-        if (order.status === "READY_FOR_PICKUP" && before?.status !== "READY_FOR_PICKUP") await sendOrderNotification("Ready for pickup", `${order.order_number} is printed and ready for a delivery partner.`, `${order.id}-ready`);
-        if (order.status === "RIDER_ASSIGNED" && before?.status !== "RIDER_ASSIGNED") await sendOrderNotification("Delivery partner assigned", `${order.rider_name || "A delivery partner"} is assigned to ${order.order_number}.`, `${order.id}-rider`);
-        if (before && order.payment_status === "PAID" && before.payment_status !== "PAID") await sendOrderNotification("Payment verified", `Payment for ${order.order_number} was received and verified. Share the OTP only after receiving your prints.`, `${order.id}-paid`);
-        if (order.status === "DELIVERED" && before?.status !== "DELIVERED") await sendOrderNotification("Order delivered", `${order.order_number} has been marked delivered. Thank you for using PrintBee.`, `${order.id}-delivered`);
-      }
-      const snapshot = Object.fromEntries(orders.map((order) => [order.id, { status: order.status, payment_status: order.payment_status, has_payment_qr: Boolean(order.has_payment_qr) }]));
-      window.localStorage.setItem(storageKey, JSON.stringify(snapshot));
-    } catch {}
-  };
+  const checkCustomerNotifications = refreshCustomerOrders;
+
 
 
   const markPaid = async (orderId: string) => {
@@ -1815,6 +1787,8 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
 
   return (
     <main className="printbee-experience">
+      <CustomerMotion hidden={adminOpen || loginOpen || paymentProcessing} />
+      {viewer && <ActiveOrderWidget key={viewer.email} email={viewer.email} orders={myOrders} error={customerOrderError} refresh={refreshCustomerOrders} details={() => void openMyOrders()} hidden={adminOpen || loginOpen || checkoutOpen || paymentProcessing || myOrdersOpen || walletOpen || profileOpen || franchiseApplyOpen || Boolean(editingCartItem) || Boolean(feedbackOrder) || Boolean(expandedScanner) || notificationPromptOpen || Boolean(notificationToast)} />}
       <DialogAccessibility />
       <a className="skip-link" href="#upload">Skip to upload</a>
       {notificationPromptOpen && (
@@ -1854,7 +1828,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
 
       <section className="hero" id="top">
           <div className="hero-copy">
-          <div className="hero-intro"><div className="eyebrow">YOUR CAMPUS PRINT COMPANION</div><h1>Upload. Print.<br /><em>Delivered.</em></h1><p>Notes, assignments, big ideas. Fresh A4 prints, delivered to your door.</p><a className="primary-cta" href="#upload">Upload Files <span aria-hidden="true">↑</span></a><BeeMascot /></div>
+          <div className="hero-intro"><div className="eyebrow">YOUR CAMPUS PRINT COMPANION</div><h1>Upload. Print.<br /><em>Delivered.</em></h1><p>Notes, assignments, big ideas. Fresh A4 prints, delivered to your door.</p><a className="primary-cta" href="#upload">Upload Files <span aria-hidden="true">↑</span></a><BeeMascot /><StudioLauncher /></div>
           <div className="campus-delivery-banner" role="status"><span>NEW</span><strong>Classroom &amp; hostel delivery is now available</strong><small>Fast in-campus delivery for university students</small></div>
           <div className="srm-binding-banner" role="status"><span>NEW</span><strong>SRM-style soft binding is now available</strong><small>Add your documents, then select the binding style from the service options.</small></div>
           <div className="plagiarism-banner" role="status"><span>NEW</span><strong>Plagiarism reports for papers and reports are now available</strong><small>Upload your document and receive the report on WhatsApp within 24 hours.</small></div>
@@ -1870,28 +1844,6 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
             {notificationPermission === "granted" && <button onClick={testNotifications}>Test alerts: sound + banner</button>}
             {notificationMessage && <small className="notification-message">{notificationMessage}</small>}
           </div>
-          {viewer && !viewer.isAdmin && myOrders.some((order) => order.payment_status === "PAID" && !["DELIVERED", "CANCELLED"].includes(order.status)) && (
-            <div className="home-active-orders">
-              <div><strong>Active order delivery OTP</strong><small>Share this OTP only after receiving your printed documents.</small></div>
-              {myOrders.filter((order) => order.payment_status === "PAID" && !["DELIVERED", "CANCELLED"].includes(order.status)).map((order) => (
-                <article key={order.id}>
-                  <span><small>Order ID</small><strong>{order.order_number}</strong></span>
-                  <span><small>Delivery OTP</small><b>{order.deliveryCode}</b></span>
-                  <span><small>Status</small><strong>{order.status.replaceAll("_", " ")}</strong></span>
-                  {Boolean(order.has_payment_qr) && order.payment_status !== "PAID" && (
-                    <div className="home-payment-scanner">
-                      <span><strong>Payment scanner ready</strong><small>Pay while we deliver. Tap the scanner to open it full-screen.</small></span>
-                      <button className="scanner-expand-button" onClick={() => setExpandedScanner({ src: `/api/orders/${order.id}/payment-qr`, alt: `Payment scanner for ${order.order_number}` })}>
-                        <img src={`/api/orders/${order.id}/payment-qr`} alt={`Payment scanner for ${order.order_number}`} />
-                      </button>
-                    </div>
-                  )}
-                  {order.payment_status === "PAID" && <div className="home-payment-verified"><strong>Payment received and verified</strong><small>The payment scanner has been removed. Keep this OTP until delivery.</small></div>}
-                </article>
-              ))}
-              <button onClick={openMyOrders}>View all orders</button>
-            </div>
-          )}
         </div>
 
         <section className="order-card" id="upload" aria-label="Create print order" tabIndex={-1}>
@@ -1913,7 +1865,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
           </label>
           {uploadProgress !== null && <progress className="upload-progress" value={uploadProgress} max={100} aria-label="File upload progress" />}
           {countingPages && <div className="processing-skeleton" role="status">Preparing your document…</div>}
-          {selectedFile && <p className="file-size">{(selectedFile.size / 1024 / 1024).toFixed(2)} MB · securely selected</p>}
+          {selectedFile && <p className="file-size">{formatFileSize(selectedFile.size)} · securely selected</p>}
           {fileName && !isPlagiarismService && <DocumentPreview pages={pages} copies={copies} colour={mode.startsWith("colour")} doubleSided={mode.endsWith("double")} file={selectedFile} />}
           <p className="file-retention-note"><strong>Accepted files: PDF, JPG/JPEG, PNG, WEBP and HEIC only.</strong> Select multiple files to review all print choices together before adding the full batch to your cart. PDFs are counted automatically; each image is treated as one printable page. Files are deleted after delivery or cancellation. Maximum file size: 50 MB per file.</p>
           {uploadError && <div className="upload-error" role="alert"><p>{uploadError}</p><button type="button" onClick={() => document.querySelector<HTMLInputElement>('.upload-zone input')?.click()}>Choose file again</button></div>}
@@ -1923,13 +1875,14 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
             const moveBatch = (direction: number) => setBatchIndex((current) => Math.max(0, Math.min(batchFiles.length - 1, current + direction)));
             const removeCurrent = () => {
               setBatchFiles((items) => items.filter((_, itemIndex) => itemIndex !== batchIndex));
+              customerFeedback('file-removed');
               setBatchIndex((current) => Math.max(0, Math.min(current, batchFiles.length - 2)));
             };
             return <section className="binding-fields batch-file-review" aria-labelledby="batch-file-review-title">
               <div className="field-label"><span className="step">2</span><strong id="batch-file-review-title">Review your files</strong></div>
               <p>Swipe left or right to set printing choices for each file. Your changes stay saved as you move between files.</p>
               <DocumentPreview pages={item.pages} copies={item.copies} colour={item.mode.startsWith("colour") || Boolean(item.colourPageNumbers)} doubleSided={item.mode.endsWith("double")} file={item.file} />
-              <p className="file-size">{(item.file.size / 1024 / 1024).toFixed(2)} MB · {item.fileName}</p>
+              <p className="file-size">{formatFileSize(item.file.size)} · {item.fileName}</p>
               <div className="batch-progress" aria-label={`File ${batchIndex + 1} of ${batchFiles.length}`}>{batchFiles.map((_, index) => <button type="button" key={index} className={index === batchIndex ? "active" : ""} onClick={() => setBatchIndex(index)} aria-label={`Review file ${index + 1}`} />)}</div>
               <label className="add-more-files"><input type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,application/pdf,image/jpeg,image/png,image/webp,image/heic,image/heif" onChange={handleFile} />+ Add more files</label>
               <article className="batch-file-card" onTouchStart={(event) => setSwipeStartX(event.changedTouches[0]?.clientX ?? null)} onTouchEnd={(event) => { const endX = event.changedTouches[0]?.clientX; if (swipeStartX !== null && endX !== undefined && Math.abs(endX - swipeStartX) > 45) moveBatch(endX < swipeStartX ? 1 : -1); setSwipeStartX(null); }}>
@@ -1937,9 +1890,9 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
                 <div className="batch-file-name"><span>{item.fileType === "PDF" ? "PDF" : "IMG"}</span><div><strong>{item.reference}</strong><small className="original-file-name">Original: {item.fileName}</small><small>{item.pages} {item.pages === 1 ? "page" : "pages"}</small></div><button type="button" className="remove-item" onClick={removeCurrent} aria-label={`Remove ${item.fileName}`}>×</button></div>
                 <div className="batch-file-fields"><label>Service<select value={item.serviceId} onChange={(event) => updateBatchFile(batchIndex, { serviceId: event.target.value })}>{printServices.filter((service) => service.id !== PLAGIARISM_SERVICE_ID).map((service) => <option key={service.id} value={service.id}>{service.name}</option>)}</select></label><label>Print style<select value={item.mode} onChange={(event) => updateBatchFile(batchIndex, { mode: event.target.value as PrintMode })}>{options.map((option) => <option key={option.id} value={option.id}>{option.title}</option>)}</select></label><div><small>Copies</small><div className="quantity-stepper"><button type="button" disabled={item.copies <= 1} onClick={() => updateBatchFile(batchIndex, { copies: Math.max(1, item.copies - 1) })}>−</button><output>{item.copies}</output><button type="button" onClick={() => updateBatchFile(batchIndex, { copies: item.copies + 1 })}>+</button></div></div></div>
                 <div className="batch-file-choice-cards"><div className="batch-choice-group"><small>Service</small><div className="service-option-grid" role="radiogroup" aria-label="Print service">{printServices.filter((service) => service.id !== PLAGIARISM_SERVICE_ID).map((service) => <button type="button" role="radio" aria-checked={item.serviceId === service.id} className={item.serviceId === service.id ? "selected" : ""} key={service.id} onClick={() => updateBatchFile(batchIndex, { serviceId: service.id, colourPageNumbers: MIXED_PRINT_SERVICES.has(service.id) ? item.colourPageNumbers : undefined })}><span><strong>{service.name}</strong><small>{service.description}</small></span><b>{service.price_paise ? `+${inr.format(service.price_paise / 100)}` : "Included"}</b></button>)}</div></div><div className="batch-choice-group"><small>Print style</small><div className="option-grid" role="radiogroup" aria-label="Print style">{options.map((option) => <button type="button" role="radio" aria-checked={item.mode === option.id && item.colourPageNumbers === undefined} className={`print-option ${item.mode === option.id && item.colourPageNumbers === undefined ? "selected" : ""}`} key={option.id} onClick={() => updateBatchFile(batchIndex, { mode: option.id, colourPageNumbers: undefined })}><span className={`mode-icon ${option.id.startsWith("colour") ? "colour" : ""}`}>{option.icon}</span><span><strong>{option.title}</strong><small>{option.note}</small></span></button>)}</div>{MIXED_PRINT_SERVICES.has(item.serviceId) && <div className="batch-mixed-pages"><button type="button" className={item.colourPageNumbers !== undefined ? "selected" : ""} onClick={() => updateBatchFile(batchIndex, { mode: `bw-${item.mode.endsWith("double") ? "double" : "single"}` as PrintMode, colourPageNumbers: item.colourPageNumbers ?? "" })}><strong>Select colour pages</strong><small>Enter only the colour page numbers; all remaining pages print in B&amp;W.</small></button>{item.colourPageNumbers !== undefined && <label>Colour page numbers<input value={item.colourPageNumbers} onChange={(event) => updateBatchFile(batchIndex, { colourPageNumbers: event.target.value })} inputMode="text" placeholder="Example: 1-4, 12, 18-20" /></label>}{item.colourPageNumbers?.trim() && parsePageNumbers(item.colourPageNumbers, item.pages).invalid.length > 0 && <small className="upload-error">Use pages between 1 and {item.pages}.</small>}</div>}</div><div className="batch-copies"><small>Copies</small><div className="quantity-stepper"><button type="button" disabled={item.copies <= 1} onClick={() => updateBatchFile(batchIndex, { copies: Math.max(1, item.copies - 1) })}>−</button><output>{item.copies}</output><button type="button" onClick={() => updateBatchFile(batchIndex, { copies: item.copies + 1 })}>+</button></div></div></div>
-                <div className="batch-file-total"><span>This file</span><strong>{inr.format(batchTotal(item))}</strong></div>
+                <div className="batch-file-total"><span>This file</span><AnimatedPrice value={batchTotal(item)} /></div>
               </article>
-              <div className="estimate"><div><small>Batch total · {batchFiles.length} files</small><strong>{inr.format(batchFiles.reduce((sum, batchItem) => sum + batchTotal(batchItem), 0))}</strong></div><button disabled={countingPages} onClick={addBatchToCart}>{uploadProgress !== null ? `Adding… ${uploadProgress}%` : "Add all to cart"} <span>→</span></button></div>
+              <div className="estimate"><div><small>Batch total · {batchFiles.length} files</small><AnimatedPrice value={batchFiles.reduce((sum, batchItem) => sum + batchTotal(batchItem), 0)} /></div><button disabled={countingPages} onClick={addBatchToCart}>{uploadProgress !== null ? `Adding… ${uploadProgress}%` : "Add all to cart"} <span>→</span></button></div>
             </section>;
           })()}
 
@@ -2115,7 +2068,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
         <p className="footer-copyright">© 2026 PrintBee · Local A4 printing made easy.</p>
       </footer>
       {!viewer?.isAdmin && <MobileNavigation orders={() => { if (viewer) void openMyOrders(); else setLoginOpen(true); }} profile={() => { if (viewer) setProfileOpen(true); else setLoginOpen(true); }} cartCount={cart.length} />}
-      {profileOpen && <div className="modal-backdrop" onMouseDown={() => setProfileOpen(false)}><section className="login-modal account-panel" role="dialog" aria-modal="true" aria-labelledby="account-title" onMouseDown={event => event.stopPropagation()}><button className="close" aria-label="Close" onClick={() => setProfileOpen(false)}>×</button><BeeMascot /><h2 id="account-title">Your PrintBee</h2><p>{viewer?.email}</p><div className="account-actions"><button onClick={() => { setProfileOpen(false); void openMyOrders(); }}>Orders & tracking →</button><button onClick={() => { setProfileOpen(false); setWalletOpen(true); }}>Wallet · {pointsBalance} points →</button><a href="/contact">Help & contact →</a><a href="/privacy-policy">Privacy & your documents →</a><button onClick={signOut}>Sign out</button></div></section></div>}
+      {profileOpen && <div className="modal-backdrop" onMouseDown={() => setProfileOpen(false)}><section className="login-modal account-panel" role="dialog" aria-modal="true" aria-labelledby="account-title" onMouseDown={event => event.stopPropagation()}><button className="close" aria-label="Close" onClick={() => setProfileOpen(false)}>×</button><BeeMascot /><h2 id="account-title">Your PrintBee</h2><p>{viewer?.email}</p><ActiveOrderLinks orders={myOrders} open={() => { setProfileOpen(false); void openMyOrders(); }} /><div className="account-actions"><button onClick={() => { setProfileOpen(false); void openMyOrders(); }}>Orders & tracking →</button><button onClick={() => { setProfileOpen(false); setWalletOpen(true); }}>Wallet · {pointsBalance} points →</button><a href="/contact">Help & contact →</a><a href="/privacy-policy">Privacy & your documents →</a><button onClick={signOut}>Sign out</button></div></section></div>}
 
       {adminOpen && (
         <div className="modal-backdrop" role="presentation" onMouseDown={() => { void closeAdminDashboard(); }}>
@@ -2382,14 +2335,13 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
             <button className="close" onClick={() => setCheckoutOpen(false)} aria-label="Close">×</button>
             {orderResult ? (
               <div className="order-success">
-                {orderResult.paid && <><BeeMascot celebrate /><button className="primary-cta" onClick={() => { setCheckoutOpen(false); void openMyOrders(); }}>Track Order →</button></>}
+                {orderResult.paid && <><BeeMascot celebrate /><p>Amount paid <strong>{inr.format(orderResult.totalPaise / 100)}</strong></p><button className="primary-cta" onClick={() => { setCheckoutOpen(false); void openMyOrders(); }}>Track Order →</button></>}
                 <span>{orderResult.paid ? "✓" : "₹"}</span><h2>{orderResult.paid ? "Order placed" : "Complete payment"}</h2>
                 <p>{orderResult.paid ? <>Order <strong>{orderResult.orderNumber}</strong> · {orderResult.locationName}</> : <>Your order number will be created after successful payment · {orderResult.locationName}</>}</p>
                 <div className="payment-pending"><small>Payment status</small><strong>{orderResult.paid ? "PAID" : "PAYMENT REQUIRED"}</strong></div>
                 {(orderResult.lateNightFeePaise ?? 0) > 0 && <div className="payment-pending"><small>Late-night delivery fee</small><strong>{inr.format((orderResult.lateNightFeePaise ?? 0) / 100)}</strong></div>}
-                {orderResult.paid && orderResult.deliveryCode && <div><small>Your delivery code</small><strong>{orderResult.deliveryCode}</strong></div>}
                 {orderResult.paid && <a className="invoice-link" href={`/api/orders/${orderResult.id}/invoice`}>Download GST-style invoice PDF</a>}
-                <p>{orderResult.paid ? "Payment verified. Give this code to the delivery agent only after receiving your prints." : `Pay ${inr.format(orderResult.totalPaise / 100)} securely through Razorpay so printing can begin.`}</p>
+                <p>{orderResult.paid ? "Payment verified. Your delivery OTP will appear in tracking when a partner is assigned." : `Pay ${inr.format(orderResult.totalPaise / 100)} securely through Razorpay so printing can begin.`}</p>
                 {!orderResult.paid && <button className="save-button" disabled={paymentProcessing} onClick={() => startRazorpayPayment(orderResult)}>{paymentProcessing ? "Starting payment..." : `Pay ${inr.format(orderResult.totalPaise / 100)} now`}</button>}
                 {orderError && <p className="panel-message">{orderError}</p>}
                 <button className="save-button" onClick={() => { setCheckoutOpen(false); setOrderResult(null); }}>Done</button>
@@ -2466,11 +2418,12 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
           <section className="orders-modal" role="dialog" aria-modal="true" onMouseDown={(e) => e.stopPropagation()}>
             <button className="close" onClick={() => setMyOrdersOpen(false)} aria-label="Close">×</button>
             <div className="admin-badge">CUSTOMER</div><h2>My orders</h2>
+            {customerOrderError && <p role="status" className="active-order-error">{customerOrderError} <button onClick={() => void refreshCustomerOrders()}>Retry updates</button></p>}
             {myOrders.filter((order) => order.items?.every((item: any) => item.serviceId === PLAGIARISM_SERVICE_ID)).map((order) => <section className="customer-plagiarism-status" key={`plagiarism-${order.id}`}><strong>{order.order_number} · Plagiarism report</strong><small>Your report will be sent to your provided WhatsApp number within 24 hours.</small><PlagiarismTracker status={order.status} /></section>)}
             {myReferralCode && <div className="referral-wallet"><span><small>Your referral code</small><strong>{myReferralCode}</strong></span><span><small>Points balance</small><strong>{pointsBalance}</strong></span><p>Your own delivered orders earn 1 point per ₹10 spent. You also earn 1 point per ₹15 spent on delivered orders by each person you referred. Redeem 15 points for ₹1 at checkout.</p></div>}
-            {myOrders.some((order) => (order.late_night_fee_paise ?? 0) > 0) && <div className="fee-breakdown">{myOrders.filter((order) => (order.late_night_fee_paise ?? 0) > 0).map((order) => <div key={`late-night-${order.id}`}><span>{order.order_number} · Late-night delivery fee</span><strong>{inr.format(order.late_night_fee_paise / 100)}</strong></div>)}</div>}
+            {myOrders.some((order) => (order.late_night_fee_paise ?? 0) > 0) && <div className="fee-breakdown">{myOrders.filter((order) => (order.late_night_fee_paise ?? 0) > 0).map((order) => <div key={`late-night-${order.id}`}><span>{order.order_number} · Late-night delivery fee</span><strong>{inr.format((order.late_night_fee_paise ?? 0) / 100)}</strong></div>)}</div>}
             {myOrders.some((order) => order.payment_status === "PENDING" && order.status !== "CANCELLED") && <div className="customer-error"><strong>Payment required</strong><p>Complete payment before PrintBee starts printing.</p>{myOrders.filter((order) => order.payment_status === "PENDING" && order.status !== "CANCELLED").map((order) => <button className="save-button" key={order.id} disabled={paymentProcessing} onClick={() => startRazorpayPayment(order)}>Pay {inr.format(order.total_paise / 100)} for {order.order_number}</button>)}</div>}
-            {myOrders.length ? myOrders.map((order) => <article key={order.id}><div><strong>{order.order_number}</strong><small>{order.location_name} · {new Date(order.created_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}</small>{order.cancellation_reason && <small>Cancelled: {order.cancellation_reason}</small>}</div><span className="status-chip">{order.payment_status === "PAY_ON_DELIVERY" ? "PAY ON DELIVERY" : order.payment_status} · {order.status}</span><strong>{inr.format(order.total_paise / 100)}</strong><div className="order-progress"><span className="done">Order confirmed</span><span className={["PRINTING", "READY_FOR_PICKUP", "RIDER_ASSIGNED", "DELIVERED"].includes(order.status) ? "done" : ""}>Printing</span><span className={["READY_FOR_PICKUP", "RIDER_ASSIGNED", "DELIVERED"].includes(order.status) ? "done" : ""}>Ready</span><span className={["RIDER_ASSIGNED", "DELIVERED"].includes(order.status) ? "done" : ""}>Rider assigned</span><span className={order.payment_status === "PAID" ? "done" : "current"}>{order.payment_status === "PAID" ? "Payment received" : "Pay on delivery"}</span><span className={order.status === "DELIVERED" ? "done" : ""}>Delivered</span></div>{order.payment_rejection_reason && <div className="customer-error">{order.payment_rejection_reason}</div>}{Boolean(order.has_payment_qr) && order.status !== "DELIVERED" && <div className="customer-payment-qr"><div><strong>Pay {inr.format(order.total_paise / 100)}</strong><small>Use this scanner now or pay when your delivery partner arrives. Tap the scanner to enlarge.</small></div><button className="scanner-expand-button" onClick={() => setExpandedScanner({ src: `/api/orders/${order.id}/payment-qr`, alt: `Payment scanner for ${order.order_number}` })}><img src={`/api/orders/${order.id}/payment-qr`} alt={`Payment scanner for ${order.order_number}`} /></button></div>}{order.rider_name && <div className="assigned-rider"><span><small>Delivery partner assigned</small><strong>{order.rider_name}</strong>{order.rider_mobile_number && <b>{order.rider_mobile_number}</b>}</span>{order.rider_mobile_number && <a href={`tel:${order.rider_mobile_number}`}>Call delivery partner</a>}</div>}{order.status !== "CANCELLED" && ["RIDER_ASSIGNED", "DELIVERED"].includes(order.status) && <div className="customer-code"><span><small>Order ID</small><b>{order.order_number}</b></span><span><small>Delivery OTP · share only after receiving prints</small><strong>{order.deliveryCode}</strong></span></div>}</article>) : <p>No orders yet.</p>}
+            {myOrders.length ? myOrders.map((order) => <article key={order.id}><div><strong>{order.order_number}</strong><small>{order.location_name} · {new Date(order.created_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}</small>{order.cancellation_reason && <small>Cancelled: {order.cancellation_reason}</small>}</div><span className="status-chip">{order.payment_status === "PAY_ON_DELIVERY" ? "PAY ON DELIVERY" : order.payment_status} · {order.status}</span><strong>{inr.format(order.total_paise / 100)}</strong><OrderDocuments order={order} /><OrderJourney order={order} />{order.payment_rejection_reason && <div className="customer-error">{order.payment_rejection_reason}</div>}{Boolean(order.has_payment_qr) && order.status !== "DELIVERED" && <div className="customer-payment-qr"><div><strong>Pay {inr.format(order.total_paise / 100)}</strong><small>Use this scanner now or pay when your delivery partner arrives. Tap the scanner to enlarge.</small></div><button className="scanner-expand-button" onClick={() => setExpandedScanner({ src: `/api/orders/${order.id}/payment-qr`, alt: `Payment scanner for ${order.order_number}` })}><img src={`/api/orders/${order.id}/payment-qr`} alt={`Payment scanner for ${order.order_number}`} /></button></div>}{order.rider_name && <div className="assigned-rider"><span><small>Delivery partner assigned</small><strong>{order.rider_name}</strong>{order.rider_mobile_number && <b>{order.rider_mobile_number}</b>}</span>{order.rider_mobile_number && <a href={`tel:${order.rider_mobile_number}`}>Call delivery partner</a>}</div>}<OTPCard order={order} /></article>) : <p>No orders yet.</p>}
             {myOrders.filter((order) => order.status === "DELIVERED" && !order.feedback_submitted).map((order) => <button key={`feedback-${order.id}`} className="feedback-invite" onClick={() => { setFeedbackOrder(order); setFeedback({ serviceRating: 0, riderRating: 0, printQualityRating: 0, overallRating: 0, description: "" }); }}>Rate your delivered order {order.order_number} (optional)</button>)}
           </section>
         </div>

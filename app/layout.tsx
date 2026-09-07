@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import "./experience.css";
+import "./order-motion.css";
 
 
 export const metadata: Metadata = {

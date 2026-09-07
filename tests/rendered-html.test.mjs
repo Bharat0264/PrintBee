@@ -14,6 +14,7 @@ test("renders the PrintBee application shell", () => {
 test("shows customer and rider payment scanners through the protected endpoint", () => {
   const matches = appSource.match(/payment-qr/g) ?? [];
   assert.ok(matches.length >= 4);
-  assert.match(appSource, /Payment scanner ready/);
-  assert.match(appSource, /Payment received and verified/);
+  assert.match(appSource, /customer-payment-qr/);
+  assert.match(appSource, /Boolean\(order.has_payment_qr\)/);
+  assert.match(appSource, /order.payment_status === "PAID"/);
 });

@@ -16,7 +16,7 @@ export function DocumentPreview({ pages, copies, colour, doubleSided, file }: { 
     return () => URL.revokeObjectURL(url);
   }, [file]);
   const hasImage = file && /^image\/(jpeg|png|webp)$/.test(file.type);
-  return <div className="document-preview"><div className={`paper-stack ${colour ? "is-colour" : ""} ${doubleSided ? "is-duplex" : ""}`} aria-hidden="true">{Array.from({ length: Math.min(5, Math.max(1, Math.ceil(pages * copies / 20))) }, (_, i) => <i key={i} style={{ transform: `translate(${i * 3}px, ${i * -3}px)` }} />)}<div className="paper-face">{hasImage ? <img ref={imageRef} alt="" /> : <><b>A4</b><span /><span /><span /><span /></>}</div></div><div><strong>Your print, at a glance</strong><p>{pages} {pages === 1 ? "page" : "pages"} · {copies} {copies === 1 ? "copy" : "copies"}</p><small>{colour ? "Colour" : "Black & white"} · {doubleSided ? "Double-sided" : "Single-sided"}</small><small>Illustrative preview · original file layout retained</small></div></div>;
+  return <div className="document-preview"><div className={`paper-stack ${colour ? "is-colour" : ""} ${doubleSided ? "is-duplex" : ""}`} aria-hidden="true">{Array.from({ length: Math.min(5, Math.max(1, Math.ceil(pages / 20) + copies - 1)) }, (_, i) => <i key={i} style={{ transform: `translate(${i * 3}px, ${i * -3}px)` }} />)}<div className="paper-face">{hasImage ? <img ref={imageRef} alt="" /> : <><b>A4</b><span /><span /><span /><span /></>}</div></div><div><strong>Your print, at a glance</strong><p>{pages} {pages === 1 ? "page" : "pages"} · {copies} {copies === 1 ? "copy" : "copies"}</p><small>{colour ? "Colour" : "Black & white"} · {doubleSided ? "Double-sided" : "Single-sided"}</small><small>Illustrative preview · original file layout retained</small></div></div>;
 }
 
 export function MobileNavigation({ orders, profile, cartCount }: { orders: () => void; profile: () => void; cartCount: number }) {
@@ -37,7 +37,7 @@ export function DialogAccessibility() {
     };
     const key = (event: KeyboardEvent) => {
       if (!active) return;
-      if (event.key === "Escape") { active.querySelector<HTMLButtonElement>('button[aria-label="Close"]')?.click(); return; }
+      if (event.key === "Escape") { active.querySelector<HTMLButtonElement>('button[aria-label^="Close"]')?.click(); return; }
       if (event.key !== "Tab") return;
       const items = [...active.querySelectorAll<HTMLElement>('button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex="0"]')].filter(el => el.getClientRects().length);
       const first = items[0], last = items[items.length - 1];
