@@ -73,8 +73,11 @@ function addItem(values: LedgerValues, item: any) {
   values.colourPages += colourPages;
   values.bwRevenuePaise += Math.round((bwPages / divisor) * bwUnitPrice * 100);
   values.colourRevenuePaise += Math.round((colourPages / divisor) * colourUnitPrice * 100);
-  values.bwCostPaise += bwPages * (isDouble ? 75 : 65);
-  values.colourCostPaise += colourPages * (isDouble ? 200 : 150);
+  // Double-sided jobs consume one sheet for every two printed pages.
+  // Costs are therefore calculated per printed page for single-sided work
+  // and per sheet for double-sided work.
+  values.bwCostPaise += (bwPages / divisor) * (isDouble ? 80 : 65);
+  values.colourCostPaise += (colourPages / divisor) * (isDouble ? 200 : 150);
 }
 
 function finish(values: LedgerValues) {
