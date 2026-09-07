@@ -335,6 +335,9 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
   const [adminOpen, setAdminOpen] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
   const [authMessage, setAuthMessage] = useState("");
+  const [franchiseApplyOpen, setFranchiseApplyOpen] = useState(false);
+  const [franchiseApplyMessage, setFranchiseApplyMessage] = useState("");
+  const [franchiseApplication, setFranchiseApplication] = useState({ fullName: "", location: "", mobileNumber: "", whatsappNumber: "", address: "" });
   const googleButtonRef = useRef<HTMLDivElement>(null);
   const [role, setRole] = useState<string | null>(viewer?.isAdmin ? "ADMIN" : null);
   const [adminRole, setAdminRole] = useState<string | null>(viewer?.isAdmin ? "OWNER" : null);
@@ -424,6 +427,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
   const [notificationPromptOpen, setNotificationPromptOpen] = useState(false);
   const [adminSection, setAdminSection] = useState<"dashboard" | "traffic" | "revenue" | "ledger" | "orders" | "riders" | "services" | "franchise">("dashboard");
   const [franchiseStores, setFranchiseStores] = useState<any[]>([]);
+  const [franchiseApplications, setFranchiseApplications] = useState<any[]>([]);
   const [newFranchise, setNewFranchise] = useState({ name: "" });
   const [franchiseManagerEmails, setFranchiseManagerEmails] = useState<Record<string, string>>({});
   const [availableStores, setAvailableStores] = useState<StoreChoice[]>([]);
@@ -1348,6 +1352,15 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
     if (storeResponse.ok) { const store = await storeResponse.json(); if (store.latitude != null) { setStoreLocation(store); setNewFranchise((current) => ({ ...current, name: current.name || store.name || "" })); } }
     const franchiseResponse = await fetch("/api/franchise/stores", { cache: "no-store" });
     if (franchiseResponse.ok) setFranchiseStores(await franchiseResponse.json());
+    const applicationsResponse = await fetch("/api/franchise/applications", { cache: "no-store" });
+    if (applicationsResponse.ok) setFranchiseApplications(await applicationsResponse.json());
+  };
+
+  const submitFranchiseApplication = async () => {
+    const response = await fetch("/api/franchise/apply", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(franchiseApplication) });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) return setFranchiseApplyMessage(data.error ?? "Application could not be submitted.");
+    setFranchiseApplyMessage("Application submitted. The PrintBee team will review it shortly.");
   };
 
   const nameCurrentStore = async () => {
@@ -1402,6 +1415,12 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
     setAdminMessage(`${email} no longer has access to this store.`);
     const refreshed = await fetch("/api/franchise/stores", { cache: "no-store" });
     if (refreshed.ok) setFranchiseStores(await refreshed.json());
+  };
+
+  const updateFranchiseApplication = async (id: string, status: string) => {
+    const response = await fetch("/api/franchise/applications", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, status }) });
+    if (!response.ok) return setAdminMessage("Application status could not be updated.");
+    setFranchiseApplications((current) => current.map((application) => application.id === id ? { ...application, status } : application));
   };
 
   const lockLedger = async () => {
@@ -1802,6 +1821,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
           <a href="#how">How it works</a>
           <a href="#points">Earn points</a>
           <a href="#pricing">Pricing</a>
+          {viewer && !viewer.isAdmin && <button className="store-switch-button" onClick={() => { setFranchiseApplyMessage(""); setFranchiseApplyOpen(true); }}>Apply for a franchise</button>}
           {selectedStoreId && !viewer?.isAdmin && <button className="store-switch-button" onClick={() => { window.localStorage.removeItem("printbee-selected-store"); setSelectedStoreId(null); }}>Change store</button>}
           {viewer?.isAdmin && <button className="admin-link" onClick={() => openAdminDashboard(1)}>Admin dashboard</button>}
           {role === "ADMIN" && <button className="admin-link" onClick={openDeliveryQueue}>Delivery</button>}
@@ -2137,7 +2157,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
               <div className="service-chips">{addons.map((addon) => <span key={addon.id}><b>{addon.name} · {inr.format(addon.price_paise / 100)}</b><small>{addon.description}</small><button onClick={() => setNewAddon({ id: addon.id, name: addon.name, description: addon.description, price: addon.price_paise / 100 })}>Edit</button><button onClick={() => removeAddon(addon.id)}>Remove</button></span>)}</div>
             </div>
             </>}
-            {adminSection === "franchise" && <><h2>Franchise network</h2><p>Customers are routed to the closest registered store within its 5 km service radius.</p><div className="service-admin"><h3>Register current store as a franchise</h3><p>This uses the current saved store location automatically. No address or map coordinates are needed.</p>{storeLocation?.latitude == null ? <button type="button" onClick={setCurrentStoreLocation}>Set Current Store Location</button> : <div className="service-admin-form"><input value={newFranchise.name} onChange={(e) => setNewFranchise({ ...newFranchise, name: e.target.value })} placeholder="Name this store" /><button onClick={addFranchiseStore}>Create 5 km franchise store</button></div>}</div><div className="location-table">{franchiseStores.map((store) => <div key={store.id}><span><strong>{store.name}</strong><small>5 km service radius · Store managers can update only this store's paid orders.</small></span><strong>5 km</strong><div className="service-admin-form"><input aria-label={`Manager email for ${store.name}`} value={franchiseManagerEmails[store.id] ?? ""} onChange={(e) => setFranchiseManagerEmails((current) => ({ ...current, [store.id]: e.target.value }))} placeholder="Add store manager email" /><button type="button" onClick={() => addFranchiseManager(store.id)}>Add manager</button></div><span>{store.members ? store.members.split(",").map((email: string) => <button key={email} type="button" className="secondary-button" onClick={() => removeFranchiseManager(store.id, email)}>Manager: {email} ×</button>) : "No managers yet"}</span></div>)}</div></>}
+            {adminSection === "franchise" && <><h2>Franchise network</h2><p>Customers are routed to the closest registered store within its 5 km service radius.</p><div className="service-admin"><h3>Franchise applications · ₹60,000</h3>{franchiseApplications.length ? franchiseApplications.map((application) => <div className="franchise-application-admin" key={application.id}><span><strong>{application.full_name} · {application.location}</strong><small>{application.email} · {application.mobile_number} · WhatsApp {application.whatsapp_number}<br />{application.address}</small></span><select value={application.status} onChange={(e) => updateFranchiseApplication(application.id, e.target.value)}><option>SUBMITTED</option><option>REVIEWING</option><option>APPROVED</option><option>REJECTED</option></select></div>) : <p>No franchise applications yet.</p>}</div><div className="service-admin"><h3>Register current store as a franchise</h3><p>This uses the current saved store location automatically. No address or map coordinates are needed.</p>{storeLocation?.latitude == null ? <button type="button" onClick={setCurrentStoreLocation}>Set Current Store Location</button> : <div className="service-admin-form"><input value={newFranchise.name} onChange={(e) => setNewFranchise({ ...newFranchise, name: e.target.value })} placeholder="Name this store" /><button onClick={addFranchiseStore}>Create 5 km franchise store</button></div>}</div><div className="location-table">{franchiseStores.map((store) => <div key={store.id}><span><strong>{store.name}</strong><small>5 km service radius · Store managers can update only this store's paid orders.</small></span><strong>5 km</strong><div className="service-admin-form"><input aria-label={`Manager email for ${store.name}`} value={franchiseManagerEmails[store.id] ?? ""} onChange={(e) => setFranchiseManagerEmails((current) => ({ ...current, [store.id]: e.target.value }))} placeholder="Add store manager email" /><button type="button" onClick={() => addFranchiseManager(store.id)}>Add manager</button></div><span>{store.members ? store.members.split(",").map((email: string) => <button key={email} type="button" className="secondary-button" onClick={() => removeFranchiseManager(store.id, email)}>Manager: {email} ×</button>) : "No managers yet"}</span></div>)}</div></>}
             {adminMessage && <p className="panel-message">{adminMessage}</p>}
             {dashboard && (
               <div className="dashboard-block">
@@ -2454,6 +2474,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
         </div>
       )}
 
+      {franchiseApplyOpen && <div className="modal-backdrop" role="presentation" onMouseDown={() => setFranchiseApplyOpen(false)}><section className="login-modal franchise-application-modal" role="dialog" aria-modal="true" aria-labelledby="franchise-apply-title" onMouseDown={(e) => e.stopPropagation()}><button className="close" onClick={() => setFranchiseApplyOpen(false)} aria-label="Close">×</button><img src="/printbee-logo.png" width={72} height={72} alt="PrintBee" /><div className="admin-badge">PRINTBEE FRANCHISE</div><h2 id="franchise-apply-title">Apply for a franchise</h2><p>Start your PrintBee franchise journey for <strong>₹60,000</strong>. We will contact you after reviewing the application.</p><div className="franchise-application-form"><input value={franchiseApplication.fullName} onChange={(e) => setFranchiseApplication({ ...franchiseApplication, fullName: e.target.value })} placeholder="Full name" /><input value={franchiseApplication.location} onChange={(e) => setFranchiseApplication({ ...franchiseApplication, location: e.target.value })} placeholder="Preferred store location / city" /><input value={franchiseApplication.mobileNumber} onChange={(e) => setFranchiseApplication({ ...franchiseApplication, mobileNumber: e.target.value.replace(/\D/g, "").slice(0, 10) })} placeholder="Mobile number" inputMode="numeric" /><input value={viewer?.email ?? ""} disabled aria-label="Email address" /><input value={franchiseApplication.whatsappNumber} onChange={(e) => setFranchiseApplication({ ...franchiseApplication, whatsappNumber: e.target.value.replace(/\D/g, "").slice(0, 10) })} placeholder="WhatsApp number" inputMode="numeric" /><textarea value={franchiseApplication.address} onChange={(e) => setFranchiseApplication({ ...franchiseApplication, address: e.target.value })} placeholder="Full address" /></div>{franchiseApplyMessage && <p className="panel-message">{franchiseApplyMessage}</p>}<button className="save-button" onClick={submitFranchiseApplication}>Submit application</button></section></div>}
       {loginOpen && (
         <div className="modal-backdrop" role="presentation" onMouseDown={() => setLoginOpen(false)}>
           <section className="login-modal" role="dialog" aria-modal="true" aria-labelledby="login-title" onMouseDown={(e) => e.stopPropagation()}>

@@ -21,7 +21,7 @@ body {
   color: var(--ink);
   font-family: Arial, Helvetica, sans-serif;
 }
-button, input { font: inherit; }
+button, input, textarea, select { font: inherit; }
 button { cursor: pointer; }
 .store-selection-screen { min-height: 100dvh; display: grid; place-items: center; padding: 24px; background: radial-gradient(circle at top, #fff8d9 0, #fffefa 46%, #f3f1eb 100%); }
 .store-selection-card { width: min(760px, 100%); padding: clamp(26px, 5vw, 52px); border: 1px solid #ead685; border-radius: 28px; background: rgba(255,255,255,.94); box-shadow: 0 28px 80px rgba(49,39,6,.15); text-align: center; }
@@ -37,6 +37,15 @@ button { cursor: pointer; }
 .store-choice small { color: var(--muted); font-size: 11px; }
 .store-choice b { margin-top: auto; color: #8a6900; font-size: 12px; }
 .store-switch-button { border: 1px solid #e0bd35; border-radius: 999px; padding: 7px 10px; background: #fff8d5; color: #5f4b00; font-size: 11px; font-weight: 800; }
+.franchise-application-modal { text-align: center; }
+.franchise-application-form { display: grid; gap: 10px; margin: 20px 0; text-align: left; }
+.franchise-application-form input, .franchise-application-form textarea { width: 100%; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
+.franchise-application-form textarea { min-height: 90px; resize: vertical; }
+.franchise-application-admin { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 13px 0; border-top: 1px solid var(--line); }
+.franchise-application-admin span { min-width: 0; }
+.franchise-application-admin strong, .franchise-application-admin small { display: block; }
+.franchise-application-admin small { margin-top: 5px; color: var(--muted); font-size: 10px; line-height: 1.45; overflow-wrap: anywhere; }
+.franchise-application-admin select { flex: 0 0 auto; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
 .notification-toast { position: fixed; z-index: 100; top: 18px; right: 18px; width: min(390px, calc(100vw - 36px)); display: grid; grid-template-columns: auto 1fr auto; align-items: start; gap: 12px; padding: 15px; border: 1px solid #e0bd35; border-radius: 14px; background: #fff8d5; color: #332800; box-shadow: 0 18px 55px rgba(0,0,0,.22); animation: notification-in .2s ease-out; }
 .notification-toast > span { font-size: 22px; }
 .notification-toast strong { font-size: 13px; }
