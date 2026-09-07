@@ -168,6 +168,7 @@ declare global {
 }
 const GOOGLE_CLIENT_ID = "365409440317-vn99jp0h6jd5suom0gppbjoubvs8sqio.apps.googleusercontent.com";
 type LocationOption = { id: string; name: string; delivery_fee_paise?: number; platform_fee_paise?: number };
+type StoreChoice = { id: string; name: string; radius_meters: number };
 type PrintService = { id: string; name: string; description: string; active: number; is_binding: number; price_paise: number; counts_for_packaging: number };
 type Addon = { id: string; name: string; description: string; active: number; price_paise: number };
 type RazorpayResult = { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string };
@@ -425,6 +426,9 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
   const [franchiseStores, setFranchiseStores] = useState<any[]>([]);
   const [newFranchise, setNewFranchise] = useState({ name: "" });
   const [franchiseManagerEmails, setFranchiseManagerEmails] = useState<Record<string, string>>({});
+  const [availableStores, setAvailableStores] = useState<StoreChoice[]>([]);
+  const [selectedStoreId, setSelectedStoreId] = useState<string | null>(null);
+  const [storeSelectionReady, setStoreSelectionReady] = useState(false);
   const [ledgerPassword, setLedgerPassword] = useState("");
   const [ledger, setLedger] = useState<any>(null);
   const [ledgerMessage, setLedgerMessage] = useState("");
@@ -495,6 +499,16 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
     const timer = window.setInterval(() => setCountdownNow(Date.now()), 1000);
     return () => window.clearInterval(timer);
   }, [acceptingOrders]);
+
+  useEffect(() => {
+    fetch("/api/stores", { cache: "no-store" }).then((response) => response.ok ? response.json() : []).then((stores: StoreChoice[]) => {
+      const choices = Array.isArray(stores) ? stores : [];
+      setAvailableStores(choices);
+      const saved = window.localStorage.getItem("printbee-selected-store");
+      if (saved && choices.some((store) => store.id === saved)) setSelectedStoreId(saved);
+      setStoreSelectionReady(true);
+    }).catch(() => setStoreSelectionReady(true));
+  }, []);
 
   useEffect(() => {
     if (!viewer) return;
@@ -1021,7 +1035,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
       const response = await fetch("/api/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ customerName, mobileNumber, deliveryAddress, deliveryLandmark, incampusDelivery, incampusType, campusBuilding, classroomNumber, items: cart, totalPaise: Math.round(cartTotal * 100), usePoints, needsPackaging, ...customerCoordinates }),
+        body: JSON.stringify({ customerName, mobileNumber, deliveryAddress, deliveryLandmark, incampusDelivery, incampusType, campusBuilding, classroomNumber, items: cart, totalPaise: Math.round(cartTotal * 100), usePoints, needsPackaging, selectedStoreId, ...customerCoordinates }),
       });
       const data = await response.json();
       if (!response.ok) return setOrderError(data.error ?? "Payment checkout could not be prepared");
@@ -1719,6 +1733,10 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
     return <main className="partner-portal"><header className="partner-topbar"><div className="partner-brand"><img src="/printbee-logo.png" alt="PrintBee" /><span><b>PrintBee</b><small>Franchise operations</small></span></div><button onClick={signOut}>Sign out</button></header><section className="partner-portal-main"><div className="partner-welcome"><div><div className="admin-badge">FRANCHISE STORE</div><h1>Your store orders</h1><p>Only orders routed to your assigned franchise are visible here.</p></div><button onClick={loadFranchiseOrders}>Refresh orders</button></div><div className="assigned-orders">{franchiseOrders.length ? franchiseOrders.map((order) => <article key={order.id}><div><strong>{order.order_number}</strong><small>{order.franchise_store_name} · {order.customer_name} · {order.mobile_number}</small><small>{order.location_name}</small></div><strong>{inr.format(order.total_paise / 100)}</strong><select value={order.status} onChange={async (event) => { await fetch("/api/franchise/operations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ orderId: order.id, status: event.target.value }) }); await loadFranchiseOrders(); }}><option value="CONFIRMED">Confirmed</option><option value="PRINTING">Printing</option><option value="READY_FOR_PICKUP">Ready for pickup</option><option value="RIDER_ASSIGNED">Rider assigned</option><option value="DELIVERED">Delivered</option></select></article>) : <div className="empty-partner-orders">No assigned franchise orders yet. Refresh after customers place orders near your store.</div>}</div></section></main>;
   }
 
+  if (!viewer?.isAdmin && storeSelectionReady && !selectedStoreId && availableStores.length) {
+    return <main className="store-selection-screen"><section className="store-selection-card"><img src="/printbee-logo.png" alt="PrintBee" /><p className="eyebrow">CHOOSE YOUR PRINTBEE STORE</p><h1>Which location should serve you?</h1><p>Select your nearest store to continue. We will confirm that your delivery address is within its 5 km service area at checkout.</p><div className="store-choice-grid">{availableStores.map((store) => <button key={store.id} type="button" className="store-choice" onClick={() => { window.localStorage.setItem("printbee-selected-store", store.id); setSelectedStoreId(store.id); }}><span>⌖</span><strong>{store.name}</strong><small>Serves within {Math.round(store.radius_meters / 1000)} km</small><b>Choose store →</b></button>)}</div></section></main>;
+  }
+
   if (viewer && !viewer.isAdmin && loginMode === "PARTNER") {
     const partnerApproved = role === "AGENT" && approvalStatus === "APPROVED";
     return (
@@ -1784,6 +1802,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
           <a href="#how">How it works</a>
           <a href="#points">Earn points</a>
           <a href="#pricing">Pricing</a>
+          {selectedStoreId && !viewer?.isAdmin && <button className="store-switch-button" onClick={() => { window.localStorage.removeItem("printbee-selected-store"); setSelectedStoreId(null); }}>Change store</button>}
           {viewer?.isAdmin && <button className="admin-link" onClick={() => openAdminDashboard(1)}>Admin dashboard</button>}
           {role === "ADMIN" && <button className="admin-link" onClick={openDeliveryQueue}>Delivery</button>}
           {role === "AGENT" && approvalStatus === "APPROVED" && <button className="admin-link" onClick={() => switchLoginMode("PARTNER")}>Partner portal</button>}
