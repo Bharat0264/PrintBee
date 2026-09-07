@@ -856,6 +856,19 @@ footer { border-top: 1px solid var(--line); padding: 28px max(24px, calc((100% -
 
 .partner-portal { min-height: 100vh; background: #f6f5f1; }
 .partner-topbar { height: 78px; display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 0 max(20px, calc((100% - 1080px) / 2)); border-bottom: 1px solid var(--line); background: white; }
+.partner-brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.partner-brand img { width: 46px; height: 46px; flex: 0 0 46px; object-fit: contain; }
+.partner-brand span { display: grid; gap: 2px; }
+.partner-brand b { font-size: 18px; line-height: 1; }
+.partner-brand small { color: var(--muted); font-size: 10px; }
+.partner-portal-main { width: min(1080px, calc(100% - 40px)); margin: 30px auto 60px; }
+.partner-portal-main .partner-welcome { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 24px; border: 1px solid var(--line); border-radius: 18px; background: white; }
+.partner-portal-main .partner-welcome h1 { margin: 6px 0; font-size: 30px; letter-spacing: -1px; }
+.partner-portal-main .partner-welcome p { margin: 0; color: var(--muted); font-size: 12px; }
+.partner-portal-main .partner-welcome > button { border: 0; border-radius: 10px; padding: 12px 15px; background: var(--ink); color: white; font-weight: 800; white-space: nowrap; }
+.partner-portal-main .assigned-orders { margin-top: 18px; }
+.partner-portal-main .assigned-orders article { grid-template-columns: minmax(0,1fr) auto auto; }
+.partner-portal-main .assigned-orders select { min-width: 150px; padding: 9px; border: 1px solid var(--line); border-radius: 8px; background: white; font-size: 11px; font-weight: 700; }
 .partner-topbar .brand img { width: 54px; height: 54px; }
 .partner-topbar > div { display: flex; gap: 8px; }
 .partner-topbar button { border: 1px solid var(--line); border-radius: 9px; padding: 10px 13px; background: white; color: var(--ink); font-size: 10px; font-weight: 800; }
@@ -967,6 +980,12 @@ footer { border-top: 1px solid var(--line); padding: 28px max(24px, calc((100% -
 
 @media (max-width: 700px) {
   .partner-topbar { height: auto; padding: 10px 16px; align-items: flex-start; }
+  .partner-portal-main { width: min(100% - 24px, 1080px); margin: 16px auto 36px; }
+  .partner-portal-main .partner-welcome { align-items: flex-start; padding: 18px; }
+  .partner-portal-main .partner-welcome h1 { font-size: 24px; }
+  .partner-portal-main .partner-welcome > button { padding: 10px; font-size: 10px; }
+  .partner-portal-main .assigned-orders article { grid-template-columns: 1fr; }
+  .partner-portal-main .assigned-orders select { width: 100%; }
   .partner-topbar > div { flex-direction: column; }
   .partner-earnings { grid-template-columns: 1fr; }
   .partner-earnings > p, .partner-earnings > label, .partner-earnings > button, .partner-withdrawal-history, .rider-order-earnings { grid-column: 1; }
