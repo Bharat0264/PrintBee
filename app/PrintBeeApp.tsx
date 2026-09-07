@@ -423,7 +423,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
   const [notificationPromptOpen, setNotificationPromptOpen] = useState(false);
   const [adminSection, setAdminSection] = useState<"dashboard" | "traffic" | "revenue" | "ledger" | "orders" | "riders" | "services" | "franchise">("dashboard");
   const [franchiseStores, setFranchiseStores] = useState<any[]>([]);
-  const [newFranchise, setNewFranchise] = useState({ name: "", address: "", latitude: "", longitude: "", members: "" });
+  const [newFranchise, setNewFranchise] = useState({ name: "" });
   const [ledgerPassword, setLedgerPassword] = useState("");
   const [ledger, setLedger] = useState<any>(null);
   const [ledgerMessage, setLedgerMessage] = useState("");
@@ -1330,9 +1330,21 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
     setAdminOpen(true);
     const [response, storeResponse] = await Promise.all([fetch(`/api/admin/dashboard?page=${page}&pageSize=100`), fetch("/api/admin/store-location")]);
     if (response.ok) { setDashboard(await response.json()); setAdminPage(page); }
-    if (storeResponse.ok) { const store = await storeResponse.json(); if (store.latitude != null) setStoreLocation(store); }
+    if (storeResponse.ok) { const store = await storeResponse.json(); if (store.latitude != null) { setStoreLocation(store); setNewFranchise((current) => ({ ...current, name: current.name || store.name || "" })); } }
     const franchiseResponse = await fetch("/api/franchise/stores", { cache: "no-store" });
     if (franchiseResponse.ok) setFranchiseStores(await franchiseResponse.json());
+  };
+
+  const nameCurrentStore = async () => {
+    if (storeLocation?.latitude == null) return setAdminMessage("Set the current store location before naming it.");
+    const name = window.prompt("Name this store", storeLocation?.name ?? "");
+    if (name == null) return;
+    const response = await fetch("/api/admin/store-location", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name }) });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) return setAdminMessage(data.error ?? "Store name could not be saved.");
+    setStoreLocation(data);
+    setNewFranchise((current) => ({ ...current, name: data.name }));
+    setAdminMessage(`Current store named ${data.name}.`);
   };
 
   const openLedger = async () => {
@@ -1348,10 +1360,10 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
   };
 
   const addFranchiseStore = async () => {
-    const response = await fetch("/api/franchise/stores", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...newFranchise, members: newFranchise.members.split(",") }) });
+    const response = await fetch("/api/franchise/stores", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(newFranchise) });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) return setAdminMessage(data.error ?? "Franchise store could not be added.");
-    setNewFranchise({ name: "", address: "", latitude: "", longitude: "", members: "" });
+    setNewFranchise({ name: "" });
     setAdminMessage(`${data.name} is ready with a 5 km delivery radius.`);
     const refreshed = await fetch("/api/franchise/stores", { cache: "no-store" });
     if (refreshed.ok) setFranchiseStores(await refreshed.json());
@@ -2053,7 +2065,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
             </div>
             <div className="service-admin fee-controls">
               <h3>Checkout fee controls</h3>
-              <div className="order-toggle-panel"><span><strong>Store location</strong><small>{storeLocation?.latitude ? "Store location configured" : "Set the store location before accepting delivery orders."}</small></span><button type="button" onClick={setCurrentStoreLocation}>{storeLocation?.latitude ? "Update" : "Set current"}</button></div>
+              <div className="order-toggle-panel"><span><strong>Store location</strong><small>{storeLocation?.latitude ? `${storeLocation.name ? `${storeLocation.name} · ` : ""}Store location configured` : "Set the store location before accepting delivery orders."}</small></span><button type="button" onClick={setCurrentStoreLocation}>{storeLocation?.latitude ? "Update" : "Set current"}</button>{storeLocation?.latitude != null && <button type="button" className="secondary-button" onClick={nameCurrentStore}>{storeLocation?.name ? "Rename store" : "Name this store"}</button>}</div>
               <div className="service-admin-form"><label>Platform fee for every delivery (₹)<input aria-label="Platform fee" type="number" min="0" step="0.01" value={platformFee} onChange={(e) => setPlatformFee(Math.max(0, Number(e.target.value)))} /></label><button onClick={() => saveFeeSettings()}>Save platform fee</button></div>
               <div className="service-admin-form"><label>Delivery fee for first 1.5 km (₹)<input aria-label="Base delivery fee" type="number" min="0" step="0.01" value={baseDeliveryFee} onChange={(e) => setBaseDeliveryFee(Math.max(0, Number(e.target.value)))} /></label><label>Extra delivery fee per 100 m (₹)<input aria-label="Delivery fee per 100 metres" type="number" min="0" step="0.01" value={deliveryFeePer100Meters} onChange={(e) => setDeliveryFeePer100Meters(Math.max(0, Number(e.target.value)))} /></label><button onClick={() => saveFeeSettings()}>Save delivery fees</button></div>
               <div className={`order-toggle-panel ${gatewayEnabled ? "on" : "off"}`}><span><strong>Payment gateway fee (1%)</strong><small>Calculated on printing + delivery + platform. Hidden from customer breakdown.</small></span><button role="switch" aria-checked={gatewayEnabled} onClick={() => saveFeeSettings({ gatewayEnabled: !gatewayEnabled })}><i />{gatewayEnabled ? "ON" : "OFF"}</button></div>
@@ -2085,14 +2097,14 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
               <div className="service-chips">{addons.map((addon) => <span key={addon.id}><b>{addon.name} · {inr.format(addon.price_paise / 100)}</b><small>{addon.description}</small><button onClick={() => setNewAddon({ id: addon.id, name: addon.name, description: addon.description, price: addon.price_paise / 100 })}>Edit</button><button onClick={() => removeAddon(addon.id)}>Remove</button></span>)}</div>
             </div>
             </>}
-            {adminSection === "franchise" && <><h2>Franchise network</h2><p>Customers are routed to the closest registered store within its 5 km service radius.</p><div className="service-admin"><h3>Add franchise store</h3><div className="service-admin-form"><input value={newFranchise.name} onChange={(e) => setNewFranchise({ ...newFranchise, name: e.target.value })} placeholder="Store / franchise name" /><input value={newFranchise.address} onChange={(e) => setNewFranchise({ ...newFranchise, address: e.target.value })} placeholder="Store address" /><input value={newFranchise.latitude} onChange={(e) => setNewFranchise({ ...newFranchise, latitude: e.target.value })} placeholder="Latitude" /><input value={newFranchise.longitude} onChange={(e) => setNewFranchise({ ...newFranchise, longitude: e.target.value })} placeholder="Longitude" /><input value={newFranchise.members} onChange={(e) => setNewFranchise({ ...newFranchise, members: e.target.value })} placeholder="Franchise member emails, comma-separated" /><button onClick={addFranchiseStore}>Add 5 km store</button></div></div><div className="location-table">{franchiseStores.map((store) => <div key={store.id}><span><strong>{store.name}</strong><small>{store.address}</small></span><strong>5 km</strong><span>{store.members || "No members"}</span></div>)}</div></>}
+            {adminSection === "franchise" && <><h2>Franchise network</h2><p>Customers are routed to the closest registered store within its 5 km service radius.</p><div className="service-admin"><h3>Register current store as a franchise</h3><p>This uses the current saved store location automatically. No address or map coordinates are needed.</p>{storeLocation?.latitude == null ? <button type="button" onClick={setCurrentStoreLocation}>Set Current Store Location</button> : <div className="service-admin-form"><input value={newFranchise.name} onChange={(e) => setNewFranchise({ ...newFranchise, name: e.target.value })} placeholder="Name this store" /><button onClick={addFranchiseStore}>Create 5 km franchise store</button></div>}</div><div className="location-table">{franchiseStores.map((store) => <div key={store.id}><span><strong>{store.name}</strong><small>Current saved store location</small></span><strong>5 km</strong><span>{store.members || "No members"}</span></div>)}</div></>}
             {adminMessage && <p className="panel-message">{adminMessage}</p>}
             {dashboard && (
               <div className="dashboard-block">
                 {adminSection === "dashboard" && <>
                 <div className="admin-divider" />
                 <h2 id="admin-dashboard">Operations dashboard</h2>
-                <div className="payment-instruction"><strong>Store location</strong><span>{storeLocation?.latitude != null ? "Store location configured" : "Action required: configure the store location before delivery orders can be accepted."}</span><button type="button" onClick={setCurrentStoreLocation}>{storeLocation?.latitude != null ? "Update Store Location" : "Set Current Store Location"}</button></div>
+                <div className="payment-instruction"><strong>Store location</strong><span>{storeLocation?.latitude != null ? `${storeLocation.name ? `${storeLocation.name} · ` : ""}Store location configured` : "Action required: configure the store location before delivery orders can be accepted."}</span><button type="button" onClick={setCurrentStoreLocation}>{storeLocation?.latitude != null ? "Update Store Location" : "Set Current Store Location"}</button>{storeLocation?.latitude != null && <button type="button" className="secondary-button" onClick={nameCurrentStore}>{storeLocation?.name ? "Rename this store" : "Name this store"}</button>}</div>
                 <div className="dashboard-range"><button className={dashboardRange === "today" ? "active" : ""} onClick={() => setDashboardRange("today")}>Today</button><button className={dashboardRange === "week" ? "active" : ""} onClick={() => setDashboardRange("week")}>This week</button><button className={dashboardRange === "month" ? "active" : ""} onClick={() => setDashboardRange("month")}>This month</button><button className={dashboardRange === "lifetime" ? "active" : ""} onClick={() => setDashboardRange("lifetime")}>Lifetime</button></div>
                 <div className="metric-grid">
                   <div><small>Total orders</small><strong>{dashboardSummaryForRange.total}</strong></div>

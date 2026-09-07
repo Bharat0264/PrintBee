@@ -135,7 +135,7 @@ export const orders = sqliteTable("orders", {
 });
 
 export const storeLocation = sqliteTable("store_location", {
-  id: text("id").primaryKey(), latitude: real("latitude").notNull(), longitude: real("longitude").notNull(), accuracy: real("accuracy"), updatedAt: text("updated_at").notNull(), updatedBy: text("updated_by"),
+  id: text("id").primaryKey(), name: text("name"), latitude: real("latitude").notNull(), longitude: real("longitude").notNull(), accuracy: real("accuracy"), updatedAt: text("updated_at").notNull(), updatedBy: text("updated_by"),
 });
 
 export const orderFeedback = sqliteTable("order_feedback", {
