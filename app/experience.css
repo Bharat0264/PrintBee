@@ -1,6 +1,6 @@
 /* PrintBee shared visual system. Operational screens use the same tokens. */
 :root { --ink:#20251e; --muted:#60695f; --yellow:#ffd447; --yellow-soft:#fff5c8; --line:#dfe5db; --paper:#f7f9f4; --radius:22px; --surface:#fff; --shadow:0 12px 40px #2637210b; --motion:180ms; }
-body { font-family:var(--font-geist-sans),Arial,sans-serif; line-height:1.5; }
+body { font-family:system-ui,-apple-system,"Segoe UI",Arial,sans-serif; line-height:1.5; }
 button,a,input,select,textarea { -webkit-tap-highlight-color:transparent; }
 button { transition:background var(--motion),box-shadow var(--motion),transform var(--motion); }
 button:active,.primary-cta:active { transform:translateY(2px); }
