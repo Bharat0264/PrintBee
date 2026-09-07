@@ -2,7 +2,6 @@
 
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
-import QRCode from "qrcode";
 import { BeeMascot, DocumentPreview, MobileNavigation, DialogAccessibility } from "./components/PrintBeeExperience";
 import { ActiveOrderWidget, ActiveOrderLinks, OrderDocuments, OrderJourney, OTPCard } from "./components/ActiveOrderWidget";
 import { useCustomerOrders } from "./components/useCustomerOrders";
@@ -416,7 +415,6 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
   const [dashboard, setDashboard] = useState<any>(null);
   const [myOrdersOpen, setMyOrdersOpen] = useState(false);
   const { orders: myOrders, setOrders: setMyOrders, refresh: refreshCustomerOrders, error: customerOrderError } = useCustomerOrders(viewer?.email, Boolean(viewer) && loginMode === "CUSTOMER" && !adminOpen, myOrdersOpen);
-  const [appQr, setAppQr] = useState("");
   const [riderOrders, setRiderOrders] = useState<any[]>([]);
   const [franchiseOrders, setFranchiseOrders] = useState<any[]>([]);
   const [franchiseSettings, setFranchiseSettings] = useState<any[]>([]);
@@ -591,15 +589,6 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
     return () => window.clearInterval(refresh);
   }, [viewer, loginMode, approvalStatus]);
 
-
-  useEffect(() => {
-    QRCode.toDataURL(window.location.origin, {
-      width: 280,
-      margin: 2,
-      color: { dark: "#171a20", light: "#ffffff" },
-      errorCorrectionLevel: "H",
-    }).then(setAppQr).catch(() => setAppQr(""));
-  }, []);
 
   useEffect(() => {
     if ("serviceWorker" in navigator) {
@@ -2025,18 +2014,6 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
           <article><span>03</span><strong>Earn from referrals</strong><p>Invite friends with your referral code. You get 1 point for every complete ₹15 they spend on delivered orders.</p></article>
         </div>
         <div className="points-guide-note"><strong>Use your rewards</strong><span>15 points = ₹1 off at checkout. Amounts below the next ₹10 or ₹15 are rounded down and do not carry forward. Cancelled, unpaid and undelivered orders earn no points.</span></div>
-      </section>
-
-      <section className="app-scanner" aria-labelledby="app-scanner-title">
-        <div>
-          <div className="eyebrow"><span>●</span> Share PrintBee</div>
-          <h2 id="app-scanner-title">Scan to open the app</h2>
-          <p>Point any phone camera at this code to open PrintBee and start a print order.</p>
-        </div>
-        <div className="scanner-card">
-          {appQr ? <img src={appQr} width={220} height={220} alt="QR code to open the PrintBee application" /> : <span>Preparing scanner…</span>}
-          <strong>Open PrintBee</strong>
-        </div>
       </section>
 
       <section className="pricing" id="pricing">

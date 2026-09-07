@@ -35,7 +35,7 @@ input:focus,textarea:focus,select:focus { border-color:#327545; box-shadow:0 0 0
 .trust-row { flex-wrap:wrap; gap:14px; font-size:13px; margin:24px 0; }
 .payment-home-note { border:0; background:#edf2e9; padding:18px; border-radius:16px; }
 .payment-home-note strong { font-size:14px; }
-.order-card,.cart-section,.points-guide,.app-scanner,.store-selection-card { background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); }
+.order-card,.cart-section,.points-guide,.store-selection-card { background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); }
 .order-card { padding:26px; scroll-margin-top:18px; }
 .card-heading h2 { font-size:24px; letter-spacing:-.7px; }
 .card-heading p,.file-retention-note { font-size:12px; line-height:1.6; }
