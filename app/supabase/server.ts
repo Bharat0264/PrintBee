@@ -37,7 +37,7 @@ async function viewerForEmail(email: string) {
     if (member?.role) adminRole = member.role;
   } catch { /* Migration may not have reached a newly created preview yet. */ }
   let isFranchise = false;
-  try { isFranchise = Boolean(await database().prepare("SELECT 1 FROM franchise_members WHERE lower(email)=? LIMIT 1").bind(email).first()); } catch { /* Franchise tables may not exist on an older deployment. */ }
+  try { isFranchise = Boolean(await database().prepare("SELECT 1 FROM franchise_members m JOIN franchise_stores s ON s.id=m.store_id WHERE lower(m.email)=? AND s.active=1 LIMIT 1").bind(email).first()); } catch { /* Franchise tables may not exist on an older deployment. */ }
   return { email, isAdmin: Boolean(adminRole), adminRole, isFranchise };
 }
 

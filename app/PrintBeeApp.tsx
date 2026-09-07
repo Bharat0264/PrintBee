@@ -1834,10 +1834,9 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
           <a href="#how">How it works</a>
           <a href="#points">Earn points</a>
           <a href="#pricing">Pricing</a>
-          {viewer && <button className="store-switch-button" onClick={() => { setFranchiseApplyMessage(""); setFranchiseApplyOpen(true); }}>Apply for a franchise</button>}
+          {viewer && !viewer.isAdmin && <button className="store-switch-button" onClick={() => { setFranchiseApplyMessage(""); setFranchiseApplyOpen(true); }}>Apply for a franchise</button>}
           {selectedStoreId && !viewer?.isAdmin && <button className="store-switch-button" onClick={() => { window.localStorage.removeItem("printbee-selected-store"); setSelectedStoreId(null); }}>Change store</button>}
           {viewer?.isAdmin && <button className="admin-link" onClick={() => openAdminDashboard(1)}>Admin dashboard</button>}
-          {role === "ADMIN" && <button className="admin-link" onClick={openDeliveryQueue}>Delivery</button>}
           {role === "AGENT" && approvalStatus === "APPROVED" && <button className="admin-link" onClick={() => switchLoginMode("PARTNER")}>Partner portal</button>}
           {viewer && <button className="home-wallet-button" onClick={() => { setWalletOpen(true); setWalletMessage(""); }} aria-label={`Wallet balance ${pointsBalance} points`}><span>◉</span><b>{pointsBalance}</b></button>}
           {viewer && <button className="admin-link" onClick={openMyOrders}>My orders</button>}
