@@ -28,12 +28,14 @@ export async function POST(request: Request) {
   if (!customerLocation) return NextResponse.json({ error: "Use your current location before checkout" }, { status: 400 });
   const stores = plagiarismOnly ? [] : (await database().prepare("SELECT s.id,s.name,s.latitude,s.longitude,s.radius_meters,fs.platform_fee_paise,fs.delivery_base_fee_paise,fs.delivery_fee_per_100m_paise FROM franchise_stores s LEFT JOIN franchise_settings fs ON fs.store_id=s.id WHERE s.active=1").all<any>()).results;
   const selectedStoreId = typeof body.selectedStoreId === "string" ? body.selectedStoreId : "";
+  const selectedMainStore = selectedStoreId === "main";
   const requestedStore = selectedStoreId ? stores.find((store: any) => store.id === selectedStoreId) : null;
-  if (selectedStoreId && !requestedStore) return NextResponse.json({ error: "Please select an available PrintBee store" }, { status: 400 });
+  if (selectedStoreId && !requestedStore && !selectedMainStore) return NextResponse.json({ error: "Please select an available PrintBee store" }, { status: 400 });
   const nearbyStores = !plagiarismOnly ? stores.map((store: any) => ({ ...store, distance: calculateDistanceMeters({ latitude: Number(store.latitude), longitude: Number(store.longitude) }, customerLocation!) })).filter((store: any) => store.distance <= Number(store.radius_meters || 5000)).sort((a: any, b: any) => a.distance - b.distance) : [];
-  const nearest = requestedStore ? nearbyStores.find((store: any) => store.id === requestedStore.id) : nearbyStores[0];
+  const nearest = selectedMainStore ? null : (requestedStore ? nearbyStores.find((store: any) => store.id === requestedStore.id) : nearbyStores[0]);
   if (requestedStore && !nearest) return NextResponse.json({ error: "This selected store does not serve your current delivery address. Choose a store within 5 km." }, { status: 422 });
   const legacyStore = !plagiarismOnly && !nearest ? await database().prepare("SELECT latitude,longitude FROM store_location WHERE id='main'").first<{ latitude: number; longitude: number }>() : null;
+  if (selectedMainStore && legacyStore && calculateDistanceMeters({ latitude: Number(legacyStore.latitude), longitude: Number(legacyStore.longitude) }, customerLocation) > MAX_DELIVERY_DISTANCE_METERS) return NextResponse.json({ error: "This selected store does not serve your current delivery address. Choose a store within 4 km." }, { status: 422 });
   const storeLocation = nearest ? { latitude: Number(nearest.latitude), longitude: Number(nearest.longitude) } : readCoordinates(legacyStore);
   if (!storeLocation && !plagiarismOnly) return NextResponse.json({ error: stores.length ? "No PrintBee franchise currently serves this address. Delivery is available within 5 km of a registered store." : "Delivery is temporarily unavailable" }, { status: 422 });
   const id = crypto.randomUUID();
