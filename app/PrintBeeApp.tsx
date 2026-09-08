@@ -2034,6 +2034,10 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
         </div>
       </section>
 
+      <section className="projects-home-cta" aria-label="PrintBee Projects">
+        <div><span>PRINTBEE PROJECTS</span><h2>Have a project idea? 🚀</h2><p>Buy a project, sell something you built, or get your idea developed.</p></div>
+        <a href="/projects">Explore Projects →</a>
+      </section>
       <footer>
         <div className="footer-brand"><img src="/printbee-logo.png" width={86} height={86} alt="" /><div><strong>Print<span>Bee</span></strong><p>Upload. Print. Delivered.</p></div></div>
         <nav className="footer-policy-links" aria-label="Policies"><a href="/terms">Terms</a><a href="/privacy-policy">Privacy</a><a href="/shipping-policy">Shipping</a><a href="/cancellation-refunds">Cancellation &amp; Refunds</a><a href="/contact">Contact</a></nav>
