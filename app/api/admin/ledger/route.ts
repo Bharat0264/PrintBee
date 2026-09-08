@@ -101,7 +101,10 @@ function finish(values: LedgerValues) {
   const ramyaPrintingProfitPaise = Math.round(printingProfitPaise * 0.65);
   const bharatPrintingProfitPaise = printingProfitPaise - ramyaPrintingProfitPaise;
   // Delivery profit is exactly the 25% retained after the delivery partner receives 75%.
-  const bharatOtherProfitPaise = serviceRevenuePaise + plagiarismProfitPaise + values.addonRevenuePaise + deliveryProfitPaise + values.platformCollectedPaise + packagingProfitPaise + values.surgeCollectedPaise + values.lateNightCollectedPaise;
+  // Allocate every non-printing result from reconciled net profit. This keeps
+  // the Bharat/Ramya share tally correct when a points discount is recorded
+  // as a printing operating cost and the collected total is already net of it.
+  const bharatOtherProfitPaise = netProfitPaise - printingProfitPaise;
   const bharatTotalProfitPaise = bharatPrintingProfitPaise + bharatOtherProfitPaise;
   const ramyaTotalProfitPaise = ramyaPrintingProfitPaise;
   return { ...values, bwProfitPaise, colourProfitPaise, printingRevenuePaise, plagiarismProfitPaise, serviceRevenuePaise, printingOperationalCostPaise, printingProfitPaise, addonProfitPaise: values.addonRevenuePaise, deliveryProfitPaise, packagingCostPaise, packagingProfitPaise, operationalCostPaise, netProfitPaise, bharatPrintingProfitPaise, bharatOtherProfitPaise, ramyaPrintingProfitPaise, bharatTotalProfitPaise, ramyaTotalProfitPaise, shareTallyPaise: bharatTotalProfitPaise + ramyaTotalProfitPaise };
