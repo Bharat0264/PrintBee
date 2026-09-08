@@ -1819,10 +1819,8 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
       <section className="hero" id="top">
           <div className="hero-copy">
           <div className="hero-intro"><div className="eyebrow">YOUR CAMPUS PRINT COMPANION</div><h1>Upload. Print.<br /><em>Delivered.</em></h1><p>Notes, assignments, big ideas. Fresh A4 prints, delivered to your door.</p><a className="primary-cta" href="#upload">Upload Files <span aria-hidden="true">↑</span></a><BeeMascot /><StudioLauncher /></div>
-          <div className="campus-delivery-banner" role="status"><span>NEW</span><strong>Classroom &amp; hostel delivery is now available</strong><small>Fast in-campus delivery for university students</small></div>
-          <div className="srm-binding-banner" role="status"><span>NEW</span><strong>SRM-style soft binding is now available</strong><small>Add your documents, then select the binding style from the service options.</small></div>
-          <div className="plagiarism-banner" role="status"><span>NEW</span><strong>Plagiarism reports for papers and reports are now available</strong><small>Upload your document and receive the report on WhatsApp within 24 hours.</small></div>
           <div className="eyebrow"><span>●</span> A4 printing, delivered locally</div>
+          <a className="projects-hero-cta" href="/projects">Explore Projects <span aria-hidden="true">→</span></a>
           <div className="trust-row">
             <span>✓ Secure files</span><span>✓ Clear pricing</span><span>✓ Doorstep delivery</span>
           </div>
