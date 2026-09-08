@@ -40,7 +40,7 @@ export async function GET(_: Request, context: { params: Promise<{ orderId: stri
     page.drawLine({ start: { x: 38, y: y - 9 }, end: { x: 557, y: y - 9 }, thickness: .4, color: rgb(.87, .87, .84) });
     y -= 25;
   }
-  const lines: Array<[string, number]> = [["Printing and products", order.printing_subtotal_paise], ["Delivery", order.delivery_fee_paise], ["Platform fee", order.platform_fee_paise], ["Packaging", order.packaging_fee_paise], ["Payment gateway fee", order.payment_gateway_fee_paise], ["Surge charge", order.surge_fee_paise], ["Late-night delivery", order.late_night_fee_paise], ["Points discount", -Number(order.points_discount_paise || 0)]];
+  const lines: Array<[string, number]> = [["Printing and products", order.printing_subtotal_paise], ["Delivery", order.delivery_fee_paise], ["Platform fee", order.platform_fee_paise], ["Packaging", order.packaging_fee_paise], ["Payment handling charges", order.payment_gateway_fee_paise], ["Surge charge", order.surge_fee_paise], ["Late-night delivery", order.late_night_fee_paise], ["Points discount", -Number(order.points_discount_paise || 0)]];
   y = Math.min(y - 20, 300);
   for (const [label, amount] of lines.filter(([, amount]) => amount !== 0)) { page.drawText(label, { x: 340, y, size: 8, font: regular }); page.drawText(money(amount), { x: 478, y, size: 8, font: regular }); y -= 17; }
   page.drawLine({ start: { x: 335, y: y + 5 }, end: { x: 557, y: y + 5 }, thickness: 1, color: rgb(.12, .12, .14) });

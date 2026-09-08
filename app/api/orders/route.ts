@@ -58,7 +58,7 @@ export async function POST(request: Request) {
     const service = await database().prepare("SELECT id FROM print_services WHERE id=? AND active=1").bind(item.serviceId || "document-printing").first<{ id: string }>();
     if (!service) return NextResponse.json({ error: "One or more selected services are unavailable" }, { status: 400 });
   }
-  const feeSettings = await database().prepare("SELECT gateway_enabled,surge_enabled,surge_type,surge_value,late_night_enabled,late_night_type,late_night_value,platform_fee_paise,delivery_base_fee_paise,delivery_fee_per_100m_paise,packaging_enabled,packaging_fee_paise FROM checkout_fee_settings WHERE id='main'").first<any>();
+  const feeSettings = await database().prepare("SELECT gateway_enabled,gateway_fee_percent,surge_enabled,surge_type,surge_value,late_night_enabled,late_night_type,late_night_value,platform_fee_paise,delivery_base_fee_paise,delivery_fee_per_100m_paise,packaging_enabled,packaging_fee_paise FROM checkout_fee_settings WHERE id='main'").first<any>();
   const storedPlatformFee = Number(nearest ? 150 : feeSettings?.platform_fee_paise);
   const platformFeePaise = plagiarismOnly ? 0 : Number.isFinite(storedPlatformFee) ? Math.max(0, storedPlatformFee) : 150;
   const baseDeliveryFeePaise = Number(nearest?.delivery_base_fee_paise ?? feeSettings?.delivery_base_fee_paise);
@@ -69,7 +69,7 @@ export async function POST(request: Request) {
   const feeBasePaise = printingSubtotalPaise + deliveryFeePaise + incampusFeePaise + platformFeePaise;
   const surgeFeePaise = !plagiarismOnly && feeSettings?.surge_enabled ? feeSettings.surge_type === "FIXED" ? Math.round(Number(feeSettings.surge_value) * 100) : Math.round(feeBasePaise * Number(feeSettings.surge_value) / 100) : 0;
   const lateNightFeePaise = !plagiarismOnly && feeSettings?.late_night_enabled ? feeSettings.late_night_type === "FIXED" ? Math.round(Number(feeSettings.late_night_value) * 100) : Math.round(feeBasePaise * Number(feeSettings.late_night_value) / 100) : 0;
-  const paymentGatewayFeePaise = (nearest || feeSettings?.gateway_enabled) ? Math.round(feeBasePaise * 0.01) : 0;
+  const paymentGatewayFeePaise = !plagiarismOnly && feeSettings?.gateway_enabled ? Math.round(feeBasePaise * Math.max(0, Number(feeSettings.gateway_fee_percent) || 0) / 100) : 0;
   const grossTotalPaise = feeBasePaise + packagingFeePaise + surgeFeePaise + lateNightFeePaise + paymentGatewayFeePaise;
   const profile = await database().prepare("SELECT points_balance FROM customer_profiles WHERE email=?").bind(viewer.email).first<{ points_balance: number }>();
   const maxRedeemablePoints = Math.max(0, Math.floor((grossTotalPaise - 100) * 15 / 100));

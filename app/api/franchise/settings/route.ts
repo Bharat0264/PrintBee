@@ -16,5 +16,5 @@ export async function POST(request: Request) {
   const values = ["bwSinglePaise","bwDoublePaise","colourSinglePaise","colourDoublePaise","deliveryBaseFeePaise","deliveryFeePer100mPaise"].map((key) => Math.round(Number(body[key])));
   if (values.some((value) => !Number.isFinite(value) || value < 0)) return NextResponse.json({ error: "Enter valid non-negative store prices and delivery fees" }, { status: 400 });
   await database().prepare("UPDATE franchise_settings SET bw_single_paise=?,bw_double_paise=?,colour_single_paise=?,colour_double_paise=?,platform_fee_paise=150,delivery_base_fee_paise=?,delivery_fee_per_100m_paise=?,updated_at=?,updated_by=? WHERE store_id=?").bind(...values.slice(0,4), values[4], values[5], new Date().toISOString(), access.viewer.email, body.storeId).run();
-  return NextResponse.json({ saved: true, platformFeePaise: 150, gatewayFeePercent: 1 });
+  return NextResponse.json({ saved: true, platformFeePaise: 150 });
 }
