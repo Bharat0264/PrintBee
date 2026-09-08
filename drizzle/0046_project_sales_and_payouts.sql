@@ -1,0 +1,10 @@
+ALTER TABLE projects ADD COLUMN seller_name text;
+ALTER TABLE projects ADD COLUMN seller_mobile text;
+ALTER TABLE projects ADD COLUMN seller_whatsapp text;
+ALTER TABLE projects ADD COLUMN seller_upi_id text;
+ALTER TABLE projects ADD COLUMN sold_at text;
+ALTER TABLE projects ADD COLUMN seller_payout_status text NOT NULL DEFAULT 'PENDING';
+ALTER TABLE projects ADD COLUMN seller_payout_paid_at text;
+ALTER TABLE project_orders ADD COLUMN gateway_fee_paise integer NOT NULL DEFAULT 0;
+ALTER TABLE project_orders ADD COLUMN seller_notified_at text;
+ALTER TABLE project_orders ADD COLUMN payout_status text NOT NULL DEFAULT 'PENDING';
