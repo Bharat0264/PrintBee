@@ -40,10 +40,11 @@ type LedgerValues = {
   lateNightCollectedPaise: number;
   pointsDiscountPaise: number;
   riderCostPaise: number;
+  projectPlatformRevenuePaise: number;
 };
 
 function emptyValues(): LedgerValues {
-  return { orders: 0, bwPages: 0, bwRevenuePaise: 0, bwCostPaise: 0, colourPages: 0, colourRevenuePaise: 0, colourCostPaise: 0, plagiarismRevenuePaise: 0, plagiarismOperationalCostPaise: 0, addonRevenuePaise: 0, packagingOrders: 0, amountCollectedPaise: 0, printingCollectedPaise: 0, deliveryCollectedPaise: 0, platformCollectedPaise: 0, packagingCollectedPaise: 0, gatewayCollectedPaise: 0, surgeCollectedPaise: 0, lateNightCollectedPaise: 0, pointsDiscountPaise: 0, riderCostPaise: 0 };
+  return { orders: 0, bwPages: 0, bwRevenuePaise: 0, bwCostPaise: 0, colourPages: 0, colourRevenuePaise: 0, colourCostPaise: 0, plagiarismRevenuePaise: 0, plagiarismOperationalCostPaise: 0, addonRevenuePaise: 0, packagingOrders: 0, amountCollectedPaise: 0, printingCollectedPaise: 0, deliveryCollectedPaise: 0, platformCollectedPaise: 0, packagingCollectedPaise: 0, gatewayCollectedPaise: 0, surgeCollectedPaise: 0, lateNightCollectedPaise: 0, pointsDiscountPaise: 0, riderCostPaise: 0, projectPlatformRevenuePaise: 0 };
 }
 
 function addItem(values: LedgerValues, item: any) {
@@ -104,7 +105,7 @@ function finish(values: LedgerValues) {
   // Allocate every non-printing result from reconciled net profit. This keeps
   // the Bharat/Ramya share tally correct when a points discount is recorded
   // as a printing operating cost and the collected total is already net of it.
-  const bharatOtherProfitPaise = netProfitPaise - printingProfitPaise;
+  const bharatOtherProfitPaise = netProfitPaise - printingProfitPaise + values.projectPlatformRevenuePaise;
   const bharatTotalProfitPaise = bharatPrintingProfitPaise + bharatOtherProfitPaise;
   const ramyaTotalProfitPaise = ramyaPrintingProfitPaise;
   return { ...values, bwProfitPaise, colourProfitPaise, printingRevenuePaise, plagiarismProfitPaise, serviceRevenuePaise, printingOperationalCostPaise, printingProfitPaise, addonProfitPaise: values.addonRevenuePaise, deliveryProfitPaise, packagingCostPaise, packagingProfitPaise, operationalCostPaise, netProfitPaise, bharatPrintingProfitPaise, bharatOtherProfitPaise, ramyaPrintingProfitPaise, bharatTotalProfitPaise, ramyaTotalProfitPaise, shareTallyPaise: bharatTotalProfitPaise + ramyaTotalProfitPaise };
@@ -161,6 +162,8 @@ export async function GET() {
     days.set(day, daily);
     orderBreakdowns.push({ ...order, ...finish(values) });
   }
+  const projectRevenue = await database().prepare("SELECT substr(paid_at,1,10) day,COALESCE(SUM(platform_fee_paise),0) revenue FROM project_orders WHERE payment_status='PAID' GROUP BY substr(paid_at,1,10)").all<any>();
+  for (const row of projectRevenue.results) { const daily=days.get(String(row.day))??emptyValues(); daily.projectPlatformRevenuePaise+=Number(row.revenue)||0; totals.projectPlatformRevenuePaise+=Number(row.revenue)||0; days.set(String(row.day),daily); }
   return NextResponse.json({
     totals: finish(totals),
     daily: Array.from(days, ([date, values]) => ({ date, ...finish(values) })).sort((a, b) => b.date.localeCompare(a.date)),
