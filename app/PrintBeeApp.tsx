@@ -256,10 +256,10 @@ function downloadLedgerCsv(ledger: any) {
 
 const ledgerFinancialColumns = [
   ["Collected", "amountCollectedPaise"], ["Printing revenue", "printingRevenuePaise"], ["Printing op. cost", "printingOperationalCostPaise"], ["Points discount (printing cost)", "pointsDiscountPaise"], ["Printing profit", "printingProfitPaise"],
-  ["Plagiarism revenue", "plagiarismRevenuePaise"], ["Plagiarism op. cost", "plagiarismOperationalCostPaise"], ["Plagiarism profit · Bharat 100%", "plagiarismProfitPaise"], ["Service/additional revenue", "serviceRevenuePaise"], ["Add-ons revenue / profit", "addonRevenuePaise"], ["Delivery collected", "deliveryCollectedPaise"], ["Delivery partner fee", "riderCostPaise"],
+  ["Other service revenue", "otherServiceRevenuePaise"], ["Other service operating cost", "otherServiceOperatingCostPaise"], ["Ramya other service profit", "ramyaOtherServiceProfitPaise"], ["Add-ons revenue / profit", "addonRevenuePaise"], ["Delivery collected", "deliveryCollectedPaise"], ["Delivery partner fee", "riderCostPaise"],
   ["Delivery profit (25%)", "deliveryProfitPaise"], ["Platform fee", "platformCollectedPaise"], ["Packing revenue", "packagingCollectedPaise"], ["Packing cost", "packagingCostPaise"], ["Packing profit", "packagingProfitPaise"],
   ["Gateway fee / cost", "gatewayCollectedPaise"], ["Surge", "surgeCollectedPaise"], ["Late-night", "lateNightCollectedPaise"], ["Total op. cost", "operationalCostPaise"],
-  ["Total profit", "netProfitPaise"], ["Bharat 35% printing profit", "bharatPrintingProfitPaise"], ["Bharat other profit", "bharatOtherProfitPaise"], ["Bharat total", "bharatTotalProfitPaise"], ["Ramya 65% printing profit", "ramyaTotalProfitPaise"], ["Share tally", "shareTallyPaise"],
+  ["Total profit", "netProfitPaise"], ["Bharat 35% printing profit", "bharatPrintingProfitPaise"], ["Bharat other profit", "bharatOtherProfitPaise"], ["Bharat total", "bharatTotalProfitPaise"], ["Ramya 65% printing profit", "ramyaPrintingProfitPaise"], ["Ramya other service profit", "ramyaOtherServiceProfitPaise"], ["Ramya total", "ramyaTotalProfitPaise"], ["Share tally", "shareTallyPaise"],
 ] as const;
 
 function LedgerFinancialTable({ rows, total, orderView = false }: { rows: any[]; total?: any; orderView?: boolean }) {
