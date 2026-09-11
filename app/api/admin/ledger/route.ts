@@ -60,6 +60,15 @@ function addItem(values: LedgerValues, item: any) {
     values.otherServiceCount += 1;
     return;
   }
+  // Binding and any future paid non-printing service are accounted for
+  // separately from the page-printing charge. Their fixed operating cost is ₹35.
+  const serviceId = String(item?.serviceId ?? "document-printing");
+  const otherServiceCharge = Math.round(Number(item?.servicePrice ?? 0) * 100);
+  if (serviceId !== "document-printing" && serviceId !== "turnitin-plagiarism-check" && otherServiceCharge > 0) {
+    values.otherServiceRevenuePaise += otherServiceCharge;
+    values.otherServiceOperatingCostPaise += 3500;
+    values.otherServiceCount += 1;
+  }
   if (item?.kind === "ADDON") {
     values.addonRevenuePaise += Math.round((Number(item?.total ?? item?.addonsTotal) || 0) * 100);
     return;
@@ -104,7 +113,7 @@ function finish(values: LedgerValues) {
   const deliveryProfitPaise = values.deliveryCollectedPaise - values.riderCostPaise;
   const packagingProfitPaise = Math.min(values.packagingCollectedPaise, values.packagingOrders * 170);
   const packagingCostPaise = values.packagingCollectedPaise - packagingProfitPaise;
-  const operationalCostPaise = printingOperationalCostPaise + values.plagiarismOperationalCostPaise + values.riderCostPaise + packagingCostPaise + values.gatewayCollectedPaise;
+  const operationalCostPaise = printingOperationalCostPaise + values.otherServiceOperatingCostPaise + values.riderCostPaise + packagingCostPaise + values.gatewayCollectedPaise;
   const netProfitPaise = values.amountCollectedPaise - operationalCostPaise;
   // Ramya shares only the profit earned from printing. All other revenue belongs to Bharat.
   const ramyaPrintingProfitPaise = Math.round(printingProfitPaise * 0.65);
