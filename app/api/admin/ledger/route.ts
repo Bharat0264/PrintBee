@@ -54,10 +54,7 @@ function addItem(values: LedgerValues, item: any) {
   if (item?.serviceId === "turnitin-plagiarism-check") {
     const revenue = Math.round((Number(item?.servicePrice ?? item?.total) || 175) * 100);
     values.plagiarismRevenuePaise += revenue;
-    values.plagiarismOperationalCostPaise += 3500;
-    values.otherServiceRevenuePaise += revenue;
-    values.otherServiceOperatingCostPaise += 3500;
-    values.otherServiceCount += 1;
+    values.plagiarismOperationalCostPaise += 15000;
     return;
   }
   // Binding and any future paid non-printing service are accounted for
@@ -113,7 +110,7 @@ function finish(values: LedgerValues) {
   const deliveryProfitPaise = values.deliveryCollectedPaise - values.riderCostPaise;
   const packagingProfitPaise = Math.min(values.packagingCollectedPaise, values.packagingOrders * 170);
   const packagingCostPaise = values.packagingCollectedPaise - packagingProfitPaise;
-  const operationalCostPaise = printingOperationalCostPaise + values.otherServiceOperatingCostPaise + values.riderCostPaise + packagingCostPaise + values.gatewayCollectedPaise;
+  const operationalCostPaise = printingOperationalCostPaise + values.plagiarismOperationalCostPaise + values.otherServiceOperatingCostPaise + values.riderCostPaise + packagingCostPaise + values.gatewayCollectedPaise;
   const netProfitPaise = values.amountCollectedPaise - operationalCostPaise;
   // Ramya shares only the profit earned from printing. All other revenue belongs to Bharat.
   const ramyaPrintingProfitPaise = Math.round(printingProfitPaise * 0.65);
