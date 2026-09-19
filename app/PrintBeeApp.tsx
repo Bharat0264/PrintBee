@@ -317,6 +317,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   const [feedbackMessage, setFeedbackMessage] = useState("");
   const [loginMode, setLoginMode] = useState<"CUSTOMER" | "PARTNER">("CUSTOMER");
   const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const [safariUpiNoticeOpen, setSafariUpiNoticeOpen] = useState(false);
   const [memeQuote, setMemeQuote] = useState(GEN_Z_MEMES[0]);
   const [acceptingOrders, setAcceptingOrders] = useState(true);
   const [launchAt, setLaunchAt] = useState("2026-08-10T03:30:00.000Z");
@@ -875,8 +876,13 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
     }, () => setAdminMessage("Location permission is required to set the store location."), { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
   };
 
-  const placeOrder = async () => {
+  const placeOrder = async (skipSafariNotice = false) => {
     if (paymentProcessing) return;
+    const isSafari = /safari/i.test(navigator.userAgent) && !/(chrome|crios|fxios|edgios|android)/i.test(navigator.userAgent);
+    if (isSafari && !skipSafariNotice) {
+      setSafariUpiNoticeOpen(true);
+      return;
+    }
     setPaymentProcessing(true);
     setOrderError("");
     try {
@@ -2134,9 +2140,22 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
                 <div className="points-earned-preview"><span>◉</span><div><strong>You’ll earn {Math.floor(Math.max(0, checkoutBeforePoints - pointsDiscount) / 10)} wallet points</strong><small>Credited after this order is successfully delivered.</small></div></div>
                 <div className="pay-on-delivery-note"><strong>Secure online payment:</strong> After creating the order, complete payment through Razorpay. Printing begins only after verified payment.</div>
                 {orderError && <p className="form-error">{orderError}</p>}
-                <button className="save-button" disabled={!deliveryAddress.trim() || !customerCoordinates || calculatedDeliveryFee === null || (incampusDelivery && (!campusBuilding.trim() || (incampusType === "CLASSROOM" && !classroomNumber.trim()))) || paymentProcessing} onClick={placeOrder}>{paymentProcessing ? "Starting Razorpay..." : "Pay now"}</button>
+                <button className="save-button" disabled={!deliveryAddress.trim() || !customerCoordinates || calculatedDeliveryFee === null || (incampusDelivery && (!campusBuilding.trim() || (incampusType === "CLASSROOM" && !classroomNumber.trim()))) || paymentProcessing} onClick={() => void placeOrder()}>{paymentProcessing ? "Starting Razorpay..." : "Pay now"}</button>
               </>
             )}
+          </section>
+        </div>
+      )}
+
+      {safariUpiNoticeOpen && (
+        <div className="modal-backdrop browser-payment-backdrop" role="presentation" onMouseDown={() => setSafariUpiNoticeOpen(false)}>
+          <section className="checkout-modal browser-payment-notice" role="dialog" aria-modal="true" aria-labelledby="safari-upi-title" onMouseDown={(event) => event.stopPropagation()}>
+            <button className="close" onClick={() => setSafariUpiNoticeOpen(false)} aria-label="Close payment browser notice">×</button>
+            <div className="admin-badge">UPI PAYMENT NOTICE</div>
+            <h2 id="safari-upi-title">UPI options can be limited in Safari</h2>
+            <p>Sometimes UPI options do not display in Safari. For the best UPI experience, open the PrintBee website in Chrome. Your signed-in cart is saved; after opening Chrome, sign in again, enter your name and required details, then pay.</p>
+            <button className="save-button" onClick={() => { window.location.href = `googlechrome://navigate?url=${encodeURIComponent("https://www.printbee.co.in")}`; }}>Open in Chrome</button>
+            <button className="browser-payment-dismiss" onClick={() => { setSafariUpiNoticeOpen(false); void placeOrder(true); }}>Continue in Safari</button>
           </section>
         </div>
       )}
