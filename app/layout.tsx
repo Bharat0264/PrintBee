@@ -6,6 +6,7 @@ import "./liquid-glass.css";
 import "./cinematic.css";
 import { FloatingBackground, GlassInteractionSystem, PageTransition } from "./components/LiquidGlass";
 import CinematicMotion from "./components/cinematic/CinematicMotion";
+import TouchFeedback from "./components/cinematic/TouchFeedback";
 
 export const metadata: Metadata = {
   title: "PrintBee | Upload. Print. Delivered.",
@@ -27,6 +28,7 @@ export default function RootLayout({
         <FloatingBackground />
         <GlassInteractionSystem />
         <CinematicMotion />
+        <TouchFeedback />
         <PageTransition>{children}</PageTransition>
       </body>
     </html>
