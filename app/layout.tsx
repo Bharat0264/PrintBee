@@ -1,5 +1,11 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import "./experience.css";
+import "./order-motion.css";
+import "./liquid-glass.css";
+import "./cinematic.css";
+import { FloatingBackground, GlassInteractionSystem, PageTransition } from "./components/LiquidGlass";
+import CinematicMotion from "./components/cinematic/CinematicMotion";
 
 export const metadata: Metadata = {
   title: "PrintBee | Upload. Print. Delivered.",
@@ -18,7 +24,10 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="antialiased">
-        {children}
+        <FloatingBackground />
+        <GlassInteractionSystem />
+        <CinematicMotion />
+        <PageTransition>{children}</PageTransition>
       </body>
     </html>
   );

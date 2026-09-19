@@ -4,6 +4,9 @@ import { ChangeEvent, useEffect, useMemo, useState } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import QRCode from "qrcode";
+import { PrintJourney, PrinterScene, ProjectPortals } from "./components/cinematic/PrintJourney";
+import { CustomerMotion, customerFeedback } from "./components/CustomerMotion";
+import { DialogAccessibility, MobileNavigation } from "./components/PrintBeeExperience";
 
 type PrintMode = "bw-single" | "bw-double" | "colour-single" | "colour-double";
 type Prices = Record<PrintMode, number>;
@@ -709,6 +712,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
       return setUploadError(error instanceof Error ? error.message : "The cart could not be saved. Please try again.");
     }
     setCart((items) => [...items, cartItem]);
+    customerFeedback('cart-added');
     setFileName("");
     setSelectedFile(null);
     setPages(1);
@@ -1570,7 +1574,9 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
   }
 
   return (
-    <main>
+    <main className="printbee-experience">
+      <CustomerMotion /><DialogAccessibility />
+      <a className="skip-link" href="#upload">Skip to upload</a>
       {notificationPromptOpen && (
         <div className="modal-backdrop notification-permission-backdrop" role="presentation">
           <section className="notification-permission-modal" role="dialog" aria-modal="true" aria-labelledby="notification-permission-title">
@@ -1592,6 +1598,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
           <a href="#how">How it works</a>
           <a href="#points">Earn points</a>
           <a href="#pricing">Pricing</a>
+          <a href="#cart" aria-label={`Cart, ${cart.length} items`}>Cart ({cart.length})</a>
           {viewer?.isAdmin && <button className="admin-link" onClick={() => openAdminDashboard(1)}>Admin dashboard</button>}
           {role === "ADMIN" && <button className="admin-link" onClick={openDeliveryQueue}>Delivery</button>}
           {role === "AGENT" && approvalStatus === "APPROVED" && <button className="admin-link" onClick={() => switchLoginMode("PARTNER")}>Partner portal</button>}
@@ -1609,8 +1616,8 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
         <div className="hero-copy">
           <div className="campus-delivery-banner" role="status"><span>NEW</span><strong>Classroom &amp; hostel delivery is now available</strong><small>Fast in-campus delivery for university students</small></div>
           <div className="eyebrow"><span>●</span> A4 printing, delivered locally</div>
-          <h1>Your documents.<br /><em>Printed right.</em></h1>
-          <p>Upload a PDF or image, choose your A4 print style, and get crisp prints delivered to your door.</p>
+          <div className="hero-intro"><div className="eyebrow">YOUR CAMPUS PRINT COMPANION</div><h1>Upload. Print.<br /><em>Delivered.</em></h1><p>Notes, assignments, big ideas. Fresh A4 prints, delivered to your door.</p><a className="primary-cta" href="#upload">Upload Files ↑</a></div>
+          <div className="hero-printer"><PrinterScene /></div>
           <div className="trust-row">
             <span>✓ Secure files</span><span>✓ Clear pricing</span><span>✓ Doorstep delivery</span>
           </div>
@@ -1646,7 +1653,8 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
           )}
         </div>
 
-        <section className="order-card" aria-label="Create print order">
+        <PrintJourney />
+        <section className="order-card" id="upload" tabIndex={-1} aria-label="Create print order">
           {acceptingOrders ? <>
           <div className="card-heading">
             <span className="step">1</span>
@@ -1819,6 +1827,8 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
         </div>
       </section>
 
+      <ProjectPortals baseUrl="https://www.printbee.co.in" />
+      {!viewer?.isAdmin && <MobileNavigation cartCount={cart.length} orders={() => { if (viewer) void openMyOrders(); else setLoginOpen(true); }} profile={() => setLoginOpen(true)} />}
       <footer>
         <div className="footer-brand"><img src="/printbee-logo.png" width={86} height={86} alt="" /><div><strong>Print<span>Bee</span></strong><p>Upload. Print. Delivered.</p></div></div>
         <nav className="footer-policy-links" aria-label="Policies"><a href="/terms">Terms</a><a href="/privacy-policy">Privacy</a><a href="/shipping-policy">Shipping</a><a href="/cancellation-refunds">Cancellation &amp; Refunds</a><a href="/contact">Contact</a></nav>
