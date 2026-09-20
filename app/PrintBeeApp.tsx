@@ -2154,7 +2154,7 @@ export default function PrintBeeApp({ viewer, supabaseConfig }: { viewer: Viewer
             <div className="admin-badge">UPI PAYMENT NOTICE</div>
             <h2 id="safari-upi-title">UPI options can be limited in Safari</h2>
             <p>Sometimes UPI options do not display in Safari. For the best UPI experience, open the PrintBee website in Chrome. Your signed-in cart is saved; after opening Chrome, sign in again, enter your name and required details, then pay.</p>
-            <button className="save-button" onClick={() => { window.location.href = `googlechrome://navigate?url=${encodeURIComponent("https://www.printbee.co.in")}`; }}>Open in Chrome</button>
+            <button className="save-button" onClick={() => { window.location.href = "googlechromes://www.printbee.co.in"; }}>Open in Chrome</button>
             <button className="browser-payment-dismiss" onClick={() => { setSafariUpiNoticeOpen(false); void placeOrder(true); }}>Continue in Safari</button>
           </section>
         </div>
