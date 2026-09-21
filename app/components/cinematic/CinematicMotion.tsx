@@ -16,7 +16,7 @@ export default function CinematicMotion() {
         cursor.current.style.transform = `translate3d(${event.clientX}px,${event.clientY}px,0)`;
         cursor.current.dataset.active = String(Boolean((event.target as Element).closest("a,button,.upload-zone")));
       }
-      const target = (event.target as Element).closest<HTMLElement>(".primary-cta,.price-list>article,.cinema-portals>a,.printer-stage");
+      const target = (event.target as Element).closest<HTMLElement>(".primary-cta,.price-list>article,.cinema-portals>a,.printer-stage,.admin-order-card,.metric-grid>div,.assigned-orders article,.partner-earnings,.admin-project-list article");
       if (lastTarget && lastTarget !== target) lastTarget.style.removeProperty("transform");
       lastTarget = target;
       if (!target) return;
