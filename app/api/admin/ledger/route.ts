@@ -112,7 +112,10 @@ function finish(values: LedgerValues) {
   // printing profit and are included in the total operating cost.
   const printingOperationalCostPaise = values.bwCostPaise + values.colourCostPaise + values.pointsDiscountPaise;
   const printingProfitPaise = printingRevenuePaise - printingOperationalCostPaise;
-  const deliveryProfitPaise = values.deliveryCollectedPaise - (values.riderCostPaise - values.incampusDeliveryCollectedPaise);
+  // Location-based delivery is split 75% to the rider and 25% to Bharat.
+  // In-campus delivery is outside that split: every rupee of its fee belongs
+  // to the rider and never becomes Bharat other profit.
+  const deliveryProfitPaise = Math.floor(values.deliveryCollectedPaise * 0.25);
   const packagingProfitPaise = Math.min(values.packagingCollectedPaise, values.packagingOrders * 170);
   const packagingCostPaise = values.packagingCollectedPaise - packagingProfitPaise;
   const operationalCostPaise = printingOperationalCostPaise + values.plagiarismOperationalCostPaise + values.otherServiceOperatingCostPaise + values.riderCostPaise + values.lateNightPartnerCostPaise + packagingCostPaise + values.gatewayCollectedPaise;
@@ -120,11 +123,18 @@ function finish(values: LedgerValues) {
   // Ramya shares only the profit earned from printing. All other revenue belongs to Bharat.
   const ramyaPrintingProfitPaise = Math.round(printingProfitPaise * 0.65);
   const bharatPrintingProfitPaise = printingProfitPaise - ramyaPrintingProfitPaise;
-  // Delivery profit is exactly the 25% retained after the delivery partner receives 75%.
-  // Allocate every non-printing result from reconciled net profit. This keeps
-  // the Bharat/Ramya share tally correct when a points discount is recorded
-  // as a printing operating cost and the collected total is already net of it.
-  const bharatOtherProfitPaise = netProfitPaise - printingProfitPaise - ramyaOtherServiceProfitPaise;
+  // Bharat other profit is explicit rather than a residual. It includes all
+  // owner charges: platform/project fees, packing profit, surcharge, 25% of
+  // normal location delivery, and 40% of late-night delivery. Payment-gateway
+  // handling is an operating cost; in-campus delivery remains fully rider pay.
+  const bharatOtherProfitPaise = values.projectPlatformRevenuePaise
+    + values.platformCollectedPaise
+    + packagingProfitPaise
+    + values.surgeCollectedPaise
+    + deliveryProfitPaise
+    + (values.lateNightCollectedPaise - values.lateNightPartnerCostPaise)
+    + values.addonRevenuePaise
+    + plagiarismProfitPaise;
   const bharatTotalProfitPaise = bharatPrintingProfitPaise + bharatOtherProfitPaise;
   const ramyaTotalProfitPaise = ramyaPrintingProfitPaise + ramyaOtherServiceProfitPaise;
   return { ...values, bwProfitPaise, colourProfitPaise, printingRevenuePaise, plagiarismProfitPaise, serviceRevenuePaise, otherServiceProfitPaise: ramyaOtherServiceProfitPaise, printingOperationalCostPaise, printingProfitPaise, addonProfitPaise: values.addonRevenuePaise, deliveryProfitPaise, lateNightOwnerProfitPaise: values.lateNightCollectedPaise - values.lateNightPartnerCostPaise, packagingCostPaise, packagingProfitPaise, operationalCostPaise, netProfitPaise, ownerPrintingProfitPaise: bharatPrintingProfitPaise, ownerOtherProfitPaise: bharatOtherProfitPaise, operatorPrintingProfitPaise: ramyaPrintingProfitPaise, ownerTotalProfitPaise: bharatTotalProfitPaise, operatorTotalProfitPaise: ramyaTotalProfitPaise, shareTallyPaise: bharatTotalProfitPaise + ramyaTotalProfitPaise };
@@ -174,7 +184,9 @@ export async function GET() {
     values.lateNightCollectedPaise = Number(order.late_night_fee_paise) || 0;
     values.lateNightPartnerCostPaise = Math.floor(values.lateNightCollectedPaise * 0.6);
     values.pointsDiscountPaise = Number(order.points_discount_paise) || 0;
-    values.riderCostPaise = Math.floor(values.deliveryCollectedPaise * 0.75) + values.incampusDeliveryCollectedPaise;
+    // Complement the exact 25% owner share, then add the full in-campus fee
+    // for the delivery partner. This recomputes every paid historical order.
+    values.riderCostPaise = values.deliveryCollectedPaise - Math.floor(values.deliveryCollectedPaise * 0.25) + values.incampusDeliveryCollectedPaise;
     let items: any[] = [];
     try { const parsed = JSON.parse(order.items_json || "[]"); if (Array.isArray(parsed)) items = parsed; } catch {}
     for (const item of items) addItem(values, item);
