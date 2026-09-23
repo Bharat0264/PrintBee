@@ -179,7 +179,7 @@ const GOOGLE_CLIENT_ID = "365409440317-vn99jp0h6jd5suom0gppbjoubvs8sqio.apps.goo
 type LocationOption = { id: string; name: string; delivery_fee_paise?: number; platform_fee_paise?: number };
 type StoreChoice = { id: string; name: string; radius_meters: number };
 type PrintService = { id: string; name: string; description: string; active: number; is_binding: number; price_paise: number; counts_for_packaging: number };
-type Addon = { id: string; name: string; description: string; active: number; price_paise: number };
+type Addon = { id: string; name: string; description: string; active: number; price_paise: number; image_url?: string | null };
 type RazorpayResult = { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string };
 type ColourChoice = "" | "bw" | "colour" | "mixed";
 
@@ -478,6 +478,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
   const [addons, setAddons] = useState<Addon[]>([]);
   const [selectedAddonIds, setSelectedAddonIds] = useState<string[]>([]);
   const [newAddon, setNewAddon] = useState({ id: "", name: "", description: "", price: 0 });
+  const [addonImageFile, setAddonImageFile] = useState<File | null>(null);
   const [newAdminMember, setNewAdminMember] = useState({ email: "", role: "OPERATIONS" });
   const [addonMessage, setAddonMessage] = useState("");
 
@@ -1591,7 +1592,9 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
     const data = await response.json().catch(() => ({}));
     setAdminMessage(response.ok ? `${data.name} saved in add-ons.` : data.error ?? "Add-on could not be saved.");
     if (response.ok) {
+      if (addonImageFile) { const form = new FormData(); form.append("image", addonImageFile); const imageResponse = await fetch(`/api/addons/${data.id}/image`, { method: "POST", body: form }); if (!imageResponse.ok) setAdminMessage(`${data.name} was saved, but its image could not be uploaded.`); }
       setNewAddon({ id: "", name: "", description: "", price: 0 });
+      setAddonImageFile(null);
       const addonsResponse = await fetch("/api/addons", { cache: "no-store" });
       if (addonsResponse.ok) setAddons(await addonsResponse.json());
     }
@@ -1999,7 +2002,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
           {!isPlagiarismService && addons.length > 0 && <div className="binding-fields addons-section">
             <strong><span className="step">4</span> Add-ons <small>Optional</small></strong>
             <p>Select any extra products you want with this document.</p>
-            <div className="service-option-grid" role="group" aria-label="Optional add-ons">{addons.map((addon) => <button type="button" aria-pressed={selectedAddonIds.includes(addon.id)} className={selectedAddonIds.includes(addon.id) ? "selected" : ""} key={addon.id} onClick={() => setSelectedAddonIds((ids) => ids.includes(addon.id) ? ids.filter((id) => id !== addon.id) : [...ids, addon.id])}><span><strong>{addon.name}</strong><small>{addon.description}</small></span><b>+{inr.format(addon.price_paise / 100)}</b></button>)}</div>
+            <div className="service-option-grid" role="group" aria-label="Optional add-ons">{addons.map((addon) => <button type="button" aria-pressed={selectedAddonIds.includes(addon.id)} className={selectedAddonIds.includes(addon.id) ? "selected" : ""} key={addon.id} onClick={() => setSelectedAddonIds((ids) => ids.includes(addon.id) ? ids.filter((id) => id !== addon.id) : [...ids, addon.id])}>{addon.image_url && <img className="addon-image" src={addon.image_url} alt="" />}<span><strong>{addon.name}</strong><small>{addon.description}</small></span><b>+{inr.format(addon.price_paise / 100)}</b></button>)}</div>
           </div>}
 
           <div className="quantities">
@@ -2177,7 +2180,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
             <div className="service-admin" id="admin-addons">
               <h3>{newAddon.id ? "Edit add-on" : "Add an add-on product"}</h3>
               <p>Add-ons use a fixed price and are included in the cart and checkout whenever a customer selects them.</p>
-              <div className="service-admin-form"><input value={newAddon.name} onChange={(e) => setNewAddon({ ...newAddon, name: e.target.value })} placeholder="Example: File folder" /><input maxLength={125} value={newAddon.description} onChange={(e) => setNewAddon({ ...newAddon, description: e.target.value })} placeholder="Description" /><label className="service-price-field">Fixed price (₹)<input type="number" min="0" step=".01" value={newAddon.price} onChange={(e) => setNewAddon({ ...newAddon, price: Math.max(0, Number(e.target.value)) })} /></label><button onClick={saveAddon}>{newAddon.id ? "Save add-on" : "Add product"}</button>{newAddon.id && <button className="secondary-button" onClick={() => setNewAddon({ id: "", name: "", description: "", price: 0 })}>Cancel</button>}</div>
+              <div className="service-admin-form"><input value={newAddon.name} onChange={(e) => setNewAddon({ ...newAddon, name: e.target.value })} placeholder="Example: File folder" /><input maxLength={125} value={newAddon.description} onChange={(e) => setNewAddon({ ...newAddon, description: e.target.value })} placeholder="Description" /><label className="service-price-field">Fixed price (₹)<input type="number" min="0" step=".01" value={newAddon.price} onChange={(e) => setNewAddon({ ...newAddon, price: Math.max(0, Number(e.target.value)) })} /></label><label>Add-on image<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={(e) => setAddonImageFile(e.target.files?.[0] ?? null)} /></label><button onClick={saveAddon}>{newAddon.id ? "Save add-on" : "Add product"}</button>{newAddon.id && <button className="secondary-button" onClick={() => { setNewAddon({ id: "", name: "", description: "", price: 0 }); setAddonImageFile(null); }}>Cancel</button>}</div>
               <div className="service-chips">{addons.map((addon) => <span key={addon.id}><b>{addon.name} · {inr.format(addon.price_paise / 100)}</b><small>{addon.description}</small><button onClick={() => setNewAddon({ id: addon.id, name: addon.name, description: addon.description, price: addon.price_paise / 100 })}>Edit</button><button onClick={() => removeAddon(addon.id)}>Remove</button></span>)}</div>
             </div>
             </>}

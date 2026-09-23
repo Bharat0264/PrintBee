@@ -2,9 +2,13 @@ import { NextResponse } from "next/server";
 import { database } from "../db";
 import { getViewer } from "../../supabase/server";
 
+async function ensureAddonImageColumn() { try { await database().prepare("ALTER TABLE addons ADD COLUMN image_storage_key TEXT").run(); } catch {} }
+
 export async function GET() {
-  const rows = await database().prepare("SELECT id,name,description,price_paise,active FROM addons WHERE active=1 ORDER BY created_at,name").all();
-  return NextResponse.json(rows.results, { headers: { "Cache-Control": "no-store, no-cache, must-revalidate" } });
+  await ensureAddonImageColumn();
+  const rows = await database().prepare("SELECT id,name,description,price_paise,active,image_storage_key FROM addons WHERE active=1 ORDER BY created_at,name").all<any>();
+  const result = rows.results.map((addon: any) => ({ ...addon, image_url: addon.image_storage_key ? `/api/addons/${addon.id}/image` : null, image_storage_key: undefined }));
+  return NextResponse.json(result, { headers: { "Cache-Control": "no-store, no-cache, must-revalidate" } });
 }
 
 export async function POST(request: Request) {
