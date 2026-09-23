@@ -33,6 +33,18 @@ export function OrderScene({ status }: { status: string }) {
   return <div className={`order-scene scene-${status.toLowerCase()}`} aria-hidden="true"><span className="scene-paper">▤</span><span className="scene-printer"><b /><em /></span><span className="scene-package">▣</span><span className="scene-rider">🛵</span><span className="scene-home">⌂</span><i /></div>;
 }
 
+function LiveTracking({ order }: { order: CustomerOrder }) {
+  const [tracking, setTracking] = useState<any>(null);
+  useEffect(() => {
+    if (!order.id) return; let live = true;
+    const refresh = async () => { const response = await fetch(`/api/orders/${order.id}/track`, { cache: 'no-store' }); if (live && response.ok) setTracking(await response.json()); };
+    void refresh(); const timer = window.setInterval(() => void refresh(), 8000);
+    return () => { live = false; window.clearInterval(timer); };
+  }, [order.id]);
+  const info = tracking?.order; if (!info || !['PICKED_UP', 'OUT_FOR_DELIVERY', 'RIDER_NEARBY'].includes(info.status)) return null;
+  return <section className="live-delivery-tracking" aria-live="polite"><strong>Live delivery tracking</strong><span>{info.location ? `Partner ${info.distanceMeters < 1000 ? `${info.distanceMeters} m` : `${(info.distanceMeters / 1000).toFixed(1)} km`} away` : 'Live rider location is temporarily unavailable.'}</span><b>{info.etaMinutes ? `Estimated arrival: ${Math.max(2, info.etaMinutes - 2)}–${info.etaMinutes + 2} min` : 'ETA temporarily unavailable'}</b>{info.location && <a href={`https://www.openstreetmap.org/?mlat=${info.location.latitude}&mlon=${info.location.longitude}#map=15/${info.location.latitude}/${info.location.longitude}`} target="_blank" rel="noreferrer">View live delivery map ↗</a>}</section>;
+}
+
 export function ActiveOrderWidget({ orders, hidden, email, error, refresh, details }: { orders: CustomerOrder[]; hidden: boolean; email: string; error: string; refresh: () => Promise<void>; details: () => void }) {
   const [expanded, setExpanded] = useState(false);
   const [selected, setSelected] = useState('');
@@ -86,7 +98,7 @@ export function ActiveOrderWidget({ orders, hidden, email, error, refresh, detai
       {expanded && <section id="active-order-panel" className="active-order-panel" aria-label="Active order details">
         <button className="active-minimize" aria-label="Close active order" onClick={() => toggle(false)}>Minimize ↓</button>
         {list.length > 1 && <div className="active-order-switch"><button onClick={() => setSelected(list[(position + list.length - 1) % list.length].id)} aria-label="Previous active order">←</button><span>Order {position + 1} of {list.length}</span><button onClick={() => setSelected(list[(position + 1) % list.length].id)} aria-label="Next active order">→</button></div>}
-        <RiderCard order={order} /><OTPCard order={order} />
+        <RiderCard order={order} /><LiveTracking order={order} /><OTPCard order={order} />
         {notice?.id === order.id && notice.status === 'DELIVERED' ? <div className="delivery-celebration"><BeeMascot celebrate /><strong>Delivered! Hope your prints make your day easier 🐝</strong></div> : <OrderScene status={order.status} />}
         <OrderJourney order={order} />
         {isReport(order) && <p className="active-order-note">Your report is delivered on WhatsApp. No delivery OTP is needed.</p>}

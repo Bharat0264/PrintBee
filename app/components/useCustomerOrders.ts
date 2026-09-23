@@ -16,7 +16,7 @@ export function useCustomerOrders(email: string | undefined, enabled: boolean, h
     let timer: ReturnType<typeof setTimeout> | undefined;
     const schedule = () => {
       clearTimeout(timer);
-      if (alive && !unauthorized && !document.hidden && current.some(isActiveOrder)) timer = setTimeout(() => void refresh(), 25000);
+      if (alive && !unauthorized && !document.hidden && current.some(isActiveOrder)) timer = setTimeout(() => void refresh(), 6000);
     };
     const refresh = async () => {
       if (!alive || pending || document.hidden) return;

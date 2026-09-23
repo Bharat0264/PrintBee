@@ -12,6 +12,10 @@ export const PRINT_STEPS = [
   ['PRINTING', 'Printing', 'Your prints are taking shape'],
   ['READY_FOR_PICKUP', 'Ready for pickup', 'Your prints are ready'],
   ['RIDER_ASSIGNED', 'Partner assigned', 'Your PrintBee partner is assigned'],
+  ['RIDER_ARRIVING_FOR_PICKUP', 'Partner heading to pickup', 'Your partner is heading to collect your prints'],
+  ['PICKED_UP', 'Picked up', 'Your prints were collected by your partner'],
+  ['OUT_FOR_DELIVERY', 'On the way', 'Your PrintBee order is on the way'],
+  ['RIDER_NEARBY', 'Partner nearby', 'Your PrintBee partner is nearby'],
   ['DELIVERED', 'Delivered', 'Delivered! Enjoy your prints'],
 ] as const;
 export const REPORT_STEPS = [
@@ -35,7 +39,7 @@ export function orderStage(order: CustomerOrder) {
   return { steps, index, label: order.status === 'CANCELLED' ? 'Order cancelled' : index < 0 ? 'Order update' : steps[index][2] };
 }
 export function canShowOTP(order: CustomerOrder) {
-  return !isReport(order) && order.payment_status === 'PAID' && order.status === 'RIDER_ASSIGNED' && Boolean(order.deliveryCode);
+  return !isReport(order) && order.payment_status === 'PAID' && ['RIDER_ASSIGNED', 'RIDER_ARRIVING_FOR_PICKUP', 'PICKED_UP', 'OUT_FOR_DELIVERY', 'RIDER_NEARBY'].includes(order.status) && Boolean(order.deliveryCode);
 }
 export function contactNumber(order: CustomerOrder) {
   const number = order.rider_mobile_number?.replace(/[\s()-]/g, '') || '';
