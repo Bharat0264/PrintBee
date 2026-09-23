@@ -18,10 +18,16 @@ export default function TouchFeedback() {
       // Native audio playback is more dependable than Web Audio's unlock
       // policy in Chrome on iOS. Generate a tiny WAV once, then replay it.
       if (!clickAudio.current) {
-        const rate = 11025, samples = Math.round(rate * .075), bytes = new ArrayBuffer(44 + samples * 2), view = new DataView(bytes);
+        const rate = 22050, samples = Math.round(rate * .055), bytes = new ArrayBuffer(44 + samples * 2), view = new DataView(bytes);
         const text = (at: number, value: string) => [...value].forEach((character, index) => view.setUint8(at + index, character.charCodeAt(0)));
         text(0, "RIFF"); view.setUint32(4, 36 + samples * 2, true); text(8, "WAVEfmt "); view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true); view.setUint32(24, rate, true); view.setUint32(28, rate * 2, true); view.setUint16(32, 2, true); view.setUint16(34, 16, true); text(36, "data"); view.setUint32(40, samples * 2, true);
-        for (let index = 0; index < samples; index += 1) { const t = index / rate, envelope = Math.exp(-t * 55), signal = (Math.sin(t * Math.PI * 2 * 720) * .72 + (Math.random() * 2 - 1) * .28) * envelope; view.setInt16(44 + index * 2, Math.max(-1, Math.min(1, signal)) * 32767, true); }
+        // Mechanical mouse press + a softer release. Noise, rather than a
+        // musical oscillator, keeps it recognisably a click.
+        for (let index = 0; index < samples; index += 1) {
+          const t = index / rate, press = Math.exp(-t * 210), release = t > .024 ? Math.exp(-(t - .024) * 330) * .34 : 0;
+          const signal = (Math.random() * 2 - 1) * (press + release);
+          view.setInt16(44 + index * 2, Math.max(-1, Math.min(1, signal)) * 32767, true);
+        }
         clickAudioUrl.current = URL.createObjectURL(new Blob([bytes], { type: "audio/wav" }));
         clickAudio.current = new window.Audio(clickAudioUrl.current); clickAudio.current.volume = .9;
       }
