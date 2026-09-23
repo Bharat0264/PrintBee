@@ -1592,7 +1592,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
     const data = await response.json().catch(() => ({}));
     setAdminMessage(response.ok ? `${data.name} saved in add-ons.` : data.error ?? "Add-on could not be saved.");
     if (response.ok) {
-      if (addonImageFile) { const form = new FormData(); form.append("image", addonImageFile); const imageResponse = await fetch(`/api/addons/${data.id}/image`, { method: "POST", body: form }); if (!imageResponse.ok) setAdminMessage(`${data.name} was saved, but its image could not be uploaded.`); }
+      if (addonImageFile) { const form = new FormData(); form.append("image", addonImageFile); const imageResponse = await fetch(`/api/addons/${data.id}/image`, { method: "POST", body: form }); if (!imageResponse.ok) { const error = await imageResponse.json().catch(() => null); setAdminMessage(error?.error || `${data.name} was saved, but its image could not be uploaded.`); } }
       setNewAddon({ id: "", name: "", description: "", price: 0 });
       setAddonImageFile(null);
       const addonsResponse = await fetch("/api/addons", { cache: "no-store" });

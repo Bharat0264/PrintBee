@@ -2,12 +2,23 @@ import { NextResponse } from "next/server";
 import { database } from "../db";
 import { getViewer } from "../../supabase/server";
 
-async function ensureAddonImageColumn() { try { await database().prepare("ALTER TABLE addons ADD COLUMN image_storage_key TEXT").run(); } catch {} }
+async function ensureAddonImageColumn() {
+  // Keep product images in D1.  The production site does not guarantee an R2
+  // binding, which made an add-on save succeed while the subsequent image
+  // upload failed.  D1 is already required for add-ons and is reliable here.
+  for (const statement of [
+    "ALTER TABLE addons ADD COLUMN image_storage_key TEXT",
+    "ALTER TABLE addons ADD COLUMN image_data BLOB",
+    "ALTER TABLE addons ADD COLUMN image_content_type TEXT",
+  ]) {
+    try { await database().prepare(statement).run(); } catch { /* already exists */ }
+  }
+}
 
 export async function GET() {
   await ensureAddonImageColumn();
-  const rows = await database().prepare("SELECT id,name,description,price_paise,active,image_storage_key FROM addons WHERE active=1 ORDER BY created_at,name").all<any>();
-  const result = rows.results.map((addon: any) => ({ ...addon, image_url: addon.image_storage_key ? `/api/addons/${addon.id}/image` : null, image_storage_key: undefined }));
+  const rows = await database().prepare("SELECT id,name,description,price_paise,active,image_storage_key,image_data FROM addons WHERE active=1 ORDER BY created_at,name").all<any>();
+  const result = rows.results.map((addon: any) => ({ ...addon, image_url: addon.image_data || addon.image_storage_key ? `/api/addons/${addon.id}/image` : null, image_storage_key: undefined, image_data: undefined }));
   return NextResponse.json(result, { headers: { "Cache-Control": "no-store, no-cache, must-revalidate" } });
 }
 
