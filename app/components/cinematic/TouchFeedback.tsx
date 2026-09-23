@@ -21,21 +21,21 @@ export default function TouchFeedback() {
         const now = audio.currentTime;
         const gain = audio.createGain();
         const tone = audio.createOscillator();
-        // A deliberately tiny, dry click: closer to the iPhone keyboard tap
-        // than the previous resonant glass/water sound.
-        tone.type = "triangle";
-        tone.frequency.setValueAtTime(1450, now);
-        tone.frequency.exponentialRampToValueAtTime(980, now + .045);
+        // Dry, audible keyboard-tap feedback — intentionally short, with no
+        // resonant glass/water tail.
+        tone.type = "square";
+        tone.frequency.setValueAtTime(1180, now);
+        tone.frequency.exponentialRampToValueAtTime(760, now + .065);
         gain.gain.setValueAtTime(.0001, now);
-        gain.gain.exponentialRampToValueAtTime(.028, now + .004);
-        gain.gain.exponentialRampToValueAtTime(.0001, now + .055);
+        gain.gain.exponentialRampToValueAtTime(.095, now + .003);
+        gain.gain.exponentialRampToValueAtTime(.0001, now + .075);
         tone.connect(gain); gain.connect(audio.destination);
-        tone.start(now); tone.stop(now + .06);
+        tone.start(now); tone.stop(now + .08);
       };
-      // Start the sound in the gesture task. Chrome on iOS can drop audio when
-      // oscillator creation waits for the resume promise to settle.
-      if (audio.state !== "running") void audio.resume().catch(() => undefined);
-      emit();
+      // Do not start an oscillator while the context is suspended: Chrome on
+      // iOS silently discards it. Resume first, then emit the tap.
+      if (audio.state === "running") emit();
+      else void audio.resume().then(emit).catch(() => undefined);
     };
     const reactToTouch = (target: EventTarget | null, x: number, y: number, isTouch: boolean) => {
       const interactive = target instanceof Element ? target.closest("button,a,[role=button],[role=radio]") : null;
