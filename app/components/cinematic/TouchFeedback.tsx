@@ -12,7 +12,7 @@ export default function TouchFeedback() {
 
   useEffect(() => {
     const isMobileTouch = () => window.matchMedia("(hover: none), (pointer: coarse)").matches;
-    const playGlassTap = () => {
+    const playKeyboardTap = () => {
       const Audio = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
       if (!Audio) return;
       const audio = context.current ?? new Audio();
@@ -21,18 +21,16 @@ export default function TouchFeedback() {
         const now = audio.currentTime;
         const gain = audio.createGain();
         const tone = audio.createOscillator();
-        const shimmer = audio.createOscillator();
-        tone.type = "sine";
-        shimmer.type = "triangle";
-        tone.frequency.setValueAtTime(760, now);
-        tone.frequency.exponentialRampToValueAtTime(420, now + .2);
-        shimmer.frequency.setValueAtTime(1680, now);
-        shimmer.frequency.exponentialRampToValueAtTime(860, now + .17);
+        // A deliberately tiny, dry click: closer to the iPhone keyboard tap
+        // than the previous resonant glass/water sound.
+        tone.type = "triangle";
+        tone.frequency.setValueAtTime(1450, now);
+        tone.frequency.exponentialRampToValueAtTime(980, now + .045);
         gain.gain.setValueAtTime(.0001, now);
-        gain.gain.exponentialRampToValueAtTime(.085, now + .01);
-        gain.gain.exponentialRampToValueAtTime(.0001, now + .24);
-        tone.connect(gain); shimmer.connect(gain); gain.connect(audio.destination);
-        tone.start(now); shimmer.start(now); tone.stop(now + .25); shimmer.stop(now + .25);
+        gain.gain.exponentialRampToValueAtTime(.028, now + .004);
+        gain.gain.exponentialRampToValueAtTime(.0001, now + .055);
+        tone.connect(gain); gain.connect(audio.destination);
+        tone.start(now); tone.stop(now + .06);
       };
       // Start the sound in the gesture task. Chrome on iOS can drop audio when
       // oscillator creation waits for the resume promise to settle.
@@ -46,7 +44,7 @@ export default function TouchFeedback() {
       if (now - lastTouch.current < 450) return;
       lastTouch.current = now;
       setRipple({ id: now, x, y });
-      playGlassTap();
+      playKeyboardTap();
       if (isTouch && isMobileTouch() && "vibrate" in navigator) navigator.vibrate(Array.from({ length: 10 }, () => [45, 55]).flat());
     };
     const onPointerDown = (event: PointerEvent) => reactToTouch(event.target, event.clientX, event.clientY, event.pointerType !== "mouse");
