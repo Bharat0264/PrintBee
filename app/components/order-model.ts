@@ -1,6 +1,6 @@
 export type CustomerOrder = {
   id: string; order_number?: string; status: string; payment_status: string;
-  created_at: string; updated_at?: string; delivered_at?: string | null; total_paise: number; location_name?: string;
+  created_at: string; updated_at?: string; total_paise: number; location_name?: string;
   rider_name?: string | null; rider_mobile_number?: string | null; deliveryCode?: string | null;
   cancellation_reason?: string; feedback_submitted?: number;
   late_night_fee_paise?: number; has_payment_qr?: boolean; payment_rejection_reason?: string;
