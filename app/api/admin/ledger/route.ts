@@ -116,8 +116,11 @@ function finish(values: LedgerValues) {
   // In-campus delivery is outside that split: every rupee of its fee belongs
   // to the rider and never becomes Bharat other profit.
   const deliveryProfitPaise = Math.floor(values.deliveryCollectedPaise * 0.25);
-  const packagingProfitPaise = Math.min(values.packagingCollectedPaise, values.packagingOrders * 170);
-  const packagingCostPaise = values.packagingCollectedPaise - packagingProfitPaise;
+  // Packaging price is controlled by admin. Every packaging order has a fixed
+  // ₹3.30 operating cost; the rest of the collected packaging fee is Bharat's
+  // other profit, with no artificial cap.
+  const packagingCostPaise = Math.min(values.packagingCollectedPaise, values.packagingOrders * 330);
+  const packagingProfitPaise = values.packagingCollectedPaise - packagingCostPaise;
   const operationalCostPaise = printingOperationalCostPaise + values.plagiarismOperationalCostPaise + values.otherServiceOperatingCostPaise + values.riderCostPaise + values.lateNightPartnerCostPaise + packagingCostPaise + values.gatewayCollectedPaise;
   const netProfitPaise = values.amountCollectedPaise + values.projectPlatformRevenuePaise - operationalCostPaise;
   // Ramya shares only the profit earned from printing. All other revenue belongs to Bharat.
