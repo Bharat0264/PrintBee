@@ -28,7 +28,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ add
   const viewer = await getViewer();
   if (!viewer?.isAdmin || !["OWNER", "OPERATIONS"].includes(viewer.adminRole || "")) return NextResponse.json({ error: "Operations access required" }, { status: 403 });
   await ensureColumn(); const { addonId } = await params, form = await request.formData(), file = form.get("image");
-  if (!(file instanceof File) || !file.type.startsWith("image/") || file.size > 5 * 1024 * 1024) return NextResponse.json({ error: "Upload a JPG, PNG, WebP, or GIF image up to 5 MB" }, { status: 400 });
+  if (!(file instanceof File) || !file.type.startsWith("image/") || file.size > 900 * 1024) return NextResponse.json({ error: "Upload an image under 900 KB" }, { status: 400 });
   const addon = await database().prepare("SELECT image_storage_key FROM addons WHERE id=?").bind(addonId).first<{ image_storage_key: string | null }>();
   if (!addon) return NextResponse.json({ error: "Add-on not found" }, { status: 404 });
   const imageData = await file.arrayBuffer();

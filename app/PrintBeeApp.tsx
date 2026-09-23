@@ -307,6 +307,30 @@ type CartItem = {
   addonsTotal?: number;
 };
 
+// Product photos are thumbnails. Compress them locally so phone-camera files
+// remain below the worker request and database value limits.
+const prepareAddonImage = async (file: File): Promise<File> => {
+  if (!file.type.startsWith("image/")) return file;
+  const source = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image(); const objectUrl = URL.createObjectURL(file);
+    image.onload = () => { URL.revokeObjectURL(objectUrl); resolve(image); };
+    image.onerror = () => { URL.revokeObjectURL(objectUrl); reject(new Error("That image could not be read.")); };
+    image.src = objectUrl;
+  });
+  let width = Math.min(source.naturalWidth, 1000);
+  let height = Math.max(1, Math.round(source.naturalHeight * (width / source.naturalWidth)));
+  let quality = 0.8; let blob: Blob | null = null;
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const canvas = document.createElement("canvas"); canvas.width = width; canvas.height = height;
+    canvas.getContext("2d")?.drawImage(source, 0, 0, width, height);
+    blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", quality));
+    if (blob && blob.size <= 850 * 1024) break;
+    width = Math.max(360, Math.round(width * 0.78)); height = Math.max(1, Math.round(height * 0.78)); quality = Math.max(0.6, quality - 0.08);
+  }
+  if (!blob || blob.size > 900 * 1024) throw new Error("Please choose a smaller image (under 900 KB after compression).");
+  return new File([blob], `${file.name.replace(/\.[^.]+$/, "") || "addon"}.jpg`, { type: "image/jpeg" });
+};
+
 type BatchFile = {
   file: File;
   fileName: string;
@@ -1592,7 +1616,13 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
     const data = await response.json().catch(() => ({}));
     setAdminMessage(response.ok ? `${data.name} saved in add-ons.` : data.error ?? "Add-on could not be saved.");
     if (response.ok) {
-      if (addonImageFile) { const form = new FormData(); form.append("image", addonImageFile); const imageResponse = await fetch(`/api/addons/${data.id}/image`, { method: "POST", body: form }); if (!imageResponse.ok) { const error = await imageResponse.json().catch(() => null); setAdminMessage(error?.error || `${data.name} was saved, but its image could not be uploaded.`); } }
+      if (addonImageFile) {
+        try {
+          const form = new FormData(); form.append("image", await prepareAddonImage(addonImageFile));
+          const imageResponse = await fetch(`/api/addons/${data.id}/image`, { method: "POST", body: form });
+          if (!imageResponse.ok) { const error = await imageResponse.json().catch(() => null); setAdminMessage(error?.error || `${data.name} was saved, but its image could not be uploaded.`); }
+        } catch (error) { setAdminMessage(error instanceof Error ? error.message : `${data.name} was saved, but its image could not be uploaded.`); }
+      }
       setNewAddon({ id: "", name: "", description: "", price: 0 });
       setAddonImageFile(null);
       const addonsResponse = await fetch("/api/addons", { cache: "no-store" });
