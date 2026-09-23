@@ -1985,7 +1985,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
           {!isPlagiarismService && addons.length > 0 && <div className="binding-fields standalone-addons">
             <strong>Don’t need printouts? Order add-ons only</strong>
             <p>No document upload is required. Choose a product below and proceed directly to checkout.</p>
-            <div className="service-option-grid" role="group" aria-label="Add-on products">{addons.map((addon) => <button type="button" key={addon.id} onClick={() => addStandaloneAddon(addon)}><span><strong>{addon.name}</strong><small>{addon.description}</small></span><b>{inr.format(addon.price_paise / 100)} · Add</b></button>)}</div>
+            <div className="service-option-grid addon-only-grid" role="group" aria-label="Add-on products">{addons.map((addon) => <button type="button" key={addon.id} onClick={() => addStandaloneAddon(addon)}>{addon.image_url && <img className="addon-image" src={addon.image_url} alt="" />}<span><strong>{addon.name}</strong><small>{addon.description}</small></span><b>{inr.format(addon.price_paise / 100)} · Add</b></button>)}</div>
             {addonMessage && <small className="notification-message" role="status">{addonMessage}</small>}
           </div>}
 
