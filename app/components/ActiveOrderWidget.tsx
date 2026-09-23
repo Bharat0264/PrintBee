@@ -33,6 +33,26 @@ export function OrderScene({ status }: { status: string }) {
   return <div className={`order-scene scene-${status.toLowerCase()}`} aria-hidden="true"><span className="scene-paper">▤</span><span className="scene-printer"><b /><em /></span><span className="scene-package">▣</span><span className="scene-rider">🛵</span><span className="scene-home">⌂</span><i /></div>;
 }
 
+function OrderStatusExperience({ order }: { order: CustomerOrder }) {
+  const printing = order.status === 'PRINTING', confirmed = order.status === 'CONFIRMED';
+  if (!printing && !confirmed && order.status !== 'READY_FOR_PICKUP') return null;
+  return <section className={`printer-status-experience ${printing ? 'is-printing' : ''}`} aria-live="polite"><div className="printer-3d" aria-hidden="true"><span className="printer-top" /><span className="printer-page page-in" /><span className="printer-body"><i /><b /></span><span className="printer-tray" /><span className="printer-page page-out" /></div><div><strong>{printing ? 'Printing your documents' : confirmed ? 'Sending your documents to the printer' : 'Your prints are ready'}</strong><span>{printing ? 'A fresh page is coming out now.' : confirmed ? 'Your files are securely queued for printing.' : 'Your documents are packed and waiting for pickup.'}</span></div></section>;
+}
+
+function DeliveryAreaMap({ order }: { order: CustomerOrder }) {
+  const [tracking, setTracking] = useState<any>(null);
+  useEffect(() => { if (!['RIDER_ASSIGNED', 'RIDER_ARRIVING_FOR_PICKUP', 'PICKED_UP', 'OUT_FOR_DELIVERY', 'RIDER_NEARBY'].includes(order.status)) return; let mounted = true; void fetch(`/api/orders/${order.id}/track`, { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(data => { if (mounted) setTracking(data); }).catch(() => {}); return () => { mounted = false; }; }, [order.id, order.status]);
+  const point = tracking?.order?.location || tracking?.order?.destination, latitude = Number(point?.latitude), longitude = Number(point?.longitude);
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+  const d = .008, url = `https://www.openstreetmap.org/export/embed.html?bbox=${longitude - d}%2C${latitude - d}%2C${longitude + d}%2C${latitude + d}&layer=mapnik&marker=${latitude}%2C${longitude}`;
+  return <section className="delivery-area-map"><strong>{order.status === 'RIDER_ASSIGNED' ? 'Partner assigned · your delivery area' : 'Live delivery area'}</strong><iframe title="Delivery area map" loading="lazy" src={url} /><a href={`https://www.openstreetmap.org/?mlat=${latitude}&mlon=${longitude}#map=15/${latitude}/${longitude}`} target="_blank" rel="noreferrer">Open map</a></section>;
+}
+
+function DeliveredSummary({ order }: { order: CustomerOrder }) {
+  const started = Date.parse(order.created_at), finished = Date.parse(order.delivered_at || ''), minutes = Number.isFinite(started) && Number.isFinite(finished) ? Math.max(0, Math.round((finished - started) / 60000)) : null;
+  return <section className="delivered-summary"><BeeMascot celebrate /><strong>Delivered</strong><span>{minutes == null ? 'Your delivery was completed successfully.' : `Delivered in ${minutes} minute${minutes === 1 ? '' : 's'} from order to OTP confirmation.`}</span></section>;
+}
+
 function LiveTracking({ order }: { order: CustomerOrder }) {
   const [tracking, setTracking] = useState<any>(null);
   useEffect(() => {
@@ -98,7 +118,7 @@ export function ActiveOrderWidget({ orders, hidden, email, error, refresh, detai
       {expanded && <section id="active-order-panel" className="active-order-panel" aria-label="Active order details">
         <button className="active-minimize" aria-label="Close active order" onClick={() => toggle(false)}>Minimize ↓</button>
         {list.length > 1 && <div className="active-order-switch"><button onClick={() => setSelected(list[(position + list.length - 1) % list.length].id)} aria-label="Previous active order">←</button><span>Order {position + 1} of {list.length}</span><button onClick={() => setSelected(list[(position + 1) % list.length].id)} aria-label="Next active order">→</button></div>}
-        <RiderCard order={order} /><LiveTracking order={order} /><OTPCard order={order} />
+        {order.status === 'DELIVERED' ? <DeliveredSummary order={order} /> : <><RiderCard order={order} /><DeliveryAreaMap order={order} /><LiveTracking order={order} /><OTPCard order={order} /><OrderStatusExperience order={order} /></>}
         {notice?.id === order.id && notice.status === 'DELIVERED' ? <div className="delivery-celebration"><BeeMascot celebrate /><strong>Delivered! Hope your prints make your day easier 🐝</strong></div> : <OrderScene status={order.status} />}
         <OrderJourney order={order} />
         {isReport(order) && <p className="active-order-note">Your report is delivered on WhatsApp. No delivery OTP is needed.</p>}
