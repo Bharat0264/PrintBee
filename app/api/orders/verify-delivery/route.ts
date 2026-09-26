@@ -12,7 +12,8 @@ export async function POST(request: Request) {
   }
   const { orderNumber, code } = await request.json() as { orderNumber?: string; code?: string };
   const db = database();
-  const order = await db.prepare("SELECT o.id, o.order_number, o.customer_email, o.total_paise, o.delivery_code_hash, o.status, o.payment_status, o.rider_email, o.payment_qr_storage_key, p.referred_by_email FROM orders o LEFT JOIN customer_profiles p ON p.email=o.customer_email WHERE o.order_number = ?").bind(orderNumber?.trim().toUpperCase()).first<{ id: string; order_number: string; customer_email: string; total_paise: number; delivery_code_hash: string; status: string; payment_status: string; rider_email: string | null; payment_qr_storage_key: string | null; referred_by_email: string | null }>();
+  try { await db.prepare("ALTER TABLE orders ADD COLUMN is_test_order INTEGER NOT NULL DEFAULT 0").run(); } catch {}
+  const order = await db.prepare("SELECT o.id, o.order_number, o.customer_email, o.total_paise, o.delivery_code_hash, o.status, o.payment_status, o.rider_email, o.payment_qr_storage_key, o.is_test_order, p.referred_by_email FROM orders o LEFT JOIN customer_profiles p ON p.email=o.customer_email WHERE o.order_number = ?").bind(orderNumber?.trim().toUpperCase()).first<{ id: string; order_number: string; customer_email: string; total_paise: number; delivery_code_hash: string; status: string; payment_status: string; rider_email: string | null; payment_qr_storage_key: string | null; is_test_order: number; referred_by_email: string | null }>();
   if (!order) return NextResponse.json({ error: "Order not found" }, { status: 404 });
   if (order.status === "DELIVERED") return NextResponse.json({ error: "Order is already delivered" }, { status: 409 });
   if (!["OUT_FOR_DELIVERY", "RIDER_NEARBY"].includes(order.status)) return NextResponse.json({ error: "Start delivery before verifying the customer OTP" }, { status: 400 });
@@ -25,9 +26,14 @@ export async function POST(request: Request) {
   if (order.payment_qr_storage_key) storageKeys.push(order.payment_qr_storage_key);
   await Promise.all(storageKeys.map((storageKey) => fileBucket().delete(storageKey)));
   const now = new Date().toISOString();
+  await ensureTrackingTables();
+  if (order.is_test_order) {
+    await Promise.all(storageKeys.map((storageKey) => fileBucket().delete(storageKey).catch(() => {})));
+    await db.batch([db.prepare("DELETE FROM uploads WHERE order_id=?").bind(order.id), db.prepare("DELETE FROM current_rider_locations WHERE order_id=?").bind(order.id), db.prepare("DELETE FROM order_status_history WHERE order_id=?").bind(order.id), db.prepare("DELETE FROM orders WHERE id=?").bind(order.id)]);
+    return NextResponse.json({ delivered: true, testOrderDeleted: true, documentsDeleted: uploads.results.length, spendPoints: 0, referralPoints: 0 });
+  }
   const spendPoints = Math.floor(order.total_paise / 1000);
   const referralPoints = order.referred_by_email ? Math.floor(order.total_paise / 1500) : 0;
-  await ensureTrackingTables();
   if (!await transitionOrder(order.id, order.status, "DELIVERED", viewer.email, viewer.isAdmin ? "ADMIN" : "RIDER", viewer.isAdmin)) return NextResponse.json({ error: "Order delivery status changed; refresh and try again" }, { status: 409 });
   const [updated] = await db.batch([
     db.prepare("UPDATE orders SET delivered_at=?, delivered_by=?, spend_points_awarded=?, referral_rewarded_at=?, payment_qr_storage_key=NULL, payment_qr_file_name=NULL, payment_qr_deleted_at=? WHERE id=? AND status='DELIVERED'").bind(now, viewer.email, spendPoints, referralPoints > 0 ? now : null, now, order.id),
