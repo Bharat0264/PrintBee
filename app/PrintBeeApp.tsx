@@ -1520,8 +1520,10 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
   };
 
   const updateOrderStatus = async (orderId: string, status: string) => {
-    await fetch("/api/admin/orders/status", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ orderId, status }) });
-    await openAdminDashboard();
+    const response = await fetch("/api/admin/orders/status", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ orderId, status }) });
+    const data = await response.json().catch(() => ({}));
+    setAdminMessage(response.ok ? `Order moved to ${status.replaceAll("_", " ").toLowerCase()}.` : (data.error || "Order status could not be updated."));
+    if (response.ok) await openAdminDashboard();
   };
 
   const assignRider = async (orderId: string, riderEmail: string) => {
@@ -2369,7 +2371,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
                     <strong>{inr.format(order.total_paise / 100)}</strong>
                     <div className="compact-order-actions">
                       <button className="view-order-action" onClick={() => setExpandedAdminOrders((current) => ({ ...current, [order.id]: !current[order.id] }))}>{expandedAdminOrders[order.id] ? "Close order" : "View order"}</button>
-                      <label>Order flow<select disabled={order.status === "CANCELLED" || order.payment_status === "REJECTED"} value={order.status} onChange={(e) => updateOrderStatus(order.id, e.target.value)}>{order.status === "CANCELLED" && <option value="CANCELLED">Cancelled</option>}<option value="CONFIRMED">Confirmed</option><option value="PRINTING">Printing</option><option value="READY_FOR_PICKUP">Ready for pickup</option><option value="RIDER_ASSIGNED">Rider assigned</option><option value="DELIVERED">Delivered</option></select></label>
+                      <label>Order flow<select disabled={order.status === "CANCELLED" || order.payment_status === "REJECTED"} value={order.status} onChange={(e) => updateOrderStatus(order.id, e.target.value)}>{order.status === "CANCELLED" && <option value="CANCELLED">Cancelled</option>}<option value="CONFIRMED">Confirmed</option><option value="PRINTING">Printing</option><option value="READY_FOR_PICKUP">Ready for pickup</option></select></label>
                       <label>Delivery partner<select disabled={order.status === "CANCELLED" || order.payment_status === "REJECTED"} value={order.rider_email ?? ""} onChange={(e) => assignRider(order.id, e.target.value)}><option value="">Assign available rider</option>{dashboard.riders.filter((rider: any) => rider.is_available).map((rider: any) => <option key={rider.email} value={rider.email}>{rider.name || rider.email} · Available</option>)}</select></label>
                     </div>
                     <div className="payment-review-details"><span><small>Payment</small><strong>{order.payment_status === "PAY_ON_DELIVERY" ? "Pay on delivery" : order.payment_reference || order.payment_status}</strong></span><span><small>Total</small><strong>{inr.format(order.total_paise / 100)}</strong></span></div>
@@ -2399,7 +2401,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
                     {(["DELIVERED", "CANCELLED"].includes(String(order.status).toUpperCase()) || order.delivered_at || order.cancelled_at) && (order.files?.some((file: any) => !file.deleted_at) ? <button className="delete-files-action" onClick={() => deleteOrderFiles(order.id)}>Delete {order.files.filter((file: any) => !file.deleted_at).length} document{order.files.filter((file: any) => !file.deleted_at).length === 1 ? "" : "s"} from storage</button> : <div className="files-cleared-note">No stored documents remain for this order.</div>)}
                     <select disabled={order.status === "CANCELLED" || order.payment_status === "REJECTED"} value={order.status} onChange={(e) => updateOrderStatus(order.id, e.target.value)}>
                       {order.status === "CANCELLED" && <option value="CANCELLED">Cancelled</option>}
-                      <option value="CONFIRMED">Confirmed</option><option value="PRINTING">Printing</option><option value="READY_FOR_PICKUP">Ready for pickup</option><option value="RIDER_ASSIGNED">Rider assigned</option>
+                      <option value="CONFIRMED">Confirmed</option><option value="PRINTING">Printing</option><option value="READY_FOR_PICKUP">Ready for pickup</option>
                     </select>
                     <select disabled={order.status === "CANCELLED" || order.payment_status === "REJECTED"} value={order.rider_email ?? ""} onChange={(e) => assignRider(order.id, e.target.value)}>
                       <option value="">Assign available rider</option>{dashboard.riders.filter((rider: any) => rider.is_available).map((rider: any) => <option key={rider.email} value={rider.email}>{rider.name || rider.email} · Available</option>)}

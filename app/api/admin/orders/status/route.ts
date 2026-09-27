@@ -21,7 +21,10 @@ export async function POST(request: Request) {
   } else {
     await ensureTrackingTables();
     const current = await db.prepare("SELECT status FROM orders WHERE id=?").bind(orderId).first<{ status: string }>();
-    if (!current || !await transitionOrder(orderId, current.status, status, viewer.email, "ADMIN")) return NextResponse.json({ error: "This status transition is not available" }, { status: 409 });
+    // Admins may correct a print-stage status without being blocked by the
+    // rider-only transition sequence. Rider assignment and OTP delivery stay
+    // in their dedicated controls.
+    if (!current || !await transitionOrder(orderId, current.status, status, viewer.email, "ADMIN", true)) return NextResponse.json({ error: "Order status could not be updated" }, { status: 409 });
   }
   if (order) void sendPushToEmail(order.customer_email, { title: "Order updated", body: `${order.order_number} is now ${status.replaceAll("_", " ").toLowerCase()}.`, tag: `${orderId}-${status}`, url: "/" });
   return NextResponse.json({ updated: true });
