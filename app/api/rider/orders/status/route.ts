@@ -15,6 +15,7 @@ export async function POST(request: Request) {
   const order = await database().prepare("SELECT status,customer_email,order_number FROM orders WHERE id=? AND rider_email=? AND payment_status='PAID'").bind(orderId, viewer.email).first<any>();
   if (!order) return NextResponse.json({ error: "Assigned order not found" }, { status: 404 });
   if (!await transitionOrder(orderId, order.status, status!, viewer.email, "RIDER")) return NextResponse.json({ error: "That action is not available for this order" }, { status: 409 });
-  await sendPushToEmail(order.customer_email, { title: "Delivery update", body: `${order.order_number} is now ${status!.replaceAll("_", " ").toLowerCase()}.`, tag: `${orderId}-${status}`, url: "/" });
+  // Do not make a rider wait for a third-party push provider response.
+  void sendPushToEmail(order.customer_email, { title: "Delivery update", body: `${order.order_number} is now ${status!.replaceAll("_", " ").toLowerCase()}.`, tag: `${orderId}-${status}`, url: "/" });
   return NextResponse.json({ updated: true, status });
 }

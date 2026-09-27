@@ -19,6 +19,6 @@ export async function POST(request: Request) {
   const result = { meta: { changes: assigned.meta.changes && changed ? 1 : 0 } };
   if (!result.meta.changes) return NextResponse.json({ error: "Only active orders can be assigned" }, { status: 400 });
   const order = await database().prepare("SELECT order_number,customer_email FROM orders WHERE id=?").bind(orderId).first<{ order_number: string; customer_email: string }>();
-  if (order) await Promise.all([sendPushToEmail(order.customer_email, { title: "Delivery partner assigned", body: `${order.order_number} now has a delivery partner.`, tag: `${orderId}-rider`, url: "/" }), sendPushToEmail(riderEmail!.toLowerCase(), { title: "Order assigned", body: `${order.order_number} has been assigned to you.`, tag: `${orderId}-assigned`, url: "/" })]);
+  if (order) void Promise.all([sendPushToEmail(order.customer_email, { title: "Delivery partner assigned", body: `${order.order_number} now has a delivery partner.`, tag: `${orderId}-rider`, url: "/" }), sendPushToEmail(riderEmail!.toLowerCase(), { title: "Order assigned", body: `${order.order_number} has been assigned to you.`, tag: `${orderId}-assigned`, url: "/" })]);
   return NextResponse.json({ assigned: true });
 }

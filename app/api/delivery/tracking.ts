@@ -7,7 +7,9 @@ const transitions: Record<string, readonly string[]> = {
   CONFIRMED: ["PRINTING", "READY_FOR_PICKUP", "CANCELLED"], PRINTING: ["READY_FOR_PICKUP", "CANCELLED"],
   READY_FOR_PICKUP: ["RIDER_ASSIGNED", "CANCELLED"], RIDER_ASSIGNED: ["RIDER_ARRIVING_FOR_PICKUP", "PICKED_UP", "CANCELLED"],
   RIDER_ARRIVING_FOR_PICKUP: ["PICKED_UP", "CANCELLED"], PICKED_UP: ["OUT_FOR_DELIVERY", "RIDER_NEARBY"],
-  OUT_FOR_DELIVERY: ["RIDER_NEARBY"], RIDER_NEARBY: ["DELIVERED"], DELIVERED: [], CANCELLED: [],
+  // OTP verification is valid once a rider starts delivery. Location sharing
+  // may be unavailable, so it must not be required to reach DELIVERED.
+  OUT_FOR_DELIVERY: ["RIDER_NEARBY", "DELIVERED"], RIDER_NEARBY: ["DELIVERED"], DELIVERED: [], CANCELLED: [],
 };
 
 export function canTransition(from: string, to: string, override = false) { return override || Boolean(transitions[from]?.includes(to)); }
@@ -18,13 +20,16 @@ export function haversineMeters(aLat: number, aLng: number, bLat: number, bLng: 
 }
 
 /** Idempotent rollout guard for D1 deployments; schema remains in drizzle migration too. */
+let trackingSetup: Promise<void> | undefined;
 export async function ensureTrackingTables() {
+  if (trackingSetup) return trackingSetup;
   const db = database();
-  await db.batch([
+  trackingSetup = db.batch([
     db.prepare("CREATE TABLE IF NOT EXISTS order_status_history (id TEXT PRIMARY KEY, order_id TEXT NOT NULL, previous_status TEXT, new_status TEXT NOT NULL, changed_by TEXT NOT NULL, actor_type TEXT NOT NULL, created_at TEXT NOT NULL)"),
     db.prepare("CREATE INDEX IF NOT EXISTS idx_order_status_history_order ON order_status_history(order_id, created_at)"),
     db.prepare("CREATE TABLE IF NOT EXISTS current_rider_locations (order_id TEXT PRIMARY KEY, rider_email TEXT NOT NULL, latitude REAL NOT NULL, longitude REAL NOT NULL, accuracy REAL, updated_at TEXT NOT NULL)"),
-  ]);
+  ]).then(() => undefined).catch((error) => { trackingSetup = undefined; throw error; });
+  return trackingSetup;
 }
 
 export async function transitionOrder(orderId: string, previous: string, next: string, actorEmail: string, actorType: "ADMIN" | "RIDER", override = false) {

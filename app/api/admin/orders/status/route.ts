@@ -23,6 +23,6 @@ export async function POST(request: Request) {
     const current = await db.prepare("SELECT status FROM orders WHERE id=?").bind(orderId).first<{ status: string }>();
     if (!current || !await transitionOrder(orderId, current.status, status, viewer.email, "ADMIN")) return NextResponse.json({ error: "This status transition is not available" }, { status: 409 });
   }
-  if (order) await sendPushToEmail(order.customer_email, { title: "Order updated", body: `${order.order_number} is now ${status.replaceAll("_", " ").toLowerCase()}.`, tag: `${orderId}-${status}`, url: "/" });
+  if (order) void sendPushToEmail(order.customer_email, { title: "Order updated", body: `${order.order_number} is now ${status.replaceAll("_", " ").toLowerCase()}.`, tag: `${orderId}-${status}`, url: "/" });
   return NextResponse.json({ updated: true });
 }
