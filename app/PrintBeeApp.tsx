@@ -226,6 +226,32 @@ function revenueSummary(orders: any[] = [], fallbackPrices: Prices) {
   return totals;
 }
 
+function adminOrderBreakdown(orders: any[] = [], fallbackPrices: Prices) {
+  const pageRevenue = revenueSummary(orders, fallbackPrices);
+  const totals = { packingOrders: 0, blueBindingOrders: 0, glossyBindingOrders: 0, overallCollected: 0, printingCollected: pageRevenue.bwAmount + pageRevenue.colourAmount, packingCollected: 0, addonsCollected: 0, deliveryCollected: 0, otherServicesCollected: 0, gatewayCollected: 0 };
+  for (const order of orders) {
+    totals.overallCollected += Number(order.total_paise) || 0;
+    const packing = Number(order.packaging_fee_paise) || 0;
+    totals.packingCollected += packing;
+    if (packing > 0) totals.packingOrders += 1;
+    totals.deliveryCollected += (Number(order.delivery_fee_paise) || 0) + (Number(order.incampus_fee_paise) || 0);
+    totals.gatewayCollected += Number(order.payment_gateway_fee_paise) || 0;
+    for (const item of order.items ?? []) {
+      if (item.kind === "ADDON") { totals.addonsCollected += Math.round((Number(item.total ?? item.addonsTotal) || 0) * 100); continue; }
+      totals.addonsCollected += Math.round((Number(item.addonsTotal) || 0) * 100);
+      const serviceId = String(item.serviceId ?? "document-printing");
+      const serviceAmount = Math.round((Number(item.servicePrice) || 0) * 100);
+      if (serviceId !== "document-printing" && serviceId !== PLAGIARISM_SERVICE_ID && serviceAmount > 0) {
+        totals.otherServicesCollected += serviceAmount;
+        const serviceLabel = `${serviceId} ${item.serviceName ?? ""}`.toLowerCase();
+        if (serviceLabel.includes("blue")) totals.blueBindingOrders += 1;
+        if (serviceLabel.includes("glossy")) totals.glossyBindingOrders += 1;
+      }
+    }
+  }
+  return totals;
+}
+
 function downloadLedgerCsv(ledger: any) {
   const safeCell = (value: unknown) => {
     let text = String(value ?? "");
@@ -1841,6 +1867,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
     revenuePaise: paidDashboardOrdersForRange.reduce((sum: number, order: any) => sum + (Number(order.total_paise) || 0), 0),
   };
   const printTotalsForRange = printSummary(dashboardOrdersForRange.flatMap((order: any) => order.items || []));
+  const adminBreakdownForRange = adminOrderBreakdown(paidDashboardOrdersForRange, prices);
   const visibleAdminOrders = (dashboard?.orders ?? []).filter((order: any) => {
     const term = adminOrderSearch.trim().toLowerCase();
     const matchesSearch = !term || [order.order_number, order.customer_name, order.customer_email, order.mobile_number, order.location_name, order.rider_email].some((value) => String(value ?? "").toLowerCase().includes(term));
@@ -2261,6 +2288,16 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
                   <div><small>Ready</small><strong>{dashboardSummaryForRange.ready}</strong></div>
                   <div><small>Paid revenue</small><strong>{inr.format(dashboardSummaryForRange.revenuePaise / 100)}</strong></div>
                   <div><small>B&amp;W pages</small><strong>{printTotalsForRange.bwSingle + printTotalsForRange.bwDouble}</strong></div><div><small>Colour pages</small><strong>{printTotalsForRange.colourSingle + printTotalsForRange.colourDouble}</strong></div>
+                  <div><small>Packing orders</small><strong>{adminBreakdownForRange.packingOrders}</strong></div>
+                  <div><small>Blue binding orders</small><strong>{adminBreakdownForRange.blueBindingOrders}</strong></div>
+                  <div><small>Glossy binding orders</small><strong>{adminBreakdownForRange.glossyBindingOrders}</strong></div>
+                  <div><small>Overall collected</small><strong>{inr.format(adminBreakdownForRange.overallCollected / 100)}</strong></div>
+                  <div><small>Printing collected</small><strong>{inr.format(adminBreakdownForRange.printingCollected)}</strong></div>
+                  <div><small>Packing collected</small><strong>{inr.format(adminBreakdownForRange.packingCollected / 100)}</strong></div>
+                  <div><small>Add-ons collected</small><strong>{inr.format(adminBreakdownForRange.addonsCollected / 100)}</strong></div>
+                  <div><small>Delivery collected</small><strong>{inr.format(adminBreakdownForRange.deliveryCollected / 100)}</strong></div>
+                  <div><small>Other services collected</small><strong>{inr.format(adminBreakdownForRange.otherServicesCollected / 100)}</strong></div>
+                  <div><small>Payment gateway charges</small><strong>{inr.format(adminBreakdownForRange.gatewayCollected / 100)}</strong></div>
                 </div>
                 {adminRole === "OWNER" && <section className="admin-team-panel"><div><h3>Admin team &amp; access</h3><p>Owners have full access. Operations manages orders and riders; accountants view revenue and exports; support handles customer order queries.</p></div><div className="admin-team-form"><input type="email" value={newAdminMember.email} onChange={(event) => setNewAdminMember({ ...newAdminMember, email: event.target.value })} placeholder="team@printbee.co.in" /><select value={newAdminMember.role} onChange={(event) => setNewAdminMember({ ...newAdminMember, role: event.target.value })}><option value="OPERATIONS">Operations manager</option><option value="ACCOUNTANT">Accountant</option><option value="SUPPORT">Support</option><option value="OWNER">Owner</option></select><button disabled={!newAdminMember.email.trim()} onClick={saveAdminMember}>Add or update</button></div><div className="admin-team-list">{dashboard.adminMembers?.map((member: any) => <span key={member.email}><span><strong>{member.email}</strong><small>{String(member.role).replaceAll("_", " ")}</small></span>{member.email !== viewer?.email && <button onClick={() => removeAdminMember(member.email)}>Remove</button>}</span>)}</div></section>}
                 {dashboard.dailySales?.length ? <section className="sales-chart" aria-label="Paid sales during the last 30 days"><div className="sales-chart-heading"><span><strong>30-day sales trend</strong><small>Daily paid revenue and order volume</small></span><strong>{inr.format(dashboard.dailySales.reduce((sum: number, day: any) => sum + Number(day.revenue_paise || 0), 0) / 100)}</strong></div><div className="sales-bars">{dashboard.dailySales.map((day: any) => { const peak = Math.max(...dashboard.dailySales.map((entry: any) => Number(entry.revenue_paise) || 0), 1); return <div key={day.day} title={`${new Date(`${day.day}T00:00:00`).toLocaleDateString("en-IN")}: ${inr.format(day.revenue_paise / 100)}, ${day.orders} orders`}><i style={{ height: `${Math.max(5, Number(day.revenue_paise) / peak * 100)}%` }} /><small>{new Date(`${day.day}T00:00:00`).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}</small></div>; })}</div></section> : null}
