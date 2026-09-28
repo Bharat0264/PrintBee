@@ -358,6 +358,8 @@ footer { border-top: 1px solid var(--line); padding: 28px max(24px, calc((100% -
 .analytics-bars i { width: 100%; min-height: 4px; border-radius: 4px 4px 1px 1px; background: linear-gradient(180deg, #ffd84e, #bd8517); }
 .analytics-chart-grid footer { color: var(--muted); font-size: 9px; }
 .analytics-chart-grid footer b { color: var(--ink); font-size: 9px; }
+.availability-toggle { background: #5b2a2a !important; color: #fff !important; border-color: #8e5252 !important; }
+.availability-toggle.is-on { background: #17643d !important; border-color: #2b925b !important; }
 .sales-chart-heading { display: flex; justify-content: space-between; gap: 20px; }
 .sales-chart-heading span strong, .sales-chart-heading span small { display: block; }
 .sales-chart-heading span small { margin-top: 4px; color: var(--muted); font-size: 9px; }

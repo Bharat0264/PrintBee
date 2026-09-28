@@ -54,7 +54,7 @@ export async function POST(request: Request) {
   for (const item of body.items as Array<{ kind?: string; addonId?: string; uploadId?: string; copies?: number; serviceId?: string }>) {
     if (item.kind === "ADDON") {
       const addon = await database().prepare("SELECT id FROM addons WHERE id=? AND active=1").bind(item.addonId).first<{ id: string }>();
-      if (!addon) return NextResponse.json({ error: "One or more selected add-ons are unavailable" }, { status: 400 });
+      if (!addon) return NextResponse.json({ error: "One or more selected add-ons are out of stock. Try again after some time." }, { status: 400 });
       continue;
     }
     const upload = await database().prepare("SELECT id, page_count, original_name, content_type FROM uploads WHERE id=? AND customer_email=? AND order_id IS NULL").bind(item.uploadId, viewer.email).first<{ id: string; page_count: number; original_name: string; content_type: string }>();

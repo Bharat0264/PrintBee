@@ -17,9 +17,21 @@ async function ensureAddonImageColumn() {
 
 export async function GET() {
   await ensureAddonImageColumn();
-  const rows = await database().prepare("SELECT id,name,description,price_paise,active,image_storage_key,image_data FROM addons WHERE active=1 ORDER BY created_at,name").all<any>();
+  const viewer = await getViewer();
+  const canManage = Boolean(viewer?.isAdmin && ["OWNER", "OPERATIONS"].includes(viewer.adminRole || ""));
+  const rows = await database().prepare(`SELECT id,name,description,price_paise,active,image_storage_key,image_data FROM addons ${canManage ? "" : "WHERE active=1"} ORDER BY created_at,name`).all<any>();
   const result = rows.results.map((addon: any) => ({ ...addon, image_url: addon.image_data || addon.image_storage_key ? `/api/addons/${addon.id}/image` : null, image_storage_key: undefined, image_data: undefined }));
   return NextResponse.json(result, { headers: { "Cache-Control": "no-store, no-cache, must-revalidate" } });
+}
+
+export async function PATCH(request: Request) {
+  const viewer = await getViewer();
+  if (!viewer?.isAdmin || !["OWNER", "OPERATIONS"].includes(viewer.adminRole || "")) return NextResponse.json({ error: "Operations access required" }, { status: 403 });
+  const { id, active } = await request.json() as { id?: string; active?: boolean };
+  if (!id || typeof active !== "boolean") return NextResponse.json({ error: "Add-on availability is required" }, { status: 400 });
+  const result = await database().prepare("UPDATE addons SET active=?,updated_at=? WHERE id=?").bind(active ? 1 : 0, new Date().toISOString(), id).run();
+  if (!result.meta.changes) return NextResponse.json({ error: "Add-on not found" }, { status: 404 });
+  return NextResponse.json({ id, active: active ? 1 : 0 });
 }
 
 export async function POST(request: Request) {
@@ -32,7 +44,7 @@ export async function POST(request: Request) {
   if (!Number.isFinite(pricePaise) || pricePaise < 0) return NextResponse.json({ error: "Enter a valid add-on price" }, { status: 400 });
   const id = body.id || crypto.randomUUID();
   const now = new Date().toISOString();
-  await database().prepare("INSERT INTO addons (id,name,description,price_paise,active,created_at,updated_at) VALUES (?,?,?,?,1,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name,description=excluded.description,price_paise=excluded.price_paise,active=1,updated_at=excluded.updated_at")
+  await database().prepare("INSERT INTO addons (id,name,description,price_paise,active,created_at,updated_at) VALUES (?,?,?,?,1,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name,description=excluded.description,price_paise=excluded.price_paise,updated_at=excluded.updated_at")
     .bind(id, name, body.description?.trim().slice(0, 125) ?? "", pricePaise, now, now).run();
   return NextResponse.json({ id, name, description: body.description?.trim().slice(0, 125) ?? "", price_paise: pricePaise, active: 1 });
 }
