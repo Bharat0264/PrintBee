@@ -39,7 +39,8 @@ export function orderStage(order: CustomerOrder) {
   return { steps, index, label: order.status === 'CANCELLED' ? 'Order cancelled' : index < 0 ? 'Order update' : steps[index][2] };
 }
 export function canShowOTP(order: CustomerOrder) {
-  return !isReport(order) && order.payment_status === 'PAID' && ['RIDER_ASSIGNED', 'RIDER_ARRIVING_FOR_PICKUP', 'PICKED_UP', 'OUT_FOR_DELIVERY', 'RIDER_NEARBY'].includes(order.status) && Boolean(order.deliveryCode);
+  const riderIsLinked = Boolean(order.rider_name);
+  return !isReport(order) && order.payment_status === 'PAID' && (['RIDER_ASSIGNED', 'RIDER_ARRIVING_FOR_PICKUP', 'PICKED_UP', 'OUT_FOR_DELIVERY', 'RIDER_NEARBY'].includes(order.status) || (order.status === 'READY_FOR_PICKUP' && riderIsLinked)) && Boolean(order.deliveryCode);
 }
 export function contactNumber(order: CustomerOrder) {
   const number = order.rider_mobile_number?.replace(/[\s()-]/g, '') || '';

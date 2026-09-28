@@ -1519,7 +1519,17 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
     if (dataResponse.ok) setLedger(await dataResponse.json());
   };
 
-  const updateOrderStatus = async (orderId: string, status: string) => {
+  const updateOrderStatus = async (orderId: string, status: string, orderNumber?: string) => {
+    if (status === "DELIVERED" && orderNumber) {
+      const code = window.prompt("Enter the customer's six-digit delivery OTP to mark this order delivered.")?.replace(/\D/g, "").slice(0, 6);
+      if (!code) return;
+      if (code.length !== 6) { setAdminMessage("Enter the complete six-digit customer OTP."); return; }
+      const response = await fetch("/api/orders/verify-delivery", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ orderNumber, code }) });
+      const data = await response.json().catch(() => ({}));
+      setAdminMessage(response.ok ? "Delivery verified and marked delivered." : (data.error || "Delivery OTP could not be verified."));
+      if (response.ok) await openAdminDashboard();
+      return;
+    }
     const response = await fetch("/api/admin/orders/status", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ orderId, status }) });
     const data = await response.json().catch(() => ({}));
     setAdminMessage(response.ok ? `Order moved to ${status.replaceAll("_", " ").toLowerCase()}.` : (data.error || "Order status could not be updated."));
@@ -1530,8 +1540,9 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
     if (!riderEmail) return;
     const response = await fetch("/api/admin/orders/assign", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ orderId, riderEmail }) });
     const data = await response.json();
-    if (!response.ok) setAdminMessage(data.error);
-    await openAdminDashboard();
+    if (!response.ok) setAdminMessage(data.error || "Rider could not be assigned.");
+    else setAdminMessage(data.generatedDeliveryCode ? "Rider assigned. A delivery OTP was generated and is visible to the customer." : "Rider assigned.");
+    if (response.ok) await openAdminDashboard();
   };
 
   const setRiderAvailability = async (available: boolean) => {
@@ -2374,6 +2385,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
                       <label>Order flow<select disabled={order.status === "CANCELLED" || order.payment_status === "REJECTED"} value={order.status} onChange={(e) => updateOrderStatus(order.id, e.target.value)}>{order.status === "CANCELLED" && <option value="CANCELLED">Cancelled</option>}<option value="CONFIRMED">Confirmed</option><option value="PRINTING">Printing</option><option value="READY_FOR_PICKUP">Ready for pickup</option></select></label>
                       <label>Delivery partner<select disabled={order.status === "CANCELLED" || order.payment_status === "REJECTED"} value={order.rider_email ?? ""} onChange={(e) => assignRider(order.id, e.target.value)}><option value="">Assign available rider</option>{dashboard.riders.filter((rider: any) => rider.is_available).map((rider: any) => <option key={rider.email} value={rider.email}>{rider.name || rider.email} · Available</option>)}</select></label>
                     </div>
+                    {order.payment_status === "PAID" && !order.items?.every((item: any) => item.serviceId === PLAGIARISM_SERVICE_ID) && !["DELIVERED", "CANCELLED"].includes(order.status) && <button className="mini-action" onClick={() => updateOrderStatus(order.id, "DELIVERED", order.order_number)}>Mark delivered · verify OTP</button>}
                     <div className="payment-review-details"><span><small>Payment</small><strong>{order.payment_status === "PAY_ON_DELIVERY" ? "Pay on delivery" : order.payment_reference || order.payment_status}</strong></span><span><small>Total</small><strong>{inr.format(order.total_paise / 100)}</strong></span></div>
                     {order.items?.every((item: any) => item.serviceId === PLAGIARISM_SERVICE_ID) && <div className="plagiarism-admin-flow"><strong>Plagiarism report flow</strong><PlagiarismTracker status={order.status} /><div><button className={order.status === "PLAGIARISM_SUBMITTED" ? "active" : ""} onClick={() => updateOrderStatus(order.id, "PLAGIARISM_SUBMITTED")}>Document submitted</button><button className={order.status === "PLAGIARISM_REPORT_RECEIVED" ? "active" : ""} onClick={() => updateOrderStatus(order.id, "PLAGIARISM_REPORT_RECEIVED")}>Report received</button><button className={order.status === "DELIVERED" ? "active" : ""} onClick={() => updateOrderStatus(order.id, "DELIVERED")}>Sent to WhatsApp · complete</button></div></div>}
                     {order.payment_status === "PAID" && order.payment_verified_at && <div className="payment-cleared-note"><strong>Payment received and verified</strong><small>Verified {new Date(order.payment_verified_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })} by {order.payment_verified_by}. Scanner deleted from admin, customer and delivery-partner views.</small></div>}
