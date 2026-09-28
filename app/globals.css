@@ -347,6 +347,17 @@ footer { border-top: 1px solid var(--line); padding: 28px max(24px, calc((100% -
 .admin-pagination button:disabled { opacity: .4; }
 .invoice-link { display: inline-flex; margin-top: 8px; color: #735500; font-size: 9px; font-weight: 900; }
 .sales-chart { margin: 16px 0 24px; padding: 20px; border: 1px solid #dfe2e7; border-radius: 14px; background: white; }
+.admin-analytics { margin: 18px 0 28px; padding: 20px; border: 1px solid var(--line); border-radius: 16px; background: linear-gradient(135deg, #f8fbf8, #fffdf4); }
+.analytics-chart-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 16px; }
+.analytics-chart-grid article { min-width: 0; padding: 13px; border: 1px solid #dfe2e7; border-radius: 12px; background: white; }
+.analytics-chart-grid header, .analytics-chart-grid footer { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.analytics-chart-grid header strong { font-size: 12px; }
+.analytics-chart-grid header small { color: var(--green); font-weight: 800; font-size: 11px; white-space: nowrap; }
+.analytics-bars { height: 92px; display: flex; align-items: end; gap: 4px; margin: 14px 0 8px; border-bottom: 1px solid #e4e8e4; }
+.analytics-bars span { flex: 1; height: 100%; display: flex; align-items: end; }
+.analytics-bars i { width: 100%; min-height: 4px; border-radius: 4px 4px 1px 1px; background: linear-gradient(180deg, #ffd84e, #bd8517); }
+.analytics-chart-grid footer { color: var(--muted); font-size: 9px; }
+.analytics-chart-grid footer b { color: var(--ink); font-size: 9px; }
 .sales-chart-heading { display: flex; justify-content: space-between; gap: 20px; }
 .sales-chart-heading span strong, .sales-chart-heading span small { display: block; }
 .sales-chart-heading span small { margin-top: 4px; color: var(--muted); font-size: 9px; }
@@ -660,6 +671,7 @@ footer { border-top: 1px solid var(--line); padding: 28px max(24px, calc((100% -
   .footer-contact { justify-items: center; }
   .footer-copyright { grid-column: 1; width: 100%; }
   .admin-portal .metric-grid { grid-template-columns: repeat(2, 1fr); }
+  .analytics-chart-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .admin-portal .metric-grid div:last-child { grid-column: span 2; }
   .admin-portal .rider-stats, .payout-history, .admin-portal .admin-orders { grid-template-columns: 1fr; }
   .payout-form { grid-template-columns: 1fr 1fr; }

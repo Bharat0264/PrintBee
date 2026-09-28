@@ -108,10 +108,12 @@ function finish(values: LedgerValues) {
   // Keep the established service-revenue calculation intact; ₹25 per paid
   // plagiarism report is an additional Bharat profit allocation.
   const serviceRevenuePaise = values.printingCollectedPaise - printingRevenuePaise - values.addonRevenuePaise;
-  // Rewards redeemed against an order are a printing cost, so they reduce
-  // printing profit and are included in the total operating cost.
-  const printingOperationalCostPaise = values.bwCostPaise + values.colourCostPaise + values.pointsDiscountPaise;
-  const printingProfitPaise = printingRevenuePaise - printingOperationalCostPaise;
+  // Wallet redemption is a reduction of printing revenue, not an extra cash
+  // expense. Delivery and every non-printing charge remain customer-paid.
+  const printingDiscountPaise = Math.min(values.pointsDiscountPaise, printingRevenuePaise);
+  const printingRevenueAfterPointsPaise = printingRevenuePaise - printingDiscountPaise;
+  const printingOperationalCostPaise = values.bwCostPaise + values.colourCostPaise;
+  const printingProfitPaise = printingRevenueAfterPointsPaise - printingOperationalCostPaise;
   // Location-based delivery is split 75% to the rider and 25% to Bharat.
   // In-campus delivery is outside that split: every rupee of its fee belongs
   // to the rider and never becomes Bharat other profit.
@@ -140,7 +142,7 @@ function finish(values: LedgerValues) {
     + plagiarismProfitPaise;
   const bharatTotalProfitPaise = bharatPrintingProfitPaise + bharatOtherProfitPaise;
   const ramyaTotalProfitPaise = ramyaPrintingProfitPaise + ramyaOtherServiceProfitPaise;
-  return { ...values, bwProfitPaise, colourProfitPaise, printingRevenuePaise, plagiarismProfitPaise, serviceRevenuePaise, otherServiceProfitPaise: ramyaOtherServiceProfitPaise, printingOperationalCostPaise, printingProfitPaise, addonProfitPaise: values.addonRevenuePaise, deliveryProfitPaise, lateNightOwnerProfitPaise: values.lateNightCollectedPaise - values.lateNightPartnerCostPaise, packagingCostPaise, packagingProfitPaise, operationalCostPaise, netProfitPaise, ownerPrintingProfitPaise: bharatPrintingProfitPaise, ownerOtherProfitPaise: bharatOtherProfitPaise, operatorPrintingProfitPaise: ramyaPrintingProfitPaise, ownerTotalProfitPaise: bharatTotalProfitPaise, operatorTotalProfitPaise: ramyaTotalProfitPaise, shareTallyPaise: bharatTotalProfitPaise + ramyaTotalProfitPaise };
+  return { ...values, bwProfitPaise, colourProfitPaise, printingRevenuePaise: printingRevenueAfterPointsPaise, printingRevenueBeforePointsPaise: printingRevenuePaise, printingDiscountPaise, plagiarismProfitPaise, serviceRevenuePaise, otherServiceProfitPaise: ramyaOtherServiceProfitPaise, printingOperationalCostPaise, printingProfitPaise, addonProfitPaise: values.addonRevenuePaise, deliveryProfitPaise, lateNightOwnerProfitPaise: values.lateNightCollectedPaise - values.lateNightPartnerCostPaise, packagingCostPaise, packagingProfitPaise, operationalCostPaise, netProfitPaise, ownerPrintingProfitPaise: bharatPrintingProfitPaise, ownerOtherProfitPaise: bharatOtherProfitPaise, operatorPrintingProfitPaise: ramyaPrintingProfitPaise, ownerTotalProfitPaise: bharatTotalProfitPaise, operatorTotalProfitPaise: ramyaTotalProfitPaise, shareTallyPaise: bharatTotalProfitPaise + ramyaTotalProfitPaise };
 }
 
 function addValues(target: LedgerValues, source: LedgerValues) {

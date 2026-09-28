@@ -252,6 +252,20 @@ function adminOrderBreakdown(orders: any[] = [], fallbackPrices: Prices) {
   return totals;
 }
 
+function adminAnalyticsTimeline(orders: any[] = [], fallbackPrices: Prices) {
+  const days = new Map<string, any>();
+  for (const order of orders) {
+    const date = String(order.created_at).slice(0, 10);
+    if (!date) continue;
+    const current = days.get(date) ?? { date, orders: 0, overallCollected: 0, printingCollected: 0, packingCollected: 0, addonsCollected: 0, deliveryCollected: 0, otherServicesCollected: 0, gatewayCollected: 0 };
+    const item = adminOrderBreakdown([order], fallbackPrices);
+    current.orders += 1;
+    for (const key of Object.keys(item)) if (key.endsWith("Collected")) current[key] += item[key];
+    days.set(date, current);
+  }
+  return Array.from(days.values()).sort((a, b) => a.date.localeCompare(b.date)).slice(-14);
+}
+
 function downloadLedgerCsv(ledger: any) {
   const safeCell = (value: unknown) => {
     let text = String(value ?? "");
@@ -1868,6 +1882,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
   };
   const printTotalsForRange = printSummary(dashboardOrdersForRange.flatMap((order: any) => order.items || []));
   const adminBreakdownForRange = adminOrderBreakdown(paidDashboardOrdersForRange, prices);
+  const adminAnalyticsForRange = adminAnalyticsTimeline(paidDashboardOrdersForRange, prices);
   const visibleAdminOrders = (dashboard?.orders ?? []).filter((order: any) => {
     const term = adminOrderSearch.trim().toLowerCase();
     const matchesSearch = !term || [order.order_number, order.customer_name, order.customer_email, order.mobile_number, order.location_name, order.rider_email].some((value) => String(value ?? "").toLowerCase().includes(term));
@@ -2299,6 +2314,10 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
                   <div><small>Other services collected</small><strong>{inr.format(adminBreakdownForRange.otherServicesCollected / 100)}</strong></div>
                   <div><small>Payment gateway charges</small><strong>{inr.format(adminBreakdownForRange.gatewayCollected / 100)}</strong></div>
                 </div>
+                <section className="admin-analytics" aria-label="Fourteen day collection analytics">
+                  <div className="sales-chart-heading"><span><strong>Collections analytics</strong><small>Last 14 active days · combined and service-level collections</small></span><strong>{inr.format(adminBreakdownForRange.overallCollected / 100)}</strong></div>
+                  <div className="analytics-chart-grid">{[["Orders received", "orders", false], ["Overall collected", "overallCollected", true], ["Printing", "printingCollected", true], ["Packing", "packingCollected", true], ["Add-ons", "addonsCollected", true], ["Delivery", "deliveryCollected", true], ["Other services", "otherServicesCollected", true], ["Gateway charges", "gatewayCollected", true]].map(([label, key, money]) => { const maximum = Math.max(...adminAnalyticsForRange.map((day: any) => Number(day[key as string]) || 0), 1); return <article key={String(key)}><header><strong>{label}</strong><small>{money ? inr.format((adminAnalyticsForRange.reduce((sum: number, day: any) => sum + (Number(day[key as string]) || 0), 0)) / 100) : adminAnalyticsForRange.reduce((sum: number, day: any) => sum + (Number(day[key as string]) || 0), 0)}</small></header><div className="analytics-bars">{adminAnalyticsForRange.map((day: any) => <span key={day.date} title={`${day.date}: ${money ? inr.format((Number(day[key as string]) || 0) / 100) : Number(day[key as string]) || 0}`}><i style={{ height: `${Math.max(4, ((Number(day[key as string]) || 0) / maximum) * 100)}%` }} /></span>)}</div><footer>{adminAnalyticsForRange[0]?.date?.slice(5) ?? "—"}<b>14-day trend</b>{adminAnalyticsForRange.at(-1)?.date?.slice(5) ?? "—"}</footer></article>; })}</div>
+                </section>
                 {adminRole === "OWNER" && <section className="admin-team-panel"><div><h3>Admin team &amp; access</h3><p>Owners have full access. Operations manages orders and riders; accountants view revenue and exports; support handles customer order queries.</p></div><div className="admin-team-form"><input type="email" value={newAdminMember.email} onChange={(event) => setNewAdminMember({ ...newAdminMember, email: event.target.value })} placeholder="team@printbee.co.in" /><select value={newAdminMember.role} onChange={(event) => setNewAdminMember({ ...newAdminMember, role: event.target.value })}><option value="OPERATIONS">Operations manager</option><option value="ACCOUNTANT">Accountant</option><option value="SUPPORT">Support</option><option value="OWNER">Owner</option></select><button disabled={!newAdminMember.email.trim()} onClick={saveAdminMember}>Add or update</button></div><div className="admin-team-list">{dashboard.adminMembers?.map((member: any) => <span key={member.email}><span><strong>{member.email}</strong><small>{String(member.role).replaceAll("_", " ")}</small></span>{member.email !== viewer?.email && <button onClick={() => removeAdminMember(member.email)}>Remove</button>}</span>)}</div></section>}
                 {dashboard.dailySales?.length ? <section className="sales-chart" aria-label="Paid sales during the last 30 days"><div className="sales-chart-heading"><span><strong>30-day sales trend</strong><small>Daily paid revenue and order volume</small></span><strong>{inr.format(dashboard.dailySales.reduce((sum: number, day: any) => sum + Number(day.revenue_paise || 0), 0) / 100)}</strong></div><div className="sales-bars">{dashboard.dailySales.map((day: any) => { const peak = Math.max(...dashboard.dailySales.map((entry: any) => Number(entry.revenue_paise) || 0), 1); return <div key={day.day} title={`${new Date(`${day.day}T00:00:00`).toLocaleDateString("en-IN")}: ${inr.format(day.revenue_paise / 100)}, ${day.orders} orders`}><i style={{ height: `${Math.max(5, Number(day.revenue_paise) / peak * 100)}%` }} /><small>{new Date(`${day.day}T00:00:00`).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}</small></div>; })}</div></section> : null}
                 </>}

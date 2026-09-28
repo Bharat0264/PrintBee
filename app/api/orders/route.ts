@@ -44,6 +44,7 @@ export async function POST(request: Request) {
   const code = crypto.getRandomValues(new Uint32Array(1))[0] % 1_000_000;
   const deliveryCode = code.toString().padStart(6, "0");
   const printingSubtotalPaise = plagiarismOnly ? body.items!.length * 17_500 : Math.max(0, Math.round(Number(body.totalPaise) || 0));
+  const pagePrintingPaise = plagiarismOnly ? 0 : (body.items ?? []).reduce((sum: number, item: any) => item?.kind === "ADDON" ? sum : sum + Math.max(0, Math.round(((Number(item?.total) || 0) - (Number(item?.servicePrice) || 0) - (Number(item?.addonsTotal) || 0)) * 100)), 0);
   const deliveryDistanceMeters = plagiarismOnly ? 0 : Math.round(calculateDistanceMeters(storeLocation!, customerLocation));
   if (!plagiarismOnly && !nearest && deliveryDistanceMeters > MAX_DELIVERY_DISTANCE_METERS) return NextResponse.json({ error: "We are unable to deliver to this location. Delivery is available within 4 km of the store." }, { status: 422 });
   const deliveryAccuracy = typeof body.accuracy === "number" && Number.isFinite(body.accuracy) && body.accuracy >= 0 ? body.accuracy : null;
@@ -81,7 +82,9 @@ export async function POST(request: Request) {
   const paymentGatewayFeePaise = plagiarismOnly ? Math.round(printingSubtotalPaise * 2.36 / 100) : feeSettings?.gateway_enabled ? Math.round(feeBasePaise * Math.max(0, Number(feeSettings.gateway_fee_percent) || 0) / 100) : 0;
   const grossTotalPaise = feeBasePaise + packagingFeePaise + surgeFeePaise + lateNightFeePaise + paymentGatewayFeePaise;
   const profile = await database().prepare("SELECT points_balance FROM customer_profiles WHERE email=?").bind(viewer.email).first<{ points_balance: number }>();
-  const maxRedeemablePoints = Math.max(0, Math.floor((grossTotalPaise - 100) * 15 / 100));
+  // Wallet points reduce only page-printing revenue; delivery and every fee
+  // are always paid by the customer.
+  const maxRedeemablePoints = Math.max(0, Math.floor((pagePrintingPaise - 100) * 15 / 100));
   const pointsRedeemed = body.usePoints ? Math.min(profile?.points_balance ?? 0, maxRedeemablePoints) : 0;
   const pointsDiscountPaise = Math.floor(pointsRedeemed * 100 / 15);
   const totalPaise = grossTotalPaise - pointsDiscountPaise;
