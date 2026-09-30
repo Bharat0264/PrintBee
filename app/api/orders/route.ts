@@ -12,6 +12,7 @@ export async function POST(request: Request) {
   if (availability?.accepting_orders === 0) return NextResponse.json({ error: "Service will be live soon. We are not accepting orders right now." }, { status: 503 });
   const body = await request.json() as { customerName?: string; mobileNumber?: string; deliveryAddress?: string; deliveryLandmark?: string; incampusDelivery?: boolean; incampusType?: "CLASSROOM" | "HOSTEL"; campusBuilding?: string; classroomNumber?: string; items?: unknown[]; totalPaise?: number; usePoints?: boolean; needsPackaging?: boolean; latitude?: unknown; longitude?: unknown; accuracy?: unknown };
   const plagiarismItems = Array.isArray(body.items) ? body.items.filter((item: any) => item?.serviceId === "turnitin-plagiarism-check") : [];
+  if (Array.isArray(body.items) && body.items.some((item: any) => item?.kind !== "ADDON" && String(item?.mode).endsWith("-double"))) return NextResponse.json({ error: "Double-sided printing is no longer available. Please choose single-sided printing." }, { status: 400 });
   const plagiarismOnly = Array.isArray(body.items) && body.items.length > 0 && plagiarismItems.length === body.items.length;
   if (plagiarismItems.length && !plagiarismOnly) return NextResponse.json({ error: "Complete plagiarism-report PDFs in a separate checkout from printing items." }, { status: 400 });
   const name = body.customerName?.trim();

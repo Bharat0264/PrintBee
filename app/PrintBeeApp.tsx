@@ -11,21 +11,17 @@ import { CustomerMotion, customerFeedback, AnimatedPrice, StudioLauncher } from 
 import { loadRazorpayCheckout } from "./components/razorpay-checkout";
 import { PrintJourney, PrinterScene, ProjectPortals, PaymentCelebration } from "./components/cinematic/PrintJourney";
 
-type PrintMode = "bw-single" | "bw-double" | "colour-single" | "colour-double";
+type PrintMode = "bw-single" | "colour-single";
 type Prices = Record<PrintMode, number>;
 
 const defaultPrices: Prices = {
   "bw-single": 2,
-  "bw-double": 3,
   "colour-single": 8,
-  "colour-double": 14,
 };
 
 const options: Array<{ id: PrintMode; title: string; note: string; icon: string }> = [
   { id: "bw-single", title: "B&W · Single side", note: "One printed side per A4 sheet", icon: "◐" },
-  { id: "bw-double", title: "B&W · Double side", note: "Two printed pages per A4 sheet", icon: "◐" },
   { id: "colour-single", title: "Colour · Single side", note: "Full colour on one side", icon: "●" },
-  { id: "colour-double", title: "Colour · Double side", note: "Full colour on both sides", icon: "●" },
 ];
 
 function printModeLabel(mode?: string) {
@@ -742,8 +738,8 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
     const colourSet = new Set(colourPageResult.pages);
     return formatPageRanges(Array.from({ length: pages }, (_, index) => index + 1).filter((page) => !colourSet.has(page)));
   }, [colourChoice, colourPageResult, pages]);
-  const side = mode.endsWith("double") ? "double" : "single";
-  const sideDivisor = side === "double" ? 2 : 1;
+  const side = "single" as const;
+  const sideDivisor = 1;
   const selectedAddons = addons.filter((addon) => selectedAddonIds.includes(addon.id));
   const addonsTotal = selectedAddons.reduce((sum, addon) => sum + addon.price_paise / 100, 0);
   const mixedPrintTotal = ((bwPageCount / sideDivisor) * prices[`bw-${side}`] + (colourPageCount / sideDivisor) * prices[`colour-${side}`]) * copies;
@@ -2083,15 +2079,6 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
 
           {isPlagiarismService && <div className="binding-fields plagiarism-service-note"><strong>Turnitin plagiarism check · ₹175 per PDF</strong><p>Add one PDF at a time. Add each PDF to cart before uploading the next one; the 2.36% payment handling charge is calculated once on the overall plagiarism cart value.</p><label>WhatsApp number<input value={whatsappNumber} onChange={(e) => setWhatsappNumber(e.target.value.replace(/\D/g, "").slice(0, 10))} inputMode="numeric" placeholder="10-digit WhatsApp number" /></label></div>}
 
-          {!isPlagiarismService && <div className="binding-fields">
-            <strong><span className="step">3</span> Choose print sides</strong>
-            <p>Choose how your document is printed. Your price updates below.</p>
-            <div className="service-option-grid" role="radiogroup" aria-label="Print sides">
-              <button type="button" role="radio" aria-checked={side === "single"} className={side === "single" ? "selected" : ""} onClick={() => setMode(`${mode.startsWith("colour") ? "colour" : "bw"}-single` as PrintMode)}><span><strong>Single side</strong><small>One page per sheet</small></span></button>
-              <button type="button" role="radio" aria-checked={side === "double"} className={side === "double" ? "selected" : ""} onClick={() => setMode(`${mode.startsWith("colour") ? "colour" : "bw"}-double` as PrintMode)}><span><strong>Double side</strong><small>{pages} pages ÷ 2 = {pages / 2} priced units</small></span></button>
-            </div>
-          </div>}
-
           {usesMixedPagePricing && (
             <div className="binding-fields">
               <strong><span className="step">3</span> Choose colour pages</strong>
@@ -2130,7 +2117,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
             <div><small>Estimated print total</small><AnimatedPrice value={total} /></div>
             <button disabled={!fileName || countingPages || (usesMixedPagePricing && !colourPagesValid) || ((Boolean(printServices.find((service) => service.id === serviceId)?.is_binding) || isPlagiarismService) && whatsappNumber.length !== 10)} onClick={addToCart}>Add &amp; proceed to checkout <span>→</span></button>
           </div>
-          <p className="estimate-note">{usesMixedPagePricing ? `${bwPageCount} B&W + ${colourPageCount} colour pages × ${copies} ${copies === 1 ? "copy" : "copies"} · ${side === "double" ? "Double sided (pages ÷ 2)" : "Single sided"}` : `${pages}${side === "double" ? " ÷ 2" : ""} pages × ${copies} ${copies === 1 ? "copy" : "copies"} × ${inr.format(prices[mode])} · ${selected.title}`}{servicePrice > 0 ? ` + ${inr.format(servicePrice)} ${selectedService?.name} charge` : ""}{addonsTotal > 0 ? ` + ${inr.format(addonsTotal)} add-ons` : ""}</p>
+          <p className="estimate-note">{usesMixedPagePricing ? `${bwPageCount} B&W + ${colourPageCount} colour pages × ${copies} ${copies === 1 ? "copy" : "copies"} · Single sided` : `${pages} pages × ${copies} ${copies === 1 ? "copy" : "copies"} × ${inr.format(prices[mode])} · ${selected.title}`}{servicePrice > 0 ? ` + ${inr.format(servicePrice)} ${selectedService?.name} charge` : ""}{addonsTotal > 0 ? ` + ${inr.format(addonsTotal)} add-ons` : ""}</p>
           <div className="payment-instruction" role="note">
             <strong>Secure Razorpay payment</strong>
             <span>Create your order, then pay online through Razorpay before printing begins.</span>
@@ -2195,7 +2182,7 @@ export default function PrintBeeApp({ viewer, appwriteConfigured }: { viewer: Vi
         <div className="section-intro">
           <div className="eyebrow"><span>●</span> Simple A4 pricing</div>
           <h2>No confusing paper choices.</h2>
-          <p>Choose black-and-white or colour, with single- or double-sided printing.</p>
+          <p>Choose black-and-white or colour printing, always single-sided for consistent quality.</p>
         </div>
         <div className="price-list">
           {options.map((item) => (

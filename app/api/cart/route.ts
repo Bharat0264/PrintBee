@@ -15,6 +15,7 @@ export async function POST(request: Request) {
   if (!viewer) return NextResponse.json({ error: "Sign in required" }, { status: 401 });
   const item = await request.json() as any;
   if (!item.id || !item.uploadId) return NextResponse.json({ error: "Invalid cart item" }, { status: 400 });
+  if (item.kind !== "ADDON" && String(item.mode).endsWith("-double")) return NextResponse.json({ error: "Double-sided printing is no longer available. Please choose single-sided printing." }, { status: 400 });
   if (item.kind === "ADDON") {
     const addon = await database().prepare("SELECT id,name,description,price_paise FROM addons WHERE id=? AND active=1").bind(item.addonId).first<{ id: string; name: string; description: string; price_paise: number }>();
     if (!addon || item.uploadId !== `addon:${addon.id}`) return NextResponse.json({ error: "This add-on is out of stock. Try again after some time." }, { status: 400 });

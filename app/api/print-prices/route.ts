@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import { database } from "../db";
 import { getViewer } from "../../supabase/server";
 
-const PRICE_IDS = ["bw-single", "bw-double", "colour-single", "colour-double"] as const;
-const DEFAULT_PRICES = { "bw-single": 200, "bw-double": 300, "colour-single": 800, "colour-double": 1400 };
+const PRICE_IDS = ["bw-single", "colour-single"] as const;
+const DEFAULT_PRICES = { "bw-single": 200, "colour-single": 800 };
 
 export async function GET() {
   const rows = await database().prepare("SELECT id, price_paise FROM print_prices").all<{ id: string; price_paise: number }>();
