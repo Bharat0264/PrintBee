@@ -5,7 +5,7 @@ PrintBee is a full-stack local A4 printing and delivery platform. Customers uplo
 ## Key features
 
 - PDF, image, and HEIC upload with automatic page counting and chunked upload support.
-- Configurable print services, A4 prices, double-sided printing, binding instructions, packaging, and add-on products.
+- Configurable single-sided A4 print services and prices, binding instructions, packaging, and add-on products.
 - GPS-assisted checkout with editable reverse-geocoded delivery address.
 - Store-to-customer distance delivery calculation with configurable base fee and per-100-metre charge.
 - Global configurable platform fee, surge, late-night, packaging, and gateway fee controls.
